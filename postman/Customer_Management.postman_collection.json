@@ -1,0 +1,423 @@
+{
+  "info": {
+    "name": "Customer Management API",
+    "_postman_id": "customer-management-collection-v1",
+    "description": "Customer Management Service - Customer Onboarding, KYC, Security, Device & Wallet Management API Collection",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check Probe",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Onboarding",
+      "item": [
+        {
+          "name": "Onboard User Device (Full Flow with Auto SasaPay WaaS)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.data && jsonData.data.token) {",
+                  "    pm.environment.set('authToken', jsonData.data.token.accessToken);",
+                  "}",
+                  "if (jsonData.data && jsonData.data.user) {",
+                  "    pm.environment.set('customerUuid', jsonData.data.user.userId);",
+                  "}",
+                  "if (jsonData.data && jsonData.data.sasapay && jsonData.data.sasapay.requestId) {",
+                  "    pm.environment.set('sasapayRequestId', jsonData.data.sasapay.requestId);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"astpp_id\": \"10492\",\n  \"device_identifier\": \"{{deviceIdentifier}}\",\n  \"device_model\": \"Samsung Galaxy S23\",\n  \"device_os\": \"Android 14\",\n  \"mobile_type\": \"android\",\n  \"app_version\": \"2.4.1\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/onboarding/user-device",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "onboarding", "user-device"]
+            },
+            "description": "Complete onboarding flow: ASTPP sync → Device registration → Wallet creation → Auto SasaPay WaaS initiation. Client only needs to call this endpoint and then the OTP confirmation."
+          }
+        },
+        {
+          "name": "SasaPay WaaS: Confirm OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"requestId\": \"{{sasapayRequestId}}\",\n  \"otp\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/onboarding/personal/confirm",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "onboarding", "personal", "confirm"]
+            },
+            "description": "Confirm the OTP code sent during user-device onboarding. This completes the SasaPay WaaS registration."
+          }
+        },
+        {
+          "name": "SasaPay WaaS Callback Webhook",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"merchantCode\": \"600980\",\n  \"displayName\": \"John Doe\",\n  \"accountNumber\": \"254712345678\",\n  \"accountStatus\": \"APPROVED\",\n  \"description\": \"Onboarding completed successfully.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/onboarding/callback/sasapay",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "onboarding", "callback", "sasapay"]
+            },
+            "description": "SasaPay webhook callback for account status updates"
+          }
+        }
+      ]
+    },
+    {
+      "name": "PIN Auth",
+      "item": [
+        {
+          "name": "Set Initial PIN",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"10492\",\n  \"pin\": \"4920\",\n  \"confirmPin\": \"4920\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/pin/set",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "pin", "set"]
+            }
+          }
+        },
+        {
+          "name": "Verify PIN (Get Scoped JWT)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.data && jsonData.data.token) {",
+                  "    pm.environment.set('authToken', jsonData.data.token.accessToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"10492\",\n  \"pin\": \"4920\",\n  \"deviceIdentifier\": \"{{deviceIdentifier}}\",\n  \"deviceModel\": \"Samsung Galaxy S23\",\n  \"mobileType\": \"android\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/pin/verify",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "pin", "verify"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "PIN Reset",
+      "item": [
+        {
+          "name": "Step 1: Initiate PIN Reset (ID Number Check)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.data && jsonData.data.sessionToken) {",
+                  "    pm.environment.set('resetSessionToken', jsonData.data.sessionToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"astppId\": \"10492\",\n  \"idNumber\": \"ID10492\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/reset-pin/initiate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "reset-pin", "initiate"]
+            }
+          }
+        },
+        {
+          "name": "Step 2: Verify Reset OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sessionToken\": \"{{resetSessionToken}}\",\n  \"otp\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/reset-pin/verify-otp",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "reset-pin", "verify-otp"]
+            }
+          }
+        },
+        {
+          "name": "Step 3: Complete PIN Reset",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sessionToken\": \"{{resetSessionToken}}\",\n  \"pin\": \"5555\",\n  \"confirmPin\": \"5555\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/reset-pin/complete",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "reset-pin", "complete"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Device Recovery",
+      "item": [
+        {
+          "name": "Step 1: Initiate Device Logout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.data && jsonData.data.sessionToken) {",
+                  "    pm.environment.set('deviceLogoutToken', jsonData.data.sessionToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"astppId\": \"10492\",\n  \"idNumber\": \"ID10492\",\n  \"pin\": \"4920\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/device/logout/initiate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "device", "logout", "initiate"]
+            }
+          }
+        },
+        {
+          "name": "Step 2: Verify OTP & Activate New Device",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sessionToken\": \"{{deviceLogoutToken}}\",\n  \"otp\": \"123456\",\n  \"device\": {\n    \"deviceIdentifier\": \"NEW-DEVICE-999-ABC\",\n    \"deviceModel\": \"iPhone 15 Pro\",\n    \"deviceOs\": \"iOS 17\",\n    \"mobileType\": \"ios\",\n    \"appVersion\": \"2.4.1\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/device/logout/verify",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "device", "logout", "verify"]
+            }
+          }
+        },
+        {
+          "name": "Get Active Device Sessions",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/device/sessions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "device", "sessions"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Customer Profile",
+      "item": [
+        {
+          "name": "Get My Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/customers/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "customers", "me"]
+            }
+          }
+        },
+        {
+          "name": "Update Profile",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Jonathan\",\n  \"lastName\": \"Doe\",\n  \"timezone\": \"Africa/Nairobi\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/customers/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "customers", "me"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Wallets",
+      "item": [
+        {
+          "name": "Get My Wallet Onboarding Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/wallets/me/onboarding-status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "wallets", "me", "onboarding-status"]
+            },
+            "description": "Check wallet onboarding readiness, application status, and whether additional KYC is needed. Fast endpoint with no joins - only 2 queries."
+          }
+        },
+        {
+          "name": "Get My Wallet Balance",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/wallets/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "wallets", "me"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Internal Operations",
+      "item": [
+        {
+          "name": "Sync Wallet KYC for Customer",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/internal/wallet-kyc/sync/:astppId",
+              "host": ["{{baseUrl}}"],
+              "path": ["internal", "wallet-kyc", "sync", ":astppId"],
+              "variable": [
+                {
+                  "key": "astppId",
+                  "value": "31553"
+                }
+              ]
+            },
+            "description": "Sync wallet KYC application data from ASTPP to PostgreSQL for a specific customer"
+          }
+        },
+        {
+          "name": "Bulk Sync Wallet KYC",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"limit\": 100\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/internal/wallet-kyc/bulk-sync",
+              "host": ["{{baseUrl}}"],
+              "path": ["internal", "wallet-kyc", "bulk-sync"]
+            },
+            "description": "Bulk sync wallet KYC data for multiple customers (useful for scheduled jobs)"
+          }
+        }
+      ]
+    }
+  ]
+}

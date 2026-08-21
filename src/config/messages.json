@@ -1,0 +1,87 @@
+{
+  "auth": {
+    "pin": {
+      "setSuccess": "Security PIN set successfully.",
+      "verifySuccess": "Security PIN verified successfully.",
+      "changeSuccess": "Security PIN changed successfully.",
+      "alreadySet": "Security PIN is already set. Use the PIN reset flow if you forgot your PIN.",
+      "mustBeFourDigits": "PIN must be exactly 4 digits.",
+      "pinsMustMatch": "PIN and confirm PIN do not match.",
+      "invalid": "Invalid PIN. {attemptsRemaining} attempt(s) remaining.",
+      "oldPinInvalid": "Current PIN is incorrect.",
+      "newPinCannotBeSame": "New PIN cannot be the same as your current PIN.",
+      "temporarilyLocked": "PIN verification is locked due to too many failed attempts. Try again in {minutes} minutes.",
+      "permanentlyLocked": "PIN is permanently locked. Please complete identity verification or contact support to unlock.",
+      "required": "PIN is required."
+    },
+    "reset": {
+      "initiated": "Identity verified successfully. An OTP has been sent to your registered phone number.",
+      "otpResent": "A new OTP has been sent to your phone.",
+      "otpVerified": "OTP verified successfully. You can now set your new PIN.",
+      "completed": "Security PIN reset successfully. Please sign in with your new PIN.",
+      "invalidOrExpiredSession": "The PIN reset session is invalid or has expired.",
+      "sessionCompleted": "This reset session has already been used.",
+      "maxResendsExceeded": "Maximum OTP resend limit reached. Please restart the reset process.",
+      "invalidOtp": "Invalid OTP code. {attemptsRemaining} attempt(s) remaining."
+    }
+  },
+  "devices": {
+    "registered": "Device registered and bound successfully.",
+    "sessionConflict": "Account is active on another device. Please sign out there first or initiate device recovery.",
+    "logoutInitiated": "Device logout initiated. An OTP has been sent to your phone to authorize this switch.",
+    "logoutVerified": "Successfully logged out from previous device. New device activated.",
+    "noActiveDevice": "No active device found for this account.",
+    "deviceRevoked": "Device session revoked successfully.",
+    "heartbeatSuccess": "Device heartbeat recorded."
+  },
+  "onboarding": {
+    "welcome": "Welcome! Your customer profile and account have been created.",
+    "welcomeBack": "Welcome back!",
+    "kycPending": "Your KYC identity verification is pending review.",
+    "kycUploadRequired": "Identification documents are required to complete your verification.",
+    "kycApproved": "Your KYC documents have been verified and approved.",
+    "kycRejected": "Your KYC verification was rejected: {reason}",
+    "documentsUploaded": "KYC documents submitted successfully. Verification is in progress.",
+    "syncFailed": "Unable to verify profile details with the telecom directory."
+  },
+  "kyc": {
+    "submitted": "KYC identity documents submitted successfully for review.",
+    "approved": "KYC profile approved successfully.",
+    "rejected": "KYC profile rejected.",
+    "alreadyApproved": "Customer KYC is already approved.",
+    "invalidDocumentType": "Unsupported document type."
+  },
+  "wallets": {
+    "active": "Account/Wallet is active.",
+    "lockedSuccess": "Account has been locked successfully.",
+    "unlockedSuccess": "Account has been unlocked successfully.",
+    "alreadyLocked": "Account is already locked.",
+    "alreadyUnlocked": "Account is already unlocked and active.",
+    "frozen": "Account is currently frozen/restricted.",
+    "notFound": "Account not found.",
+    "lockReasonRequired": "A reason for locking the account is required.",
+    "onboarding": {
+      "notStarted": "Wallet onboarding not started. Ready to begin.",
+      "readyToStart": "Ready to start wallet onboarding process.",
+      "awaitingOtp": "Wallet onboarding initiated. Please verify the OTP sent to your phone.",
+      "processingKyc": "Your wallet KYC documents are being processed. This may take a few minutes.",
+      "inProgress": "Wallet onboarding is in progress. Please wait for approval.",
+      "approved": "Your wallet has been successfully approved and is ready to use.",
+      "rejected": "Your wallet application was rejected. Please contact support for assistance."
+    }
+  },
+  "operations": {
+    "statusUpdated": "Customer status updated successfully.",
+    "pinUnlocked": "Customer PIN lockout cleared successfully.",
+    "walletFrozen": "Customer account frozen successfully.",
+    "walletUnfrozen": "Customer account unfrozen successfully.",
+    "customerNotFound": "Customer record not found."
+  },
+  "common": {
+    "validationError": "Validation failed on the submitted data.",
+    "unauthorized": "Authentication required to access this resource.",
+    "forbidden": "You do not have permission to perform this action.",
+    "notFound": "Requested resource was not found.",
+    "internalError": "An unexpected server error occurred. Please try again later."
+  }
+}
