@@ -2,12 +2,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DatabaseService } from '../../../core/database/database.service';
 import { SasaPayWaasService } from './sasapay-waas.service';
-import { Client as SSHClient } from 'ssh2';
+// import { Client as SSHClient } from 'ssh2'; // TODO: Install ssh2 package when implementing image fetch
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
 import axios from 'axios';
-import FormData from 'form-data';
+// import FormData from 'form-data'; // TODO: Install form-data if needed
 
 interface OnboardingJobPayload {
   customerId: number;
@@ -226,8 +226,10 @@ export class WaasOnboardingJobService {
 
   /**
    * SSH Helper: Download file from remote ASTPP server
+   * TODO: Implement when ssh2 package is installed
    */
   private async sshDownloadFile(remoteDir: string, filename: string, localPath: string): Promise<void> {
+    /* TODO: Install ssh2 package first: npm install ssh2 @types/ssh2
     return new Promise((resolve, reject) => {
       const conn = new SSHClient();
 
@@ -270,6 +272,8 @@ export class WaasOnboardingJobService {
         privateKey: require('fs').readFileSync(this.sshPrivateKeyPath),
       });
     });
+    */
+    throw new Error('SSH functionality not yet implemented. Install ssh2 package first.');
   }
 
   /**

@@ -177,7 +177,7 @@ export class CustomerService {
     );
 
     // Dispatch outbox event
-    await this.events.recordEvent(
+    await this.events.publish(
       'customer.kyc_submitted',
       'CustomerApplication',
       String(customerId),

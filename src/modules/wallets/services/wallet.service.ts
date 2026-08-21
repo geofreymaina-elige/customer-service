@@ -218,7 +218,7 @@ export class WalletService {
     );
 
     // Outbox event
-    await this.events.recordEvent(
+    await this.events.publish(
       'customer.wallet_locked',
       'Wallet',
       String(customerId),
@@ -276,7 +276,7 @@ export class WalletService {
     );
 
     // Outbox event
-    await this.events.recordEvent(
+    await this.events.publish(
       'customer.wallet_unlocked',
       'Wallet',
       String(customerId),

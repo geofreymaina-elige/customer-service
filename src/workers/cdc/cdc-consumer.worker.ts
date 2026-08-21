@@ -151,11 +151,17 @@ export class CdcConsumerWorker implements OnModuleInit, OnModuleDestroy {
    * Handle mysql.astpp.accounts events
    */
   private async handleAccountsEvent(event: KafkaEvent) {
-    const { __op, id, deleted, number, first_name, last_name, email, balance, credit_limit, 
+    const { __op, id, deleted, number, first_name, last_name, email,
             country_id, currency_id, customer_type, status, type: account_type, 
             creation, __source_ts_ms } = event;
 
     const astpp_id = id;
+
+    // Filter: Only process customer accounts (type = 9), ignore resellers/admins
+    if (account_type !== 9) {
+      this.logger.debug(`Skipping non-customer account ${astpp_id} (type: ${account_type})`);
+      return;
+    }
 
     switch (__op) {
       case 'c': // INSERT - new customer
@@ -185,7 +191,7 @@ export class CdcConsumerWorker implements OnModuleInit, OnModuleDestroy {
     try {
       await client.query('BEGIN');
 
-      const { number, first_name, last_name, email, balance, credit_limit,
+      const { number, first_name, last_name, email,
               country_id, currency_id, customer_type, status, type: account_type,
               deleted, creation, __source_ts_ms } = event;
 
@@ -202,22 +208,20 @@ export class CdcConsumerWorker implements OnModuleInit, OnModuleDestroy {
         return;
       }
 
-      // Upsert customer
+      // Upsert customer (removed balance and credit_limit)
       await client.query(`
         INSERT INTO customers (
-          astpp_id, phone_number, first_name, last_name, email, balance, credit_limit,
+          astpp_id, phone_number, first_name, last_name, email,
           country_id, currency_id, customer_type, account_status, account_type,
           deleted, astpp_created_at, sync_version, synced_at, created_at, updated_at
         ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW(), NOW(), NOW()
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW(), NOW()
         )
         ON CONFLICT (astpp_id) DO UPDATE SET
           phone_number = EXCLUDED.phone_number,
           first_name = EXCLUDED.first_name,
           last_name = EXCLUDED.last_name,
           email = EXCLUDED.email,
-          balance = EXCLUDED.balance,
-          credit_limit = EXCLUDED.credit_limit,
           country_id = EXCLUDED.country_id,
           currency_id = EXCLUDED.currency_id,
           customer_type = EXCLUDED.customer_type,
@@ -233,8 +237,6 @@ export class CdcConsumerWorker implements OnModuleInit, OnModuleDestroy {
         first_name || '',
         last_name || '',
         email || null,
-        balance || 0,
-        credit_limit || 0,
         country_id || null,
         currency_id || null,
         customer_type || null,

@@ -5,7 +5,7 @@ interface CacheEntry<T> {
   expiresAt: number; // Unix timestamp in milliseconds
 }
 
-interface CacheStats {
+export interface CacheStats {
   hits: number;
   misses: number;
   sets: number;

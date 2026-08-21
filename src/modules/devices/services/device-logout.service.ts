@@ -70,7 +70,7 @@ export class DeviceLogoutService {
 
     // 4. Invalidate previous logout sessions
     await this.db.query(
-      `UPDATE device_logout_sessions SET invalidated_at = NOW() WHERE customer_id = $1 AND invalidated_at IS NULL`,
+      `UPDATE customer_device_logout_sessions SET invalidated_at = NOW() WHERE customer_id = $1 AND invalidated_at IS NULL`,
       [customer.id]
     );
 
@@ -79,7 +79,7 @@ export class DeviceLogoutService {
     const sessionTokenHash = crypto.createHash('sha256').update(sessionToken).digest('hex');
 
     await this.db.query(
-      `INSERT INTO device_logout_sessions (customer_id, session_token_hash, state, resend_count, expires_at, created_at, updated_at)
+      `INSERT INTO customer_device_logout_sessions (customer_id, session_token_hash, state, resend_count, expires_at, created_at, updated_at)
        VALUES ($1, $2, 'id_verified', 0, NOW() + INTERVAL '30 minutes', NOW(), NOW())`,
       [customer.id, sessionTokenHash]
     );
@@ -89,13 +89,13 @@ export class DeviceLogoutService {
     const otpHash = this.jwtService.hashOtp(otpCode);
 
     await this.db.query(
-      `INSERT INTO otp_codes (customer_id, otp_hash, purpose, attempts, max_attempts, is_used, expires_at, created_at)
+      `INSERT INTO customer_otp_codes (customer_id, otp_hash, purpose, attempts, max_attempts, is_used, expires_at, created_at)
        VALUES ($1, $2, 'device_logout', 0, 3, FALSE, NOW() + INTERVAL '5 minutes', NOW())`,
       [customer.id, otpHash]
     );
 
     await this.db.query(
-      `UPDATE device_logout_sessions SET state = 'otp_sent', updated_at = NOW() WHERE session_token_hash = $1`,
+      `UPDATE customer_device_logout_sessions SET state = 'otp_sent', updated_at = NOW() WHERE session_token_hash = $1`,
       [sessionTokenHash]
     );
 
@@ -123,7 +123,7 @@ export class DeviceLogoutService {
 
     const session = await this.db.queryOne(
       `SELECT id, customer_id, state, expires_at, invalidated_at
-       FROM device_logout_sessions
+       FROM customer_device_logout_sessions
        WHERE session_token_hash = $1 AND invalidated_at IS NULL`,
       [sessionHash]
     );
@@ -135,7 +135,7 @@ export class DeviceLogoutService {
     // Verify OTP
     const otpRecord = await this.db.queryOne(
       `SELECT id, otp_hash, attempts, max_attempts
-       FROM otp_codes
+       FROM customer_otp_codes
        WHERE customer_id = $1 AND purpose = 'device_logout' AND is_used = FALSE AND expires_at > NOW()
        ORDER BY created_at DESC LIMIT 1`,
       [session.customer_id]
@@ -149,7 +149,7 @@ export class DeviceLogoutService {
 
     if (otpRecord.otp_hash !== providedOtpHash) {
       const newAttempts = otpRecord.attempts + 1;
-      await this.db.query(`UPDATE otp_codes SET attempts = $1 WHERE id = $2`, [newAttempts, otpRecord.id]);
+      await this.db.query(`UPDATE customer_otp_codes SET attempts = $1 WHERE id = $2`, [newAttempts, otpRecord.id]);
       const attemptsRemaining = Math.max(0, otpRecord.max_attempts - newAttempts);
       throw new AppException(
         'INVALID_OTP',
@@ -159,9 +159,9 @@ export class DeviceLogoutService {
     }
 
     // Mark OTP as used and invalidate session
-    await this.db.query(`UPDATE otp_codes SET is_used = TRUE WHERE id = $1`, [otpRecord.id]);
+    await this.db.query(`UPDATE customer_otp_codes SET is_used = TRUE WHERE id = $1`, [otpRecord.id]);
     await this.db.query(
-      `UPDATE device_logout_sessions SET state = 'completed', invalidated_at = NOW(), updated_at = NOW() WHERE id = $1`,
+      `UPDATE customer_device_logout_sessions SET state = 'completed', invalidated_at = NOW(), updated_at = NOW() WHERE id = $1`,
       [session.id]
     );
 

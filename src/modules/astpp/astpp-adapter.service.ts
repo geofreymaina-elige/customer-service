@@ -14,6 +14,7 @@ export interface AstppCustomerRecord {
   identityDocumentType: number;
   identityDocumentNumber: string;
   applicationStatus: number; // 0=submitted, 1=saved, 2=approved, 3=rejected
+  applicationId?: number; // From ASTPP applications.id
   dateOfBirth?: string;
   gender?: string;
 }

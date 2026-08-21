@@ -18,3 +18,5 @@ yarn-error.log*
 # OS Files
 .DS_Store
 Thumbs.db
+
+snapshot_checkpoint.json

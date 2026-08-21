@@ -167,7 +167,7 @@ export class CustomerOperationsService {
       ]
     );
 
-    await this.events.recordEvent('customer.status_changed', 'Customer', String(customer.id), {
+    await this.events.publish('customer.status_changed', 'Customer', String(customer.id), {
       customerId: customer.id,
       previousStatus: customer.status,
       newStatus: dto.status,
@@ -231,7 +231,7 @@ export class CustomerOperationsService {
       ]
     );
 
-    await this.events.recordEvent(
+    await this.events.publish(
       dto.decision === 'approved' ? 'customer.kyc_approved' : 'customer.kyc_rejected',
       'CustomerIdentity',
       String(customer.id),
@@ -272,7 +272,7 @@ export class CustomerOperationsService {
       [customer.id, dto.operatorId || 'OPERATOR', JSON.stringify({ reason: dto.reason })]
     );
 
-    await this.events.recordEvent('customer.pin_unlocked_by_admin', 'CustomerPin', String(customer.id), {
+    await this.events.publish('customer.pin_unlocked_by_admin', 'CustomerPin', String(customer.id), {
       customerId: customer.id,
       operatorId: dto.operatorId,
       reason: dto.reason,

@@ -32,8 +32,6 @@ CREATE TABLE IF NOT EXISTS customers (
     -- ASTPP Integration (CDC Sync)
     astpp_id INTEGER UNIQUE, -- From ASTPP accounts.id
     phone_number VARCHAR(32) NOT NULL UNIQUE, -- From ASTPP accounts.number (account_number and phone_number are same)
-    balance DECIMAL(12, 5) DEFAULT 0, -- From ASTPP accounts.balance
-    credit_limit DECIMAL(12, 5) DEFAULT 0, -- From ASTPP accounts.credit_limit
     country_id INTEGER, -- From ASTPP accounts.country_id
     currency_id INTEGER, -- From ASTPP accounts.currency_id
     customer_type INTEGER, -- From ASTPP accounts.customer_type
@@ -130,6 +128,7 @@ CREATE TABLE IF NOT EXISTS customer_applications (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS uq_applications_application_id ON customer_applications(application_id);
 CREATE INDEX IF NOT EXISTS idx_applications_customer ON customer_applications(customer_id);
 CREATE INDEX IF NOT EXISTS idx_applications_astpp_id ON customer_applications(astpp_id);
 CREATE INDEX IF NOT EXISTS idx_applications_type ON customer_applications(application_type);
@@ -186,7 +185,7 @@ CREATE TABLE IF NOT EXISTS customer_applicant_details (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_applicant_details_application ON customer_applicant_details(application_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_applicant_details_application_id ON customer_applicant_details(application_id);
 CREATE INDEX IF NOT EXISTS idx_applicant_details_customer ON customer_applicant_details(customer_id);
 CREATE INDEX IF NOT EXISTS idx_applicant_details_astpp_id ON customer_applicant_details(astpp_id);
 CREATE INDEX IF NOT EXISTS idx_applicant_details_doc_number ON customer_applicant_details(identity_document_number);
@@ -262,7 +261,7 @@ CREATE INDEX IF NOT EXISTS idx_devices_lookup ON customer_devices(customer_id, d
 -- 4. STATEFUL OTP & RECOVERY SESSIONS
 -- ============================================================================
 
-CREATE TABLE IF NOT EXISTS otp_codes (
+CREATE TABLE IF NOT EXISTS customer_otp_codes (
     id BIGSERIAL PRIMARY KEY,
     customer_id BIGINT NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
     otp_hash VARCHAR(255) NOT NULL,
@@ -274,9 +273,9 @@ CREATE TABLE IF NOT EXISTS otp_codes (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_otp_active ON otp_codes(customer_id, purpose) WHERE is_used = FALSE;
+CREATE INDEX IF NOT EXISTS idx_customer_otp_active ON customer_otp_codes(customer_id, purpose) WHERE is_used = FALSE;
 
-CREATE TABLE IF NOT EXISTS pin_reset_sessions (
+CREATE TABLE IF NOT EXISTS customer_pin_reset_sessions (
     id BIGSERIAL PRIMARY KEY,
     uuid UUID NOT NULL DEFAULT uuid_generate_v4() UNIQUE,
     session_token_hash CHAR(64) NOT NULL UNIQUE,
@@ -290,7 +289,7 @@ CREATE TABLE IF NOT EXISTS pin_reset_sessions (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS device_logout_sessions (
+CREATE TABLE IF NOT EXISTS customer_device_logout_sessions (
     id BIGSERIAL PRIMARY KEY,
     uuid UUID NOT NULL DEFAULT uuid_generate_v4() UNIQUE,
     session_token_hash CHAR(64) NOT NULL UNIQUE,

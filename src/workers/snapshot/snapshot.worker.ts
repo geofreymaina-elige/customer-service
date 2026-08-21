@@ -68,9 +68,11 @@ export class SnapshotWorker {
 
     while (hasMore) {
       // Fetch batch of customer IDs
+      // Note: MySQL doesn't accept bound parameters for LIMIT/OFFSET, so we use string interpolation
+      // Filter: Only accounts with type = 9 (customer accounts, not resellers/admins)
       const customerIds = await this.astppMysql.query<{ id: number }>(
-        `SELECT id FROM accounts WHERE deleted = 0 ORDER BY id ASC LIMIT ? OFFSET ?`,
-        [this.batchSize, offset],
+        `SELECT id FROM accounts WHERE deleted = 0 AND type = 9 ORDER BY id ASC LIMIT ${this.batchSize} OFFSET ${offset}`,
+        [],
       );
 
       if (customerIds.length === 0) {
@@ -148,12 +150,12 @@ export class SnapshotWorker {
    */
   private async fetchCustomerData(astpp_id: number): Promise<CustomerSnapshot> {
     const [account, application, applicant_details, wallet_kyc] = await Promise.all([
-      // Core account data
+      // Core account data (only type = 9 customer accounts)
       this.astppMysql.queryOne(`
-        SELECT id, number, balance, credit_limit, first_name, last_name, email,
+        SELECT id, number, first_name, last_name, email,
                telephone_2, country_id, currency_id, customer_type, status, type AS account_type,
                deleted, creation
-        FROM accounts WHERE id = ? AND deleted = 0
+        FROM accounts WHERE id = ? AND deleted = 0 AND type = 9
       `, [astpp_id]),
 
       // Primary KYC application
@@ -220,20 +222,18 @@ export class SnapshotWorker {
       // 1. Upsert customer
       await client.query(`
         INSERT INTO customers (
-          astpp_id, phone_number, first_name, last_name, email, balance, credit_limit,
+          astpp_id, phone_number, first_name, last_name, email,
           country_id, currency_id, customer_type, account_status, account_type,
           wallet_kyc_status, wallet_kyc_required, wallet_kyc_flagged_at,
           deleted, astpp_created_at, synced_at, created_at, updated_at
         ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, NOW(), NOW(), NOW()
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW(), NOW(), NOW()
         )
         ON CONFLICT (astpp_id) DO UPDATE SET
           phone_number = EXCLUDED.phone_number,
           first_name = EXCLUDED.first_name,
           last_name = EXCLUDED.last_name,
           email = EXCLUDED.email,
-          balance = EXCLUDED.balance,
-          credit_limit = EXCLUDED.credit_limit,
           account_status = EXCLUDED.account_status,
           wallet_kyc_status = EXCLUDED.wallet_kyc_status,
           wallet_kyc_required = EXCLUDED.wallet_kyc_required,
@@ -247,8 +247,6 @@ export class SnapshotWorker {
         account.first_name || '',
         account.last_name || '',
         account.email || null,
-        account.balance || 0,
-        account.credit_limit || 0,
         account.country_id || null,
         account.currency_id || null,
         account.customer_type || null,

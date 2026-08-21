@@ -124,7 +124,7 @@ export class DeviceGatekeeperService {
       ]
     );
 
-    await this.events.recordEvent('customer.device_registered', 'CustomerDevice', String(customerId), {
+    await this.events.publish('customer.device_registered', 'CustomerDevice', String(customerId), {
       customerId,
       deviceUuid: newDevice.uuid,
       deviceModel: deviceData.deviceModel,
@@ -162,7 +162,7 @@ export class DeviceGatekeeperService {
       [customerId, JSON.stringify({ deviceUuid })]
     );
 
-    await this.events.recordEvent('customer.device_revoked', 'CustomerDevice', String(customerId), {
+    await this.events.publish('customer.device_revoked', 'CustomerDevice', String(customerId), {
       customerId,
       deviceUuid,
     });

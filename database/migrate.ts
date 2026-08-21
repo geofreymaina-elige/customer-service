@@ -19,15 +19,27 @@ async function runMigrations() {
   const client = await pool.connect();
 
   try {
-    const migrationFilePath = path.join(__dirname, 'migrations', '001_initial_schema.sql');
-    console.log(`[MIGRATION] Reading SQL from ${migrationFilePath}...`);
-    const sql = fs.readFileSync(migrationFilePath, 'utf-8');
+    const migrationsDir = path.join(__dirname, 'migrations');
+    const migrationFiles = fs.readdirSync(migrationsDir)
+      .filter(f => f.endsWith('.sql'))
+      .sort(); // Run migrations in order: 001, 002, 003...
 
-    console.log('[MIGRATION] Executing migration transaction...');
-    await client.query('BEGIN');
-    await client.query(sql);
-    await client.query('COMMIT');
-    console.log('[MIGRATION] Migration 001_initial_schema.sql completed successfully!');
+    console.log(`[MIGRATION] Found ${migrationFiles.length} migration file(s)`);
+
+    for (const file of migrationFiles) {
+      const filePath = path.join(migrationsDir, file);
+      console.log(`[MIGRATION] Running ${file}...`);
+      
+      const sql = fs.readFileSync(filePath, 'utf-8');
+      
+      await client.query('BEGIN');
+      await client.query(sql);
+      await client.query('COMMIT');
+      
+      console.log(`[MIGRATION] ✓ ${file} completed successfully`);
+    }
+
+    console.log('[MIGRATION] All migrations completed successfully!');
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('[MIGRATION] Migration failed:', error);

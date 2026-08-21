@@ -53,7 +53,7 @@ export class PinResetService {
 
     // Invalidate previous active sessions
     await this.db.query(
-      `UPDATE pin_reset_sessions SET invalidated_at = NOW() WHERE customer_id = $1 AND invalidated_at IS NULL`,
+      `UPDATE customer_pin_reset_sessions SET invalidated_at = NOW() WHERE customer_id = $1 AND invalidated_at IS NULL`,
       [customer.id]
     );
 
@@ -63,7 +63,7 @@ export class PinResetService {
 
     // Create session (state: id_verified, expires in 30 minutes)
     await this.db.query(
-      `INSERT INTO pin_reset_sessions (customer_id, session_token_hash, state, resend_count, expires_at, created_at, updated_at)
+      `INSERT INTO customer_pin_reset_sessions (customer_id, session_token_hash, state, resend_count, expires_at, created_at, updated_at)
        VALUES ($1, $2, 'id_verified', 0, NOW() + INTERVAL '30 minutes', NOW(), NOW())`,
       [customer.id, sessionTokenHash]
     );
@@ -74,14 +74,14 @@ export class PinResetService {
 
     // Store OTP in database
     await this.db.query(
-      `INSERT INTO otp_codes (customer_id, otp_hash, purpose, attempts, max_attempts, is_used, expires_at, created_at)
+      `INSERT INTO customer_otp_codes (customer_id, otp_hash, purpose, attempts, max_attempts, is_used, expires_at, created_at)
        VALUES ($1, $2, 'pin_reset', 0, 3, FALSE, NOW() + INTERVAL '5 minutes', NOW())`,
       [customer.id, otpHash]
     );
 
     // Update session state to otp_sent
     await this.db.query(
-      `UPDATE pin_reset_sessions SET state = 'otp_sent', updated_at = NOW() WHERE session_token_hash = $1`,
+      `UPDATE customer_pin_reset_sessions SET state = 'otp_sent', updated_at = NOW() WHERE session_token_hash = $1`,
       [sessionTokenHash]
     );
 
@@ -104,7 +104,7 @@ export class PinResetService {
 
     const session = await this.db.queryOne(
       `SELECT id, customer_id, state, expires_at, invalidated_at
-       FROM pin_reset_sessions
+       FROM customer_pin_reset_sessions
        WHERE session_token_hash = $1 AND invalidated_at IS NULL`,
       [sessionHash]
     );
@@ -116,7 +116,7 @@ export class PinResetService {
     // Lookup latest unused OTP
     const otpRecord = await this.db.queryOne(
       `SELECT id, otp_hash, attempts, max_attempts, expires_at
-       FROM otp_codes
+       FROM customer_otp_codes
        WHERE customer_id = $1 AND purpose = 'pin_reset' AND is_used = FALSE AND expires_at > NOW()
        ORDER BY created_at DESC LIMIT 1`,
       [session.customer_id]
@@ -131,7 +131,7 @@ export class PinResetService {
     if (otpRecord.otp_hash !== providedOtpHash) {
       const newAttempts = otpRecord.attempts + 1;
       await this.db.query(
-        `UPDATE otp_codes SET attempts = $1 WHERE id = $2`,
+        `UPDATE customer_otp_codes SET attempts = $1 WHERE id = $2`,
         [newAttempts, otpRecord.id]
       );
 
@@ -144,11 +144,11 @@ export class PinResetService {
     }
 
     // Mark OTP as used
-    await this.db.query(`UPDATE otp_codes SET is_used = TRUE WHERE id = $1`, [otpRecord.id]);
+    await this.db.query(`UPDATE customer_otp_codes SET is_used = TRUE WHERE id = $1`, [otpRecord.id]);
 
     // Advance session state to otp_verified
     await this.db.query(
-      `UPDATE pin_reset_sessions SET state = 'otp_verified', updated_at = NOW() WHERE id = $1`,
+      `UPDATE customer_pin_reset_sessions SET state = 'otp_verified', updated_at = NOW() WHERE id = $1`,
       [session.id]
     );
 
@@ -170,7 +170,7 @@ export class PinResetService {
 
     const session = await this.db.queryOne(
       `SELECT id, customer_id, state, expires_at, invalidated_at
-       FROM pin_reset_sessions
+       FROM customer_pin_reset_sessions
        WHERE session_token_hash = $1 AND invalidated_at IS NULL`,
       [sessionHash]
     );
@@ -194,7 +194,7 @@ export class PinResetService {
 
       // Invalidate the session
       await client.query(
-        `UPDATE pin_reset_sessions SET state = 'completed', invalidated_at = NOW(), updated_at = NOW() WHERE id = $1`,
+        `UPDATE customer_pin_reset_sessions SET state = 'completed', invalidated_at = NOW(), updated_at = NOW() WHERE id = $1`,
         [session.id]
       );
     });

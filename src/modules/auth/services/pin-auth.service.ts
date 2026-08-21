@@ -67,7 +67,7 @@ export class PinAuthService {
       [customer.id]
     );
 
-    await this.events.recordEvent('customer.pin_set', 'CustomerPin', String(customer.id), { customerId: customer.id });
+    await this.events.publish('customer.pin_set', 'CustomerPin', String(customer.id), { customerId: customer.id });
 
     return {
       success: true,
@@ -137,7 +137,7 @@ export class PinAuthService {
       [customerId]
     );
 
-    await this.events.recordEvent('customer.pin_changed', 'CustomerPin', String(customerId), { customerId });
+    await this.events.publish('customer.pin_changed', 'CustomerPin', String(customerId), { customerId });
 
     return {
       success: true,
