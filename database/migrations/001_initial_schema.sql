@@ -34,8 +34,6 @@ CREATE TABLE IF NOT EXISTS customers (
     phone_number VARCHAR(32) NOT NULL UNIQUE, -- From ASTPP accounts.number (account_number and phone_number are same)
     country_id INTEGER, -- From ASTPP accounts.country_id
     currency_id INTEGER, -- From ASTPP accounts.currency_id
-    customer_type INTEGER, -- From ASTPP accounts.customer_type
-    account_status INTEGER, -- From ASTPP accounts.status
     account_type INTEGER, -- From ASTPP accounts.type
     
     -- Customer Details
@@ -43,30 +41,19 @@ CREATE TABLE IF NOT EXISTS customers (
     email VARCHAR(255),
     first_name VARCHAR(100) NOT NULL,
     last_name VARCHAR(100) NOT NULL,
-    gender VARCHAR(20),
     date_of_birth DATE,
     timezone VARCHAR(50) DEFAULT 'Africa/Nairobi',
     
-    -- Status & Wallet
+    -- Status
     status customer_status_enum NOT NULL DEFAULT 'pending_verification',
-    has_wallet BOOLEAN NOT NULL DEFAULT FALSE,
-    
-    -- Wallet KYC (Secondary KYC for wallet activation)
-    wallet_kyc_status VARCHAR(20), -- 'pending', 'approved', 'rejected', null (null = not required)
-    wallet_kyc_required BOOLEAN NOT NULL DEFAULT FALSE, -- Flag if secondary KYC needed
-    wallet_kyc_flagged_at TIMESTAMPTZ,
     
     -- Soft Delete
-    deleted BOOLEAN NOT NULL DEFAULT FALSE,
     deleted_at TIMESTAMPTZ,
     
     -- CDC Sync Tracking
     sync_version BIGINT, -- For idempotency (from Kafka __source_ts_ms)
     synced_at TIMESTAMPTZ, -- Last sync timestamp
     astpp_created_at TIMESTAMPTZ, -- From ASTPP accounts.creation
-    
-    -- Metadata (flexible storage for additional ASTPP data)
-    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
     
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -75,14 +62,12 @@ CREATE TABLE IF NOT EXISTS customers (
 CREATE INDEX IF NOT EXISTS idx_customers_astpp_id ON customers(astpp_id);
 CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone_number);
 CREATE INDEX IF NOT EXISTS idx_customers_status ON customers(status);
-CREATE INDEX IF NOT EXISTS idx_customers_wallet_kyc_status ON customers(wallet_kyc_status);
 CREATE INDEX IF NOT EXISTS idx_customers_sync_version ON customers(sync_version);
-CREATE INDEX IF NOT EXISTS idx_customers_deleted ON customers(deleted) WHERE deleted = FALSE;
+CREATE INDEX IF NOT EXISTS idx_customers_deleted ON customers(deleted_at) WHERE deleted_at IS NULL;
 
 COMMENT ON TABLE customers IS 'Core customer records - synced from ASTPP accounts table via Kafka CDC';
 COMMENT ON COLUMN customers.astpp_id IS 'Primary key from ASTPP accounts.id - used for CDC sync';
 COMMENT ON COLUMN customers.phone_number IS 'Customer phone number - same as ASTPP accounts.number (account_number and phone_number are identical in ASTPP)';
-COMMENT ON COLUMN customers.wallet_kyc_status IS 'Secondary wallet KYC status - null means not required, pending/approved/rejected for flagged customers';
 COMMENT ON COLUMN customers.sync_version IS 'Kafka event timestamp for idempotency - prevents out-of-order updates';
 
 -- ============================================================================
@@ -321,7 +306,6 @@ CREATE TABLE IF NOT EXISTS customer_wallets (
     locked_at TIMESTAMPTZ,
     freeze_type VARCHAR(32), -- 'customer_initiated', 'admin_compliance', 'suspicious_activity'
     tier_level VARCHAR(20) NOT NULL DEFAULT 'TIER_1',
-    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

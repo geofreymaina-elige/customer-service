@@ -186,15 +186,7 @@ export class WalletKycSyncService {
         imagesJson,
       ]);
 
-      // Update customer wallet_kyc_status
-      await client.query(`
-        UPDATE customers SET
-          wallet_kyc_status = $2,
-          wallet_kyc_required = true,
-          wallet_kyc_flagged_at = COALESCE(wallet_kyc_flagged_at, $3),
-          updated_at = NOW()
-        WHERE astpp_id = $1
-      `, [astppId, walletKyc.status, walletKyc.created_at]);
+      // No need to update customers table - wallet KYC info is now in customer_applications
 
       // If approved, enable wallet
       if (walletKyc.status === 'approved') {

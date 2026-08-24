@@ -94,8 +94,8 @@ export class CustomerOperationsService {
   async getCustomerAdminDetails(customerUuid: string) {
     const customer = await this.db.queryOne(
       `SELECT c.id, c.uuid, c.astpp_id, c.phone_number, c.email,
-              c.first_name, c.last_name, c.gender, c.date_of_birth, c.timezone, c.status, c.has_wallet,
-              c.balance, c.credit_limit, c.wallet_kyc_status, c.wallet_kyc_required,
+              c.first_name, c.last_name, c.date_of_birth, c.timezone, c.status,
+              c.balance, c.credit_limit,
               c.created_at, c.updated_at,
               p.pin_hash IS NOT NULL AS has_pin, p.failed_attempts AS pin_failed_attempts, p.locked_until AS pin_locked_until,
               p.is_permanently_locked AS pin_is_permanently_locked, p.last_verified_at AS pin_last_verified_at,

@@ -35,9 +35,9 @@ export class OnboardingService {
 
     // If ASTPP DB not accessible or no record, check local DB
     let customer = await this.db.queryOne(
-      `SELECT id, uuid, astpp_account_id, voip_number, phone_number, first_name, last_name, email, gender, date_of_birth, status, has_wallet, timezone
+      `SELECT id, uuid, astpp_id, voip_number, phone_number, first_name, last_name, email, date_of_birth, status, timezone
        FROM customers
-       WHERE astpp_account_id = $1`,
+       WHERE astpp_id = $1`,
       [dto.astpp_id]
     );
 
@@ -62,11 +62,11 @@ export class OnboardingService {
       // Create new customer record in PostgreSQL
       customer = await this.db.queryOne(
         `INSERT INTO customers (
-          astpp_account_id, voip_number, phone_number, email, first_name,
-          last_name, gender, timezone, status, has_wallet, created_at, updated_at
+          astpp_id, voip_number, phone_number, email, first_name,
+          last_name, timezone, status, created_at, updated_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, 'male', $7, 'active', TRUE, NOW(), NOW())
-        RETURNING id, uuid, astpp_account_id, voip_number, phone_number, first_name, last_name, email, gender, date_of_birth, status, has_wallet, timezone`,
+        VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', NOW(), NOW())
+        RETURNING id, uuid, astpp_id, voip_number, phone_number, first_name, last_name, email, date_of_birth, status, timezone`,
         [
           dto.astpp_id,
           astppCustomer.voipNumber,

@@ -18,9 +18,8 @@ export class CustomerService {
   async getProfile(customerId: number) {
     const customer = await this.db.queryOne(
       `SELECT c.id, c.uuid, c.astpp_id, c.phone_number, c.email,
-              c.first_name, c.last_name, c.gender, c.date_of_birth, c.timezone, 
-              c.status, c.has_wallet, c.balance, c.credit_limit,
-              c.wallet_kyc_status, c.wallet_kyc_required, c.wallet_kyc_flagged_at,
+              c.first_name, c.last_name, c.date_of_birth, c.timezone, 
+              c.status, c.balance, c.credit_limit,
               c.created_at, c.updated_at,
               (p.pin_hash IS NOT NULL) AS is_pin_set,
               p.is_permanently_locked AS is_pin_permanently_locked,
@@ -52,19 +51,19 @@ export class CustomerService {
       [customerId]
     );
 
-    // Get wallet KYC details if flagged
-    let walletKyc = null;
-    if (customer.wallet_kyc_required) {
-      walletKyc = await this.db.queryOne(
-        `SELECT ca.kyc_status, ca.rejection_reason, ca.reviewed_at,
-                cad.identity_document_number, cad.images
-         FROM customer_applications ca
-         LEFT JOIN customer_applicant_details cad ON cad.application_id = ca.application_id
-         WHERE ca.customer_id = $1 AND ca.application_type = 'wallet_kyc'
-         LIMIT 1`,
-        [customerId]
-      );
-    }
+    // Get wallet KYC details (if exists)
+    const walletKyc = await this.db.queryOne(
+      `SELECT ca.kyc_status, ca.rejection_reason, ca.reviewed_at, ca.created_at,
+              cad.identity_document_number, cad.images
+       FROM customer_applications ca
+       LEFT JOIN customer_applicant_details cad ON cad.application_id = ca.application_id
+       WHERE ca.customer_id = $1 AND ca.application_type = 'wallet_kyc'
+       LIMIT 1`,
+      [customerId]
+    );
+
+    // Infer has_wallet from customer_wallets table (wallet exists and is active)
+    const hasWallet = customer.wallet_uuid !== null && customer.wallet_status === 'active';
 
     return {
       customerId: customer.uuid,
@@ -73,13 +72,13 @@ export class CustomerService {
       email: customer.email,
       firstName: customer.first_name,
       lastName: customer.last_name,
-      gender: customer.gender,
       dateOfBirth: customer.date_of_birth,
       timezone: customer.timezone,
       status: customer.status,
       balance: customer.balance || 0,
       creditLimit: customer.credit_limit || 0,
       createdAt: customer.created_at,
+      hasWallet,
       security: {
         isPinSet: customer.is_pin_set,
         isPinPermanentlyLocked: customer.is_pin_permanently_locked || false,
@@ -97,12 +96,12 @@ export class CustomerService {
         kycStatus: 'pending',
         kycTier: 'TIER_1',
       },
-      walletKyc: customer.wallet_kyc_required ? {
+      walletKyc: walletKyc ? {
         required: true,
-        status: customer.wallet_kyc_status,
-        flaggedAt: customer.wallet_kyc_flagged_at,
-        rejectionReason: walletKyc?.rejection_reason,
-        documentCount: walletKyc?.images ? JSON.parse(walletKyc.images).length : 0,
+        status: walletKyc.kyc_status,
+        flaggedAt: walletKyc.created_at,
+        rejectionReason: walletKyc.rejection_reason,
+        documentCount: walletKyc.images ? JSON.parse(walletKyc.images).length : 0,
       } : {
         required: false,
       },

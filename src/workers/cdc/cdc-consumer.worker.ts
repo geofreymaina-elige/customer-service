@@ -152,7 +152,7 @@ export class CdcConsumerWorker implements OnModuleInit, OnModuleDestroy {
    */
   private async handleAccountsEvent(event: KafkaEvent) {
     const { __op, id, deleted, number, first_name, last_name, email,
-            country_id, currency_id, customer_type, status, type: account_type, 
+            country_id, currency_id, type: account_type, 
             creation, __source_ts_ms } = event;
 
     const astpp_id = id;
@@ -192,7 +192,7 @@ export class CdcConsumerWorker implements OnModuleInit, OnModuleDestroy {
       await client.query('BEGIN');
 
       const { number, first_name, last_name, email,
-              country_id, currency_id, customer_type, status, type: account_type,
+              country_id, currency_id, type: account_type,
               deleted, creation, __source_ts_ms } = event;
 
       // Check if customer exists and compare version
@@ -208,14 +208,17 @@ export class CdcConsumerWorker implements OnModuleInit, OnModuleDestroy {
         return;
       }
 
-      // Upsert customer (removed balance and credit_limit)
+      // Determine deleted_at from ASTPP deleted flag
+      const deletedAt = deleted === 1 ? new Date() : null;
+
+      // Upsert customer
       await client.query(`
         INSERT INTO customers (
           astpp_id, phone_number, first_name, last_name, email,
-          country_id, currency_id, customer_type, account_status, account_type,
-          deleted, astpp_created_at, sync_version, synced_at, created_at, updated_at
+          country_id, currency_id, account_type,
+          deleted_at, astpp_created_at, sync_version, synced_at, created_at, updated_at
         ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW(), NOW()
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW(), NOW()
         )
         ON CONFLICT (astpp_id) DO UPDATE SET
           phone_number = EXCLUDED.phone_number,
@@ -224,10 +227,8 @@ export class CdcConsumerWorker implements OnModuleInit, OnModuleDestroy {
           email = EXCLUDED.email,
           country_id = EXCLUDED.country_id,
           currency_id = EXCLUDED.currency_id,
-          customer_type = EXCLUDED.customer_type,
-          account_status = EXCLUDED.account_status,
           account_type = EXCLUDED.account_type,
-          deleted = EXCLUDED.deleted,
+          deleted_at = EXCLUDED.deleted_at,
           sync_version = EXCLUDED.sync_version,
           synced_at = NOW(),
           updated_at = NOW()
@@ -239,10 +240,8 @@ export class CdcConsumerWorker implements OnModuleInit, OnModuleDestroy {
         email || null,
         country_id || null,
         currency_id || null,
-        customer_type || null,
-        status || null,
         account_type || null,
-        deleted === 1,
+        deletedAt,
         creation || null,
         __source_ts_ms,
       ]);
@@ -281,7 +280,6 @@ export class CdcConsumerWorker implements OnModuleInit, OnModuleDestroy {
       // Soft-delete customer
       await client.query(`
         UPDATE customers SET
-          deleted = true,
           deleted_at = NOW(),
           sync_version = $2,
           updated_at = NOW()
@@ -364,7 +362,6 @@ export class CdcConsumerWorker implements OnModuleInit, OnModuleDestroy {
         await client.query(`
           UPDATE customers SET
             status = 'active',
-            has_wallet = true,
             updated_at = NOW()
           WHERE astpp_id = $1
         `, [astpp_id]);

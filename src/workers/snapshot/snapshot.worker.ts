@@ -19,6 +19,7 @@ interface CustomerSnapshot {
   applicant_details: any;
   wallet_kyc: any;
   wallet_kyc_images: any[];
+  voip_number: string | null;
 }
 
 /**
@@ -149,11 +150,11 @@ export class SnapshotWorker {
    * Fetch all customer data from ASTPP
    */
   private async fetchCustomerData(astpp_id: number): Promise<CustomerSnapshot> {
-    const [account, application, applicant_details, wallet_kyc] = await Promise.all([
+    const [account, application, applicant_details, wallet_kyc, voipNumber] = await Promise.all([
       // Core account data (only type = 9 customer accounts)
       this.astppMysql.queryOne(`
         SELECT id, number, first_name, last_name, email,
-               telephone_2, country_id, currency_id, customer_type, status, type AS account_type,
+               telephone_2, country_id, currency_id, type AS account_type,
                deleted, creation
         FROM accounts WHERE id = ? AND deleted = 0 AND type = 9
       `, [astpp_id]),
@@ -180,6 +181,11 @@ export class SnapshotWorker {
                system_notes, created_at, updated_at, reviewed_at, reviewed_by
         FROM wallet_kyc_applications WHERE account_id = ? ORDER BY created_at DESC LIMIT 1
       `, [astpp_id]),
+
+      // VoIP number (DID) associated with this account
+      this.astppMysql.queryOne(`
+        SELECT number FROM dids WHERE accountid = ? LIMIT 1
+      `, [astpp_id]),
     ]);
 
     // Fetch wallet KYC images if wallet_kyc exists
@@ -200,6 +206,7 @@ export class SnapshotWorker {
       applicant_details,
       wallet_kyc,
       wallet_kyc_images,
+      voip_number: voipNumber?.number || null,
     };
   }
 
@@ -212,50 +219,44 @@ export class SnapshotWorker {
     try {
       await client.query('BEGIN');
 
-      const { account, application, applicant_details, wallet_kyc, wallet_kyc_images } = data;
+      const { account, application, applicant_details, wallet_kyc, wallet_kyc_images, voip_number } = data;
 
       // Determine KYC statuses
       const kycStatus = this.mapKycStatus(application?.status);
-      const walletKycStatus = wallet_kyc ? wallet_kyc.status : null;
-      const walletKycRequired = wallet_kyc ? true : false;
+
+      // Determine deleted_at from ASTPP deleted flag
+      const deletedAt = account.deleted === 1 ? new Date() : null;
 
       // 1. Upsert customer
       await client.query(`
         INSERT INTO customers (
-          astpp_id, phone_number, first_name, last_name, email,
-          country_id, currency_id, customer_type, account_status, account_type,
-          wallet_kyc_status, wallet_kyc_required, wallet_kyc_flagged_at,
-          deleted, astpp_created_at, synced_at, created_at, updated_at
+          astpp_id, phone_number, voip_number, first_name, last_name, email,
+          country_id, currency_id, account_type,
+          deleted_at, astpp_created_at, synced_at, created_at, updated_at
         ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW(), NOW(), NOW()
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW(), NOW()
         )
         ON CONFLICT (astpp_id) DO UPDATE SET
           phone_number = EXCLUDED.phone_number,
+          voip_number = EXCLUDED.voip_number,
           first_name = EXCLUDED.first_name,
           last_name = EXCLUDED.last_name,
           email = EXCLUDED.email,
-          account_status = EXCLUDED.account_status,
-          wallet_kyc_status = EXCLUDED.wallet_kyc_status,
-          wallet_kyc_required = EXCLUDED.wallet_kyc_required,
-          deleted = EXCLUDED.deleted,
+          deleted_at = EXCLUDED.deleted_at,
           synced_at = NOW(),
           updated_at = NOW()
         RETURNING id
       `, [
         account.id,
         account.number,
+        voip_number,
         account.first_name || '',
         account.last_name || '',
         account.email || null,
         account.country_id || null,
         account.currency_id || null,
-        account.customer_type || null,
-        account.status || null,
         account.account_type || null,
-        walletKycStatus,
-        walletKycRequired,
-        wallet_kyc ? wallet_kyc.created_at : null,
-        account.deleted === 1,
+        deletedAt,
         account.creation || null,
       ]);
 
