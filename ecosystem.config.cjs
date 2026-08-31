@@ -9,11 +9,11 @@ module.exports = {
       max_memory_restart: '1G',
       env: {
         NODE_ENV: 'production',
-        PORT: 5005,
+        PORT: 5006,
       },
       env_development: {
         NODE_ENV: 'development',
-        PORT: 5005,
+        PORT: 5006,
       },
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
       error_file: './logs/pm2-error.log',
