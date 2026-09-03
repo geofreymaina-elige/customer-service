@@ -30,8 +30,16 @@ export class OnboardingService {
     user: any;
     token: any;
   }> {
-    // 1. Sync from ASTPP or check existing customer
-    let astppCustomer = await this.astppAdapter.lookupCustomer(dto.astpp_id);
+    // 1. Sync from ASTPP or check existing customer (with 3-second timeout safety)
+    let astppCustomer = null;
+    try {
+      astppCustomer = await Promise.race([
+        this.astppAdapter.lookupCustomer(dto.astpp_id),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
+      ]);
+    } catch {
+      astppCustomer = null;
+    }
 
     // If ASTPP DB not accessible or no record, check local DB
     let customer = await this.db.queryOne(

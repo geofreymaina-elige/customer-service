@@ -59,36 +59,78 @@ export class AstppAdapterService implements OnModuleInit, OnModuleDestroy {
     }
 
     try {
-      const sql = `
-        SELECT
-          a.id AS accountId,
-          a.number AS accountNumber,
-          a.first_name AS firstName,
-          a.last_name AS lastName,
-          a.email AS email,
-          COALESCE(a.telephone_2, a.number) AS phoneNumber,
-          d.number AS voipNumber,
-          'Africa/Nairobi' AS timezone,
-          ad.identity_document_type AS identityDocumentType,
-          ad.identity_document_number AS identityDocumentNumber,
-          ad.date_of_birth AS dateOfBirth,
-          ad.gender AS gender,
-          COALESCE(app.status, 0) AS applicationStatus,
-          app.id AS applicationId
-        FROM accounts a
-        LEFT JOIN applications app ON app.accountid = a.id AND app.deleted = 0
-        LEFT JOIN applicant_details ad ON ad.accountid = a.id
-        LEFT JOIN dids d ON d.accountid = a.id
-        WHERE a.deleted = 0 AND (a.id = ? OR d.number = ?)
-        ORDER BY app.creation_date DESC
-        LIMIT 1
-      `;
+      let resolvedAccountId = astppAccountId;
 
-      const [rows] = await this.mysqlPool.query(sql, [astppAccountId, voipNumber || '']);
-      if (Array.isArray(rows) && rows.length > 0) {
-        return rows[0] as AstppCustomerRecord;
+      // 1. If voipNumber is given without an accountId, resolve it via dids
+      if (voipNumber && !astppAccountId) {
+        const [didRows] = await this.mysqlPool.query<any[]>(
+          'SELECT accountid FROM dids WHERE number = ? LIMIT 1',
+          [voipNumber],
+        );
+        if (Array.isArray(didRows) && didRows.length > 0) {
+          resolvedAccountId = didRows[0].accountid;
+        }
       }
-      return null;
+
+      // 2. Fetch core account by primary key (instant indexed lookup)
+      const [accountRows] = await this.mysqlPool.query<any[]>(
+        `SELECT id, number, first_name, last_name, email, telephone_2
+         FROM accounts
+         WHERE id = ? AND deleted = 0
+         LIMIT 1`,
+        [resolvedAccountId],
+      );
+
+      if (!Array.isArray(accountRows) || accountRows.length === 0) {
+        return null;
+      }
+      const account = accountRows[0];
+
+      // 3. Fetch primary KYC application (indexed on accountid)
+      const [appRows] = await this.mysqlPool.query<any[]>(
+        `SELECT id, status FROM applications WHERE accountid = ? AND deleted = 0 ORDER BY id DESC LIMIT 1`,
+        [account.id],
+      );
+      const app = Array.isArray(appRows) && appRows.length > 0 ? appRows[0] : null;
+
+      // 4. Fetch applicant details (indexed on accountid)
+      const [applicantRows] = await this.mysqlPool.query<any[]>(
+        `SELECT identity_document_type, identity_document_number, date_of_birth, gender
+         FROM applicant_details
+         WHERE accountid = ?
+         LIMIT 1`,
+        [account.id],
+      );
+      const applicant = Array.isArray(applicantRows) && applicantRows.length > 0 ? applicantRows[0] : null;
+
+      // 5. Fetch DID voip number if not provided (indexed on accountid)
+      let finalVoip = voipNumber || '';
+      if (!finalVoip) {
+        const [didRows] = await this.mysqlPool.query<any[]>(
+          `SELECT number FROM dids WHERE accountid = ? LIMIT 1`,
+          [account.id],
+        );
+        if (Array.isArray(didRows) && didRows.length > 0) {
+          finalVoip = didRows[0].number;
+        }
+      }
+
+      return {
+        accountId: account.id,
+        accountNumber: account.number,
+        firstName: account.first_name || '',
+        lastName: account.last_name || '',
+        email: account.email || '',
+        phoneNumber: account.telephone_2 || account.number || '',
+        voipNumber: finalVoip || account.number || '',
+        timezone: 'Africa/Nairobi',
+        identityDocumentType: applicant?.identity_document_type ?? 0,
+        identityDocumentNumber: applicant?.identity_document_number ?? '',
+        dateOfBirth: applicant?.date_of_birth ?? undefined,
+        gender: applicant?.gender ?? undefined,
+        applicationStatus: app?.status ?? 0,
+        applicationId: app?.id ?? undefined,
+      };
     } catch (error) {
       console.error('[ASTPP ADAPTER] Error querying ASTPP database:', error);
       return null;
