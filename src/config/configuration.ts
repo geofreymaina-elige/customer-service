@@ -27,6 +27,8 @@ export default () => ({
     database: process.env.ASTPP_DATABASE || 'astpp',
     user: process.env.ASTPP_USER || 'root',
     password: process.env.ASTPP_PASSWORD || '',
+    tokenKey: process.env.ASTPP_TOKEN_KEY || '',
+    ivKey: process.env.ASTPP_IV_KEY || '',
   },
   kafka: {
     brokers: (process.env.KAFKA_BROKERS || 'localhost:9092').split(','),

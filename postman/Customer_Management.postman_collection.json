@@ -16,8 +16,12 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/health",
-              "host": ["{{baseUrl}}"],
-              "path": ["health"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
             }
           }
         }
@@ -51,16 +55,36 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Astpp-Token",
+                "value": "{{astppToken}}",
+                "description": "ASTPP encrypted token for this account"
+              }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"astpp_id\": \"10492\",\n  \"device_identifier\": \"{{deviceIdentifier}}\",\n  \"device_model\": \"Samsung Galaxy S23\",\n  \"device_os\": \"Android 14\",\n  \"mobile_type\": \"android\",\n  \"app_version\": \"2.4.1\"\n}"
+              "raw": "{\n  \"astpp_id\": \"0000\",\n  \"device_identifier\": \"{{deviceIdentifier}}\",\n  \"device_model\": \"Samsung Galaxy S23\",\n  \"device_os\": \"Android 14\",\n  \"mobile_type\": \"android\",\n  \"app_version\": \"2.4.1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/onboarding/user-device",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "onboarding", "user-device"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "onboarding",
+                "user-device"
+              ]
             },
             "description": "Complete onboarding flow: ASTPP sync → Device registration → Wallet creation → Auto SasaPay WaaS initiation. Client only needs to call this endpoint and then the OTP confirmation."
           }
@@ -70,7 +94,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -78,8 +105,16 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/onboarding/personal/confirm",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "onboarding", "personal", "confirm"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "onboarding",
+                "personal",
+                "confirm"
+              ]
             },
             "description": "Confirm the OTP code sent during user-device onboarding. This completes the SasaPay WaaS registration."
           }
@@ -89,7 +124,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -97,8 +135,16 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/onboarding/callback/sasapay",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "onboarding", "callback", "sasapay"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "onboarding",
+                "callback",
+                "sasapay"
+              ]
             },
             "description": "SasaPay webhook callback for account status updates"
           }
@@ -113,16 +159,27 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"customerId\": \"10492\",\n  \"pin\": \"4920\",\n  \"confirmPin\": \"4920\"\n}"
+              "raw": "{\n  \"customerId\": \"0000\",\n  \"pin\": \"4920\",\n  \"confirmPin\": \"4920\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/pin/set",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "auth", "pin", "set"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "pin",
+                "set"
+              ]
             }
           }
         },
@@ -145,16 +202,27 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"customerId\": \"10492\",\n  \"pin\": \"4920\",\n  \"deviceIdentifier\": \"{{deviceIdentifier}}\",\n  \"deviceModel\": \"Samsung Galaxy S23\",\n  \"mobileType\": \"android\"\n}"
+              "raw": "{\n  \"customerId\": \"0000\",\n  \"pin\": \"4920\",\n  \"deviceIdentifier\": \"{{deviceIdentifier}}\",\n  \"deviceModel\": \"Samsung Galaxy S23\",\n  \"mobileType\": \"android\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/pin/verify",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "auth", "pin", "verify"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "pin",
+                "verify"
+              ]
             }
           }
         }
@@ -182,16 +250,27 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"astppId\": \"10492\",\n  \"idNumber\": \"ID10492\"\n}"
+              "raw": "{\n  \"astppId\": \"0000\",\n  \"idNumber\": \"ID0000\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/reset-pin/initiate",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "auth", "reset-pin", "initiate"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "reset-pin",
+                "initiate"
+              ]
             }
           }
         },
@@ -200,7 +279,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -208,8 +290,16 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/reset-pin/verify-otp",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "auth", "reset-pin", "verify-otp"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "reset-pin",
+                "verify-otp"
+              ]
             }
           }
         },
@@ -218,7 +308,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -226,8 +319,16 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/reset-pin/complete",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "auth", "reset-pin", "complete"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "reset-pin",
+                "complete"
+              ]
             }
           }
         }
@@ -255,16 +356,28 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"astppId\": \"10492\",\n  \"idNumber\": \"ID10492\",\n  \"pin\": \"4920\"\n}"
+              "raw": "{\n  \"astppId\": \"0000\",\n  \"idNumber\": \"ID0000\",\n  \"pin\": \"4920\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/device/logout/initiate",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "auth", "device", "logout", "initiate"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "device",
+                "logout",
+                "initiate"
+              ]
             }
           }
         },
@@ -273,7 +386,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -281,8 +397,17 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/device/logout/verify",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "auth", "device", "logout", "verify"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "device",
+                "logout",
+                "verify"
+              ]
             }
           }
         },
@@ -291,12 +416,23 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/device/sessions",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "auth", "device", "sessions"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "device",
+                "sessions"
+              ]
             }
           }
         }
@@ -310,12 +446,22 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/api/v1/customers/me",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "customers", "me"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "customers",
+                "me"
+              ]
             }
           }
         },
@@ -324,8 +470,14 @@
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{authToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -333,8 +485,15 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/customers/me",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "customers", "me"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "customers",
+                "me"
+              ]
             }
           }
         }
@@ -347,15 +506,29 @@
           "name": "Get Wallet Onboarding Status (by ASTPP ID)",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "X-Astpp-Token",
+                "value": "{{astppToken}}",
+                "description": "ASTPP encrypted token for this account"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/v1/wallets/:astppId/onboarding-status",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "wallets", ":astppId", "onboarding-status"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "wallets",
+                ":astppId",
+                "onboarding-status"
+              ],
               "variable": [
                 {
                   "key": "astppId",
-                  "value": "10492",
+                  "value": "0000",
                   "description": "ASTPP Account ID of the customer"
                 }
               ]
@@ -368,12 +541,22 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/api/v1/wallets/me",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "wallets", "me"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "wallets",
+                "me"
+              ]
             }
           }
         }
@@ -387,12 +570,22 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/internal/wallet-kyc/sync/:astppId",
-              "host": ["{{baseUrl}}"],
-              "path": ["internal", "wallet-kyc", "sync", ":astppId"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "internal",
+                "wallet-kyc",
+                "sync",
+                ":astppId"
+              ],
               "variable": [
                 {
                   "key": "astppId",
@@ -408,7 +601,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -416,8 +612,14 @@
             },
             "url": {
               "raw": "{{baseUrl}}/internal/wallet-kyc/bulk-sync",
-              "host": ["{{baseUrl}}"],
-              "path": ["internal", "wallet-kyc", "bulk-sync"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "internal",
+                "wallet-kyc",
+                "bulk-sync"
+              ]
             },
             "description": "Bulk sync wallet KYC data for multiple customers (useful for scheduled jobs)"
           }

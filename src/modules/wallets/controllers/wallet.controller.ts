@@ -2,6 +2,7 @@ import { Controller, Get, Post, Body, Param, UseGuards, HttpCode, HttpStatus } f
 import { WalletService } from '../services/wallet.service';
 import { LockWalletDto, UnlockWalletDto } from '../dto/wallet.dto';
 import { AuthGuard } from '../../../core/auth/auth.guard';
+import { AstppTokenGuard } from '../../../core/auth/astpp-token.guard';
 import { CurrentUser, AuthenticatedUser } from '../../../core/auth/current-user.decorator';
 import { MessageService } from '../../../core/messages/message.service';
 
@@ -23,6 +24,7 @@ export class WalletController {
   }
 
   @Get(':astppId/onboarding-status')
+  @UseGuards(AstppTokenGuard)
   async getWalletOnboardingStatus(@Param('astppId') astppId: string) {
     const data = await this.walletService.getWalletOnboardingStatusByAstppId(astppId);
     return {
