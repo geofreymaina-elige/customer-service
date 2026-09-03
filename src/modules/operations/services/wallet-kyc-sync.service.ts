@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { AstppMysqlService } from '../../../core/astpp-mysql/astpp-mysql.service';
 import { DatabaseService } from '../../../core/database/database.service';
+import { parseDateOrNull, parseTimestampOrNull } from '../../../core/utils/date.util';
 
 /**
  * Wallet KYC Sync Service
@@ -134,10 +135,10 @@ export class WalletKycSyncService {
         walletKyc.status || 'pending',
         walletKyc.rejection_reason || null,
         walletKyc.system_notes || null,
-        walletKyc.reviewed_at || null,
+        parseTimestampOrNull(walletKyc.reviewed_at),
         walletKyc.reviewed_by || null,
-        walletKyc.created_at || new Date(),
-        walletKyc.updated_at || new Date(),
+        parseTimestampOrNull(walletKyc.created_at) || new Date(),
+        parseTimestampOrNull(walletKyc.updated_at) || new Date(),
       ]);
 
       // Prepare images JSON
@@ -149,7 +150,7 @@ export class WalletKycSyncService {
         file_size: img.file_size,
         mime_type: img.mime_type,
         description: img.description || '',
-        uploaded_at: img.upload_date,
+        uploaded_at: parseTimestampOrNull(img.upload_date)?.toISOString() || null,
       })));
 
       // Upsert wallet KYC applicant details
@@ -179,7 +180,7 @@ export class WalletKycSyncService {
         walletKyc.name || '',
         'NATIONAL_ID', // Default
         walletKyc.identity_document_number || '',
-        walletKyc.date_of_birth || null,
+        parseDateOrNull(walletKyc.date_of_birth),
         this.mapGender(walletKyc.gender),
         walletKyc.nationality || null,
         walletKyc.physical_address || null,

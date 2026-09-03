@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AstppMysqlService } from '../../core/astpp-mysql/astpp-mysql.service';
 import { DatabaseService } from '../../core/database/database.service';
+import { parseDateOrNull, parseTimestampOrNull } from '../../core/utils/date.util';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
@@ -257,7 +258,7 @@ export class SnapshotWorker {
         account.currency_id || null,
         account.account_type || null,
         deletedAt,
-        account.creation || null,
+        parseTimestampOrNull(account.creation),
       ]);
 
       const customerResult = await client.query(
@@ -288,9 +289,9 @@ export class SnapshotWorker {
           application.application_id,
           application.applicationid || null,
           kycStatus,
-          application.approved_date || null,
-          application.rejected_date || null,
-          application.creation_date || new Date(),
+          parseTimestampOrNull(application.approved_date),
+          parseTimestampOrNull(application.rejected_date),
+          parseTimestampOrNull(application.creation_date) || new Date(),
         ]);
 
         // Insert applicant details
@@ -317,7 +318,7 @@ export class SnapshotWorker {
           applicant_details.name || '',
           this.mapDocumentType(applicant_details.identity_document_type),
           applicant_details.identity_document_number || '',
-          applicant_details.date_of_birth || null,
+          parseDateOrNull(applicant_details.date_of_birth),
           this.mapGender(applicant_details.gender),
           applicant_details.nationality || null,
           applicant_details.physical_address || null,
@@ -352,10 +353,10 @@ export class SnapshotWorker {
           wallet_kyc.status || 'pending',
           wallet_kyc.rejection_reason || null,
           wallet_kyc.system_notes || null,
-          wallet_kyc.reviewed_at || null,
+          parseTimestampOrNull(wallet_kyc.reviewed_at),
           wallet_kyc.reviewed_by || null,
-          wallet_kyc.created_at || new Date(),
-          wallet_kyc.updated_at || new Date(),
+          parseTimestampOrNull(wallet_kyc.created_at) || new Date(),
+          parseTimestampOrNull(wallet_kyc.updated_at) || new Date(),
         ]);
 
         // Insert wallet KYC applicant details with images
@@ -367,7 +368,7 @@ export class SnapshotWorker {
           file_size: img.file_size,
           mime_type: img.mime_type,
           description: img.description || '',
-          uploaded_at: img.upload_date,
+          uploaded_at: parseTimestampOrNull(img.upload_date)?.toISOString() || null,
         })));
 
         await client.query(`
@@ -391,7 +392,7 @@ export class SnapshotWorker {
           wallet_kyc.name || '',
           'NATIONAL_ID', // Default, will be updated if needed
           wallet_kyc.identity_document_number || '',
-          wallet_kyc.date_of_birth || null,
+          parseDateOrNull(wallet_kyc.date_of_birth),
           this.mapGender(wallet_kyc.gender),
           wallet_kyc.nationality || null,
           wallet_kyc.physical_address || null,

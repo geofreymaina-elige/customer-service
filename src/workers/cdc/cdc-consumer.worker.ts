@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DatabaseService } from '../../core/database/database.service';
+import { parseDateOrNull, parseTimestampOrNull } from '../../core/utils/date.util';
 import { Kafka, Consumer, EachMessagePayload } from 'kafkajs';
 
 interface KafkaEvent {
@@ -242,7 +243,7 @@ export class CdcConsumerWorker implements OnModuleInit, OnModuleDestroy {
         currency_id || null,
         account_type || null,
         deletedAt,
-        creation || null,
+        parseTimestampOrNull(creation),
         __source_ts_ms,
       ]);
 
@@ -352,8 +353,8 @@ export class CdcConsumerWorker implements OnModuleInit, OnModuleDestroy {
         application_id,
         event.applicationid || null,
         kyc_status,
-        approved_date || null,
-        rejected_date || null,
+        parseTimestampOrNull(approved_date),
+        parseTimestampOrNull(rejected_date),
         __source_ts_ms,
       ]);
 
@@ -443,7 +444,7 @@ export class CdcConsumerWorker implements OnModuleInit, OnModuleDestroy {
         name || '',
         this.mapDocumentType(identity_document_type),
         identity_document_number || '',
-        date_of_birth || null,
+        parseDateOrNull(date_of_birth),
         this.mapGender(gender),
         nationality || null,
         physical_address || null,
