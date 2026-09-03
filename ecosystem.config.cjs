@@ -22,5 +22,25 @@ module.exports = {
       autorestart: true,
       exp_backoff_restart_delay: 100,
     },
+    {
+      name: 'customer-cdc-consumer',
+      script: 'dist/src/workers/cdc/run-cdc-consumer.js',
+      instances: 1,
+      exec_mode: 'fork',
+      watch: false,
+      max_memory_restart: '1G',
+      env: {
+        NODE_ENV: 'production',
+      },
+      env_development: {
+        NODE_ENV: 'development',
+      },
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+      error_file: './logs/pm2-cdc-error.log',
+      out_file: './logs/pm2-cdc-out.log',
+      merge_logs: true,
+      autorestart: true,
+      exp_backoff_restart_delay: 100,
+    },
   ],
 };
