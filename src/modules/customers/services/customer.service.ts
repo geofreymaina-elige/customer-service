@@ -139,8 +139,8 @@ export class CustomerService {
     // Record activity log
     await this.db.query(
       `INSERT INTO customer_activity_logs (customer_id, event_type, actor_type, actor_id, details)
-       VALUES ($1, 'PROFILE_UPDATED', 'CUSTOMER', $1::text, $2::jsonb)`,
-      [customerId, JSON.stringify(dto)]
+       VALUES ($1, 'PROFILE_UPDATED', 'CUSTOMER', $2, $3::jsonb)`,
+      [customerId, String(customerId), JSON.stringify(dto)]
     );
 
     return this.getProfile(customerId);
@@ -171,8 +171,8 @@ export class CustomerService {
     // Record activity log
     await this.db.query(
       `INSERT INTO customer_activity_logs (customer_id, event_type, actor_type, actor_id, details)
-       VALUES ($1, 'KYC_DOCUMENTS_SUBMITTED', 'CUSTOMER', $1::text, $2::jsonb)`,
-      [customerId, JSON.stringify({ documentType: dto.documentType, documentNumber: dto.documentNumber })]
+       VALUES ($1, 'KYC_DOCUMENTS_SUBMITTED', 'CUSTOMER', $2, $3::jsonb)`,
+      [customerId, String(customerId), JSON.stringify({ documentType: dto.documentType, documentNumber: dto.documentNumber })]
     );
 
     // Dispatch outbox event

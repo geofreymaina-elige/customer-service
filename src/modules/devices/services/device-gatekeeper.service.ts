@@ -112,9 +112,10 @@ export class DeviceGatekeeperService {
     // Record activity log
     await this.db.query(
       `INSERT INTO customer_activity_logs (customer_id, event_type, actor_type, actor_id, details, ip_address)
-       VALUES ($1, 'DEVICE_REGISTERED', 'CUSTOMER', $1::text, $2::jsonb, $3)`,
+       VALUES ($1, 'DEVICE_REGISTERED', 'CUSTOMER', $2, $3::jsonb, $4)`,
       [
         customerId,
+        String(customerId),
         JSON.stringify({
           deviceModel: deviceData.deviceModel,
           mobileType: deviceData.mobileType,
@@ -158,8 +159,8 @@ export class DeviceGatekeeperService {
     // Record activity log
     await this.db.query(
       `INSERT INTO customer_activity_logs (customer_id, event_type, actor_type, actor_id, details)
-       VALUES ($1, 'DEVICE_REVOKED', 'CUSTOMER', $1::text, $2::jsonb)`,
-      [customerId, JSON.stringify({ deviceUuid })]
+       VALUES ($1, 'DEVICE_REVOKED', 'CUSTOMER', $2, $3::jsonb)`,
+      [customerId, String(customerId), JSON.stringify({ deviceUuid })]
     );
 
     await this.events.publish('customer.device_revoked', 'CustomerDevice', String(customerId), {

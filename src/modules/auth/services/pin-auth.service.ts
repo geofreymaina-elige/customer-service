@@ -63,8 +63,8 @@ export class PinAuthService {
     // Record activity log
     await this.db.query(
       `INSERT INTO customer_activity_logs (customer_id, event_type, actor_type, actor_id, details)
-       VALUES ($1, 'PIN_SET', 'CUSTOMER', $1::text, '{}'::jsonb)`,
-      [customer.id]
+       VALUES ($1, 'PIN_SET', 'CUSTOMER', $2, '{}'::jsonb)`,
+      [customer.id, String(customer.id)]
     );
 
     await this.events.publish('customer.pin_set', 'CustomerPin', String(customer.id), { customerId: customer.id });
@@ -133,8 +133,8 @@ export class PinAuthService {
     // Record activity log
     await this.db.query(
       `INSERT INTO customer_activity_logs (customer_id, event_type, actor_type, actor_id, details)
-       VALUES ($1, 'PIN_CHANGED', 'CUSTOMER', $1::text, '{}'::jsonb)`,
-      [customerId]
+       VALUES ($1, 'PIN_CHANGED', 'CUSTOMER', $2, '{}'::jsonb)`,
+      [customerId, String(customerId)]
     );
 
     await this.events.publish('customer.pin_changed', 'CustomerPin', String(customerId), { customerId });
