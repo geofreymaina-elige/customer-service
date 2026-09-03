@@ -24,6 +24,31 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     try {
       const client = await this.pool.connect();
       console.log('[DATABASE] PostgreSQL connection pool established successfully');
+
+      // Auto-ensure SasaPay WaaS columns exist on customer_applications
+      await client.query(`
+        ALTER TABLE customer_applications 
+          ADD COLUMN IF NOT EXISTS sasapay_request_id VARCHAR(64),
+          ADD COLUMN IF NOT EXISTS sasapay_account_number VARCHAR(64),
+          ADD COLUMN IF NOT EXISTS sasapay_account_status VARCHAR(32),
+          ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMPTZ;
+
+        ALTER TABLE customer_applications 
+          ALTER COLUMN application_id DROP NOT NULL;
+
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint WHERE conname = 'uq_customer_application_type'
+            ) THEN
+                ALTER TABLE customer_applications 
+                    ADD CONSTRAINT uq_customer_application_type UNIQUE (customer_id, application_type);
+            END IF;
+        END $$;
+      `).catch((err) => {
+        console.warn('[DATABASE] Schema auto-migration notice:', err.message);
+      });
+
       client.release();
     } catch (error) {
       console.error('[DATABASE] Failed to connect to PostgreSQL:', error);

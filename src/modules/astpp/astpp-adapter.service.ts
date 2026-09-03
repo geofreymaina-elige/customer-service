@@ -62,23 +62,23 @@ export class AstppAdapterService implements OnModuleInit, OnModuleDestroy {
       const sql = `
         SELECT
           a.id AS accountId,
-          a.account_number AS accountNumber,
+          a.number AS accountNumber,
           a.first_name AS firstName,
           a.last_name AS lastName,
           a.email AS email,
-          a.phone AS phoneNumber,
+          COALESCE(a.telephone_2, a.number) AS phoneNumber,
           d.number AS voipNumber,
-          t.gmtzone AS timezone,
+          'Africa/Nairobi' AS timezone,
           ad.identity_document_type AS identityDocumentType,
           ad.identity_document_number AS identityDocumentNumber,
           ad.date_of_birth AS dateOfBirth,
           ad.gender AS gender,
-          COALESCE(app.status, 0) AS applicationStatus
+          COALESCE(app.status, 0) AS applicationStatus,
+          app.id AS applicationId
         FROM accounts a
         LEFT JOIN applications app ON app.accountid = a.id AND app.deleted = 0
-        LEFT JOIN applicant_details ad ON ad.application_id = app.id
-        LEFT JOIN dids d ON d.id = app.did_id
-        LEFT JOIN timezone t ON a.timezone_id = t.id
+        LEFT JOIN applicant_details ad ON ad.accountid = a.id
+        LEFT JOIN dids d ON d.accountid = a.id
         WHERE a.deleted = 0 AND (a.id = ? OR d.number = ?)
         ORDER BY app.creation_date DESC
         LIMIT 1

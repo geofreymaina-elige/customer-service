@@ -2,16 +2,34 @@ import * as crypto from 'node:crypto';
 import { BadRequestException } from '@nestjs/common';
 
 /**
+ * Helper to attempt AES-256-CBC decryption with candidate key, iv and ciphertext.
+ * Returns decrypted UTF-8 string on success, or null on decryption failure (e.g. bad decrypt / padding error).
+ */
+function tryDecrypt(cipherBuf: Buffer, keyBuf: Buffer, ivBuf: Buffer): string | null {
+  try {
+    if (cipherBuf.length === 0 || keyBuf.length !== 32 || ivBuf.length !== 16) {
+      return null;
+    }
+    const decipher = crypto.createDecipheriv('aes-256-cbc', keyBuf, ivBuf);
+    const decrypted = Buffer.concat([
+      decipher.update(cipherBuf),
+      decipher.final(),
+    ]);
+    return decrypted.toString('utf8');
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Validates and decrypts an ASTPP token, then checks it matches the given id.
  *
- * Algorithm (mirrors legacy PHP implementation):
- *   key  = sha256(ASTPP_TOKEN_KEY)        → hex string
- *   iv   = sha256(ASTPP_IV_KEY)[0..15]    → first 16 bytes
- *   token must be exactly 30 chars long   (base64-encoded AES-256-CBC ciphertext)
- *   decrypted value must equal String(id)
+ * Handles ASTPP / PHP legacy encryption quirks:
+ *   - Key: SHA-256 hex string first 32 chars OR raw 32-byte binary SHA-256 digest
+ *   - IV: SHA-256 hex string first 16 chars OR raw 16-byte binary SHA-256 digest
+ *   - Ciphertext: Double Base64 (base64_encode(openssl_encrypt(...))) OR Single Base64
  *
- * @throws BadRequestException  when token is absent, wrong length, fails decryption,
- *                               or decrypted id does not match.
+ * @throws BadRequestException when token is absent, fails decryption, or decrypted id does not match.
  */
 export function validateAndDecryptToken(
   id: string | number,
@@ -26,58 +44,78 @@ export function validateAndDecryptToken(
     );
   }
 
-  let tokenId: string | false = false;
-
-  if (token) {
-    try {
-      // PHP: $key = hash('sha256', config_item('token_key'));
-      const key = crypto
-        .createHash('sha256')
-        .update(tokenKey, 'utf8')
-        .digest('hex');
-
-      // PHP: $iv = substr(hash('sha256', $secret_iv), 0, 16);
-      const iv = crypto
-        .createHash('sha256')
-        .update(ivKey, 'utf8')
-        .digest('hex')
-        .substring(0, 16);
-
-      // PHP: if (strlen($string) == 30)
-      if (token.length === 30) {
-        // PHP: base64_decode($string) → then another base64_decode for the actual cipher
-        const firstBase64 = Buffer.from(token, 'base64').toString('utf8');
-
-        const aesKey = Buffer.from(key, 'utf8').subarray(0, 32);
-        const aesIv = Buffer.from(iv, 'utf8');
-
-        const encrypted = Buffer.from(firstBase64, 'base64');
-
-        const decipher = crypto.createDecipheriv('aes-256-cbc', aesKey, aesIv);
-
-        const decrypted = Buffer.concat([
-          decipher.update(encrypted),
-          decipher.final(),
-        ]);
-
-        tokenId = decrypted.toString('utf8');
-      }
-      // else tokenId stays false
-    } catch (error) {
-      console.error(
-        `[AstppTokenUtil] Decryption error: ${error instanceof Error ? error.message : error}`,
-      );
-      tokenId = false;
-    }
-  }
-
-  // PHP: if ($this->postdata['id'] != $token_id)
-  if (String(id) !== String(tokenId)) {
+  const cleanToken = token?.trim();
+  if (!cleanToken) {
     throw new BadRequestException({
       status: false,
       error: 'Invalid key',
     });
   }
 
-  return String(tokenId);
+  const targetIdStr = String(id).trim();
+
+  // Key candidates
+  const keyHex = crypto.createHash('sha256').update(tokenKey, 'utf8').digest('hex');
+  const candidateKeys = [
+    Buffer.from(keyHex, 'utf8').subarray(0, 32), // PHP openssl default: first 32 chars of hex string
+    crypto.createHash('sha256').update(tokenKey, 'utf8').digest(), // Raw 32-byte binary SHA-256
+  ];
+
+  // IV candidates
+  const ivHex = crypto.createHash('sha256').update(ivKey, 'utf8').digest('hex');
+  const candidateIvs = [
+    Buffer.from(ivHex.substring(0, 16), 'utf8'), // PHP: substr(hash('sha256', $secret_iv), 0, 16)
+    crypto.createHash('sha256').update(ivKey, 'utf8').digest().subarray(0, 16), // Raw 16-byte binary
+  ];
+
+  // Ciphertext candidates (double base64 vs single base64)
+  const candidateCiphers: Buffer[] = [];
+  try {
+    // Double Base64: base64_encode(openssl_encrypt(...)) where openssl_encrypt already outputs base64
+    const firstBase64 = Buffer.from(cleanToken, 'base64').toString('utf8');
+    const doubleCipher = Buffer.from(firstBase64, 'base64');
+    if (doubleCipher.length > 0) {
+      candidateCiphers.push(doubleCipher);
+    }
+  } catch {
+    // Ignore base64 decode errors
+  }
+
+  try {
+    const singleCipher = Buffer.from(cleanToken, 'base64');
+    if (singleCipher.length > 0) {
+      candidateCiphers.push(singleCipher);
+    }
+  } catch {
+    // Ignore base64 decode errors
+  }
+
+  let decryptedId: string | null = null;
+
+  // Try all permutations
+  for (const cipher of candidateCiphers) {
+    for (const key of candidateKeys) {
+      for (const iv of candidateIvs) {
+        const result = tryDecrypt(cipher, key, iv);
+        if (result !== null) {
+          if (result.trim() === targetIdStr) {
+            console.log(`[AstppTokenUtil] Token validated successfully for id: ${targetIdStr}`);
+            return targetIdStr;
+          }
+          if (!decryptedId) {
+            decryptedId = result.trim();
+          }
+        }
+      }
+    }
+  }
+
+  console.warn(
+    `[AstppTokenUtil] Validation failed. Expected id: '${targetIdStr}', decrypted: '${decryptedId ?? 'FAILED_DECRYPT'}'`,
+  );
+
+  throw new BadRequestException({
+    status: false,
+    error: 'Invalid key',
+  });
 }

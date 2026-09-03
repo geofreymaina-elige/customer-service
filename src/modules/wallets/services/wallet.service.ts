@@ -70,15 +70,27 @@ export class WalletService {
       [customerId]
     );
 
-    // Single query to fetch customer application status
-    const application = await this.db.queryOne(
-      `SELECT kyc_status, sasapay_request_id, sasapay_account_number, sasapay_account_status, submitted_at, approved_at, rejected_at
-       FROM customer_applications
-       WHERE customer_id = $1 AND application_type = 'wallet_kyc'
-       ORDER BY created_at DESC
-       LIMIT 1`,
-      [customerId]
-    );
+    // Single query to fetch customer application status (with fallback if migration is running)
+    let application: any = null;
+    try {
+      application = await this.db.queryOne(
+        `SELECT kyc_status, sasapay_request_id, sasapay_account_number, sasapay_account_status, submitted_at, approved_at, rejected_at
+         FROM customer_applications
+         WHERE customer_id = $1 AND application_type = 'wallet_kyc'
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [customerId]
+      );
+    } catch (error) {
+      application = await this.db.queryOne(
+        `SELECT kyc_status, approved_at, rejected_at, created_at AS submitted_at
+         FROM customer_applications
+         WHERE customer_id = $1 AND application_type = 'wallet_kyc'
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [customerId]
+      ).catch(() => null);
+    }
 
     // Determine readiness
     const hasWallet = !!wallet;
