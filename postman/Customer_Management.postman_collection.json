@@ -344,18 +344,23 @@
       "name": "Wallets",
       "item": [
         {
-          "name": "Get My Wallet Onboarding Status",
+          "name": "Get Wallet Onboarding Status (by ASTPP ID)",
           "request": {
             "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{authToken}}" }
-            ],
+            "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/wallets/me/onboarding-status",
+              "raw": "{{baseUrl}}/api/v1/wallets/:astppId/onboarding-status",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "wallets", "me", "onboarding-status"]
+              "path": ["api", "v1", "wallets", ":astppId", "onboarding-status"],
+              "variable": [
+                {
+                  "key": "astppId",
+                  "value": "10492",
+                  "description": "ASTPP Account ID of the customer"
+                }
+              ]
             },
-            "description": "Check wallet onboarding readiness, application status, and whether additional KYC is needed. Fast endpoint with no joins - only 2 queries."
+            "description": "Public endpoint — no auth token required. Check wallet onboarding readiness, application status, and whether additional KYC is needed. Fast endpoint with no joins - only 2 queries."
           }
         },
         {

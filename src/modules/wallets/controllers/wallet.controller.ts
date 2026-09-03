@@ -22,10 +22,9 @@ export class WalletController {
     };
   }
 
-  @Get('me/onboarding-status')
-  @UseGuards(AuthGuard)
-  async getMyWalletOnboardingStatus(@CurrentUser() user: AuthenticatedUser) {
-    const data = await this.walletService.getWalletOnboardingStatus(user.id);
+  @Get(':astppId/onboarding-status')
+  async getWalletOnboardingStatus(@Param('astppId') astppId: string) {
+    const data = await this.walletService.getWalletOnboardingStatusByAstppId(astppId);
     return {
       success: true,
       data,

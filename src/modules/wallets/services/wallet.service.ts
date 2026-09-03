@@ -44,6 +44,21 @@ export class WalletService {
   }
 
   /**
+   * Get wallet onboarding readiness status by ASTPP ID (no auth required)
+   * Resolves astppId → internal customer id, then delegates to getWalletOnboardingStatus
+   */
+  async getWalletOnboardingStatusByAstppId(astppId: string) {
+    const customer = await this.db.queryOne(
+      `SELECT id FROM customers WHERE astpp_id = $1::bigint`,
+      [astppId]
+    );
+    if (!customer) {
+      throw new NotFoundException(this.messages.get('common.notFound'));
+    }
+    return this.getWalletOnboardingStatus(customer.id);
+  }
+
+  /**
    * Get wallet onboarding readiness status (fast - no joins)
    * Returns wallet status, application progress, and KYC requirements
    */

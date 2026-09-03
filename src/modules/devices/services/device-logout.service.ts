@@ -36,7 +36,7 @@ export class DeviceLogoutService {
       `SELECT c.id, c.uuid, c.phone_number, ci.document_number
        FROM customers c
        LEFT JOIN customer_identities ci ON ci.customer_id = c.id
-       WHERE c.astpp_id = $1 OR c.uuid::text = $1`,
+       WHERE c.astpp_id::text = $1 OR c.uuid::text = $1`,
       [dto.astppId]
     );
 
