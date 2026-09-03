@@ -16,7 +16,7 @@ export class CustomerOperationsService {
     private readonly db: DatabaseService,
     private readonly messages: MessageService,
     private readonly events: EventService,
-  ) {}
+  ) { }
 
   /**
    * Search and filter customer directory with pagination
@@ -37,7 +37,7 @@ export class CustomerOperationsService {
         c.last_name ILIKE $${idx} OR
         c.email ILIKE $${idx} OR
         ci.document_number ILIKE $${idx} OR
-        c.astpp_account_id ILIKE $${idx}
+        c.astpp_id ILIKE $${idx}
       )`);
     }
 

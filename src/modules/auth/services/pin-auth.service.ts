@@ -21,7 +21,7 @@ export class PinAuthService {
     private readonly jwtService: SecureJwtService,
     private readonly messages: MessageService,
     private readonly events: EventService,
-  ) {}
+  ) { }
 
   /**
    * Set initial 4-digit PIN for a customer
@@ -33,7 +33,7 @@ export class PinAuthService {
 
     // Find customer by UUID or ASTPP ID
     const customer = await this.db.queryOne(
-      `SELECT id, uuid FROM customers WHERE uuid::text = $1 OR astpp_account_id = $1`,
+      `SELECT id, uuid FROM customers WHERE uuid::text = $1 OR astpp_id = $1`,
       [dto.customerId]
     );
 
@@ -156,7 +156,7 @@ export class PinAuthService {
     const customer = await this.db.queryOne(
       `SELECT id, uuid, voip_number, first_name, last_name, email, phone_number, status, timezone
        FROM customers
-       WHERE uuid::text = $1 OR astpp_account_id = $1`,
+       WHERE uuid::text = $1 OR astpp_id = $1`,
       [dto.customerId]
     );
 

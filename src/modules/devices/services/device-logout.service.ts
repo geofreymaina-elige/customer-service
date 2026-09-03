@@ -21,7 +21,7 @@ export class DeviceLogoutService {
     private readonly jwtService: SecureJwtService,
     private readonly messages: MessageService,
     private readonly deviceGatekeeper: DeviceGatekeeperService,
-  ) {}
+  ) { }
 
   /**
    * Step 1: Initiate Device Logout / Recovery (Verify ASTPP ID, Document Number & PIN)
@@ -36,7 +36,7 @@ export class DeviceLogoutService {
       `SELECT c.id, c.uuid, c.phone_number, ci.document_number
        FROM customers c
        LEFT JOIN customer_identities ci ON ci.customer_id = c.id
-       WHERE c.astpp_account_id = $1 OR c.uuid::text = $1`,
+       WHERE c.astpp_id = $1 OR c.uuid::text = $1`,
       [dto.astppId]
     );
 
