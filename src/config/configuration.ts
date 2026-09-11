@@ -29,6 +29,13 @@ export default () => ({
     password: process.env.ASTPP_PASSWORD || '',
     tokenKeyHex: process.env.ASTPP_TOKEN_KEY_HEX || '',
     ivHex: process.env.ASTPP_IV_HEX || '',
+    ssh: {
+      host: process.env.ASTPP_SSH_HOST || '196.251.144.121',
+      port: parseInt(process.env.ASTPP_SSH_PORT || '22', 10),
+      username: process.env.ASTPP_SSH_USERNAME || 'jeff',
+      privateKey: process.env.ASTPP_SSH_PRIVATE_KEY || '',
+    },
+    imagesPath: process.env.ASTPP_IMAGES_PATH || '/var/www/html/astpp/application_images',
   },
   kafka: {
     brokers: (process.env.KAFKA_BROKERS || 'localhost:9092').split(','),

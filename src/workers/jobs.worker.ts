@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { JobService } from '../core/jobs/job.service';
+import { WaasOnboardingJobService, OnboardingJobPayload } from '../modules/onboarding/services/waas-onboarding-job.service';
 import * as os from 'os';
 
 @Injectable()
@@ -9,7 +10,10 @@ export class JobsWorker implements OnModuleInit, OnModuleDestroy {
   private timer: NodeJS.Timeout | null = null;
   private readonly workerId = `${os.hostname()}-${process.pid}`;
 
-  constructor(private readonly jobService: JobService) {}
+  constructor(
+    private readonly jobService: JobService,
+    private readonly waasOnboardingJob: WaasOnboardingJobService,
+  ) {}
 
   onModuleInit() {
     this.isRunning = true;
@@ -45,6 +49,37 @@ export class JobsWorker implements OnModuleInit, OnModuleDestroy {
   private async processJob(job: any) {
     try {
       switch (job.job_type) {
+        // -----------------------------------------------------------------------
+        // SasaPay WaaS: Step 1 — Initiate onboarding (sends OTP)
+        // -----------------------------------------------------------------------
+        case 'sasapay_waas_onboarding': {
+          const payload = job.payload as OnboardingJobPayload;
+          this.logger.log(`[WAAS JOB] Step 1 — initiating WaaS for customer ${payload.customerId}`);
+          await this.waasOnboardingJob.step1_InitiateSasaPayWaaS(payload);
+          await this.jobService.markCompleted(job.id);
+          break;
+        }
+
+        // -----------------------------------------------------------------------
+        // SasaPay WaaS: Step 2+3 — Fetch KYC images via SSH and upload to SasaPay
+        // -----------------------------------------------------------------------
+        case 'sasapay_waas_kyc_upload': {
+          const payload = job.payload as OnboardingJobPayload;
+          this.logger.log(`[WAAS JOB] Step 2+3 — KYC upload for customer ${payload.customerId}`);
+
+          // Step 2: download images from ASTPP via SSH
+          const stateAfterFetch = await this.waasOnboardingJob.step2_FetchKycImagesViaSSH(
+            payload,
+            { step: 'fetch_images' },
+          );
+
+          // Step 3: upload images to SasaPay WaaS
+          await this.waasOnboardingJob.step3_UploadKycToSasaPay(payload, stateAfterFetch);
+
+          await this.jobService.markCompleted(job.id);
+          break;
+        }
+
         case 'KycVerificationJob':
           this.logger.log(`[KYC JOB] Executing automated verification for customer ${job.payload?.customerId}`);
           // Simulate / execute automated KYC / IPRS lookup
@@ -63,10 +98,11 @@ export class JobsWorker implements OnModuleInit, OnModuleDestroy {
           break;
 
         default:
-          this.logger.log(`[JOB] Completed job ${job.job_type}`);
+          this.logger.warn(`[JOB] Unknown job type: ${job.job_type} — marking completed`);
           await this.jobService.markCompleted(job.id);
       }
     } catch (error) {
+      this.logger.error(`[JOBS WORKER] Job ${job.job_type} (${job.uuid}) failed: ${error?.message}`);
       await this.jobService.markFailed(job.id, error.message);
     }
   }

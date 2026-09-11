@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { DatabaseService } from '../../../core/database/database.service';
 import { AstppAdapterService } from '../../astpp/astpp-adapter.service';
 import { DeviceGatekeeperService } from '../../devices/services/device-gatekeeper.service';
@@ -9,6 +9,7 @@ import { OnboardUserDeviceDto } from '../dto/onboarding.dto';
 
 @Injectable()
 export class OnboardingService {
+  private readonly logger = new Logger(OnboardingService.name);
   constructor(
     private readonly db: DatabaseService,
     private readonly astppAdapter: AstppAdapterService,
@@ -124,11 +125,36 @@ export class OnboardingService {
     const isWalletPinSet = !!pinRecord;
 
     // 4. Enqueue background onboarding job (SasaPay WaaS + KYC image sync)
-    await this.jobService.enqueue('sasapay_waas_onboarding', {
-      customerId: customer.id,
-      astppId: customer.astpp_id,
-      applicationId: astppCustomer?.applicationId || null,
-    });
+    //    Guard A: skip if customer already has an active wallet
+    const existingWallet = await this.db.queryOne(
+      `SELECT id FROM customer_wallets WHERE customer_id = $1 AND status IN ('active', 'locked', 'frozen')`,
+      [customer.id],
+    );
+
+    if (existingWallet) {
+      this.logger.log(`[ONBOARDING] Customer ${customer.id} already has a wallet — skipping WaaS job enqueue`);
+    } else {
+      //    Guard B: skip if a pending/running onboarding job already exists
+      const existingJob = await this.db.queryOne(
+        `SELECT id FROM jobs
+         WHERE job_type = 'sasapay_waas_onboarding'
+           AND status IN ('PENDING', 'RUNNING')
+           AND payload->>'customerId' = $1::text
+         LIMIT 1`,
+        [customer.id],
+      );
+
+      if (existingJob) {
+        this.logger.log(`[ONBOARDING] Pending WaaS job already exists for customer ${customer.id} — skipping duplicate`);
+      } else {
+        await this.jobService.enqueue('sasapay_waas_onboarding', {
+          customerId: customer.id,
+          astppId: customer.astpp_id,
+          applicationId: null,
+        });
+        this.logger.log(`[ONBOARDING] Enqueued sasapay_waas_onboarding job for customer ${customer.id}`);
+      }
+    }
 
     // 5. Generate token if PIN is set
     let token = null;

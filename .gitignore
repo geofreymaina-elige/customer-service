@@ -20,3 +20,6 @@ yarn-error.log*
 Thumbs.db
 
 snapshot_checkpoint.json
+
+# Secrets (SSH keys, tokens — never commit)
+/secrets/

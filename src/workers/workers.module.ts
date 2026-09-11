@@ -3,8 +3,10 @@ import { JobsWorker } from './jobs.worker';
 import { EventsWorker } from './events.worker';
 import { SnapshotWorker } from './snapshot/snapshot.worker';
 import { CdcConsumerWorker } from './cdc/cdc-consumer.worker';
+import { OnboardingModule } from '../modules/onboarding/onboarding.module';
 
 @Module({
+  imports: [OnboardingModule],
   providers: [JobsWorker, EventsWorker, SnapshotWorker, CdcConsumerWorker],
   exports: [JobsWorker, EventsWorker, SnapshotWorker, CdcConsumerWorker],
 })

@@ -158,22 +158,6 @@ export class SasaPayWaasService {
         timeout: 15000,
       });
 
-      // Store the requestId in customer_applications for tracking
-      if (response.data.requestId) {
-        const { DatabaseService } = require('../../../core/database/database.service');
-        const db = new DatabaseService(this.config);
-        
-        await db.query(
-          `INSERT INTO customer_applications (
-            customer_id, application_type, sasapay_request_id, kyc_status, submitted_at, created_at, updated_at
-          )
-          VALUES ($1, 'wallet_kyc', $2, 'pending', NOW(), NOW(), NOW())
-          ON CONFLICT (customer_id, application_type) 
-          DO UPDATE SET sasapay_request_id = $2, kyc_status = 'pending', submitted_at = NOW(), updated_at = NOW()`,
-          [data.customerId, response.data.requestId]
-        );
-      }
-
       return response.data;
     }, () => ({
       status: true,
@@ -186,7 +170,7 @@ export class SasaPayWaasService {
   /**
    * Step 2: Confirm Personal Onboarding with OTP
    */
-  async confirmPersonalOnboarding(dto: PersonalOnboardingConfirmDto): Promise<{
+  async confirmPersonalOnboarding(dto: PersonalOnboardingConfirmDto, requestId: string): Promise<{
     status: boolean;
     responseCode: string;
     message: string;
@@ -202,7 +186,7 @@ export class SasaPayWaasService {
       const payload = {
         merchantCode: this.merchantCode,
         otp: dto.otp,
-        requestId: dto.requestId,
+        requestId,
       };
 
       const response = await axios.post(`${this.baseUrl}/api/v2/waas/personal-onboarding/confirmation/`, payload, {
