@@ -43,9 +43,7 @@
                   "}",
                   "if (jsonData.data && jsonData.data.user) {",
                   "    pm.environment.set('customerUuid', jsonData.data.user.userId);",
-                  "}",
-                  "if (jsonData.data && jsonData.data.sasapay && jsonData.data.sasapay.requestId) {",
-                  "    pm.environment.set('sasapayRequestId', jsonData.data.sasapay.requestId);",
+                  "    pm.environment.set('customerId', jsonData.data.user.customerId || jsonData.data.user.id);",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -91,6 +89,22 @@
         },
         {
           "name": "SasaPay WaaS: Confirm OTP",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.data && jsonData.data.accountNumber) {",
+                  "    pm.environment.set('walletAccountNumber', jsonData.data.accountNumber);",
+                  "    console.log('Wallet accountNumber:', jsonData.data.accountNumber);",
+                  "    console.log('accountStatus:', jsonData.data.accountStatus);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -101,7 +115,12 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"requestId\": \"{{sasapayRequestId}}\",\n  \"otp\": \"123456\"\n}"
+              "raw": "{\n  \"customerId\": \"{{customerId}}\",\n  \"otp\": \"123456\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/onboarding/personal/confirm",
@@ -116,7 +135,7 @@
                 "confirm"
               ]
             },
-            "description": "Confirm the OTP code sent during user-device onboarding. This completes the SasaPay WaaS registration."
+            "description": "Step 2 — Confirm OTP sent by SasaPay during onboarding.\n\nPayload:\n- customerId: internal PG customer ID (server looks up sasapay_request_id automatically)\n- otp: 6-digit OTP from SMS\n\nResponse includes accountNumber and accountStatus (AWAITING_KYC_UPLOAD | ACTIVE | AWAITING_APPROVAL).\nIf AWAITING_KYC_UPLOAD, the server enqueues a background KYC image upload job automatically."
           }
         },
         {
