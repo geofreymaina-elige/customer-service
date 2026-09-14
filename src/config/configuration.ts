@@ -54,8 +54,8 @@ export default () => ({
     clientId: process.env.SASAPAY_CLIENT_ID || '',
     clientSecret: process.env.SASAPAY_CLIENT_SECRET || '',
     merchantCode: process.env.SASAPAY_MERCHANT_CODE || '',
-    baseUrl: process.env.SASAPAY_BASE_URL || 'https://sandbox.sasapay.app',
-    callbackUrl: process.env.SASAPAY_CALLBACK_URL || 'https://api.yourdomain.com/api/v1/callbacks/sasapay/onboarding',
+    baseUrl: process.env.SASAPAY_BASE_URL || '',
+    callbackUrl: process.env.SASAPAY_CALLBACK_URL || '',
   },
   notification: {
     url: process.env.NOTIFICATION_SERVICE_URL || '',
