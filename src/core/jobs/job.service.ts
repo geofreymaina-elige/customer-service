@@ -27,8 +27,8 @@ export class JobService {
   async enqueue(jobType: string, payload: Record<string, any>, delaySeconds: number = 0): Promise<string> {
     const availableAt = new Date(Date.now() + delaySeconds * 1000);
     const result = await this.db.queryOne(
-      `INSERT INTO jobs (job_type, payload, status, attempts, max_attempts, available_at, created_at, updated_at)
-       VALUES ($1, $2, 'PENDING', 0, 5, $3, NOW(), NOW())
+      `INSERT INTO jobs (job_type, payload, status, attempts, available_at, created_at, updated_at)
+       VALUES ($1, $2, 'PENDING', 0, $3, NOW(), NOW())
        RETURNING uuid`,
       [jobType, JSON.stringify(payload), availableAt]
     );
