@@ -105,9 +105,7 @@ export class JobsWorker implements OnModuleInit, OnModuleDestroy {
           break;
 
         default:
-          this.logger.warn(`[JOB] Unknown job type: ${job.job_type} — marking completed`);
-          await this.jobService.markCompleted(job.id);
-          this.logger.log(`[JOBS WORKER] Completed job ${job.job_type} (${job.uuid})`);
+          throw new Error(`Unsupported job type: ${job.job_type}`);
       }
     } catch (error) {
       const errorDetails = this.formatError(error);

@@ -67,17 +67,26 @@ export class JobService {
 
       job.status = 'RUNNING';
       job.attempts += 1;
+      this.logger.log(`Claimed job ${job.job_type} (${job.uuid}) as ${workerId}`);
       return job;
     });
   }
 
   async markCompleted(jobId: number): Promise<void> {
-    await this.db.query(
+    const result = await this.db.query(
       `UPDATE jobs
        SET status = 'COMPLETED', completed_at = NOW(), locked_at = NULL, locked_by = NULL, updated_at = NOW()
-       WHERE id = $1`,
+       WHERE id = $1 AND status = 'RUNNING'
+       RETURNING id, uuid, job_type`,
       [jobId]
     );
+
+    if (result.rowCount === 0) {
+      throw new Error(`Job ${jobId} could not be marked completed because it is not RUNNING`);
+    }
+
+    const job = result.rows[0];
+    this.logger.log(`Completed job ${job.job_type} (${job.uuid})`);
   }
 
   async markFailed(jobId: number, error: string, retryDelaySeconds: number = 60): Promise<void> {
