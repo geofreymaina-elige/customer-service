@@ -310,7 +310,7 @@ export class SasaPayWaasService {
    */
   private async callSasaPayApi<T>(
     apiCall: (token: string) => Promise<T>,
-    fallback: () => T
+    fallback: () => T,
   ): Promise<T> {
     try {
       // Get cached or fresh token

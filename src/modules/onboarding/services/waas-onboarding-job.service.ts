@@ -22,7 +22,7 @@ interface OnboardingJobState {
   sasapay_account_number?: string;
   sasapay_account_status?: string;
   images?: {
-    front?: string; // Local temp path after SSH fetch
+    front?: string; // Local temporary path
     back?: string;
     selfie?: string;
   };
@@ -38,6 +38,7 @@ export class WaasOnboardingJobService {
   private readonly sshPort: number;
   private readonly sshUsername: string;
   private readonly sshPrivateKey: string;
+  private readonly sshPrivateKeyPath: string;
   private readonly astppImagesPath: string;
 
   constructor(
@@ -50,7 +51,12 @@ export class WaasOnboardingJobService {
     this.sshPort = this.config.get<number>('astpp.ssh.port') || 22;
     this.sshUsername = this.config.get<string>('astpp.ssh.username') || 'jeff';
     this.sshPrivateKey = this.config.get<string>('astpp.ssh.privateKey') || '';
+    this.sshPrivateKeyPath = this.config.get<string>('astpp.ssh.privateKeyPath') || '';
     this.astppImagesPath = this.config.get<string>('astpp.imagesPath') || '/var/www/html/astpp/application_images';
+
+    if (!this.astppImagesPath.startsWith('/')) {
+      throw new Error(`astpp.imagesPath must be an absolute path, got: "${this.astppImagesPath}"`);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -458,19 +464,27 @@ export class WaasOnboardingJobService {
     const astppApplicationId = bestRow.astpp_application_id;
     const remoteDir = `${this.astppImagesPath}/${astppApplicationId}`;
 
-    // Download images to temp directory via SSH
-    const localTempDir = path.join(os.tmpdir(), `kyc_${payload.customerId}_${Date.now()}`);
+    const localTempDir = path.join(os.tmpdir(), `kyc_${payload.customerId}_${astppApplicationId}`);
     await fsPromises.mkdir(localTempDir, { recursive: true });
 
     const localFrontPath = path.join(localTempDir, path.basename(frontFilename));
     const localBackPath = path.join(localTempDir, path.basename(backFilename));
     const localSelfiePath = path.join(localTempDir, path.basename(selfieFilename));
 
-    await this.sshDownloadFile(`${remoteDir}/${path.basename(frontFilename)}`, localFrontPath);
-    await this.sshDownloadFile(`${remoteDir}/${path.basename(backFilename)}`, localBackPath);
-    await this.sshDownloadFile(`${remoteDir}/${path.basename(selfieFilename)}`, localSelfiePath);
+    this.logger.log(`[STEP 2] Staging KYC files in ${localTempDir}`);
 
-    this.logger.log(`[STEP 2] Images downloaded to ${localTempDir}`);
+    await this.downloadIfMissing(
+      `${remoteDir}/${path.basename(frontFilename)}`,
+      localFrontPath,
+    );
+    await this.downloadIfMissing(
+      `${remoteDir}/${path.basename(backFilename)}`,
+      localBackPath,
+    );
+    await this.downloadIfMissing(
+      `${remoteDir}/${path.basename(selfieFilename)}`,
+      localSelfiePath,
+    );
 
     return {
       ...state,
@@ -503,16 +517,21 @@ export class WaasOnboardingJobService {
       [payload.customerId],
     );
 
-    // Upload to SasaPay
-    await this.sasapayWaas.uploadKycDocuments(
-      customer.phone_number.replace(/^\+?254/, ''),
-      state.images.front,
-      state.images.back,
-      state.images.selfie,
-    );
+    try {
+      await this.sasapayWaas.uploadKycDocuments(
+        customer.phone_number.replace(/^\+?254/, ''),
+        state.images.front,
+        state.images.back,
+        state.images.selfie,
+      );
 
-    // Clean up temporary files
-    await fsPromises.rm(path.dirname(state.images.front), { recursive: true, force: true });
+      await fsPromises.rm(path.dirname(state.images.front), { recursive: true, force: true });
+    } catch (error) {
+      this.logger.warn(
+        `[STEP 3] SasaPay upload failed; staged files retained for retry in ${path.dirname(state.images.front)}`,
+      );
+      throw error;
+    }
 
     // Update wallet to active + application to approved
     await this.db.query(
@@ -541,43 +560,61 @@ export class WaasOnboardingJobService {
   // SSH Helper
   // ---------------------------------------------------------------------------
 
-  /**
-   * Download a single file from the ASTPP server via SFTP.
-   */
-  private sshDownloadFile(remotePath: string, localPath: string): Promise<void> {
+  private downloadIfMissing(remotePath: string, localPath: string): Promise<void> {
+    if (fs.existsSync(localPath)) {
+      this.logger.log(`[STEP 2] Reusing staged KYC file ${path.basename(localPath)}`);
+      return Promise.resolve();
+    }
+
     return new Promise((resolve, reject) => {
       const conn = new SSHClient();
 
       conn.on('ready', () => {
-        conn.sftp((err, sftp) => {
-          if (err) {
-            conn.end();
-            return reject(err);
-          }
+        conn.exec(`/bin/cat ${this.shellQuote(remotePath)}`, (execError, stream) => {
+            if (execError) {
+              conn.end();
+              reject(execError);
+              return;
+            }
 
-          const readStream = sftp.createReadStream(remotePath);
-          const writeStream = fs.createWriteStream(localPath);
+            const writeStream = fs.createWriteStream(localPath);
+            let stderr = '';
 
-          readStream.on('error', (error) => {
-            conn.end();
-            reject(error);
-          });
+            stream.stderr.on('data', (chunk: Buffer) => {
+              stderr += chunk.toString();
+            });
 
-          writeStream.on('error', (error) => {
-            conn.end();
-            reject(error);
-          });
+            stream.on('error', (error) => {
+              writeStream.destroy();
+              conn.end();
+              reject(error);
+            });
 
-          writeStream.on('finish', () => {
-            conn.end();
-            resolve();
-          });
+            writeStream.on('error', (error) => {
+              stream.destroy();
+              conn.end();
+              reject(error);
+            });
 
-          readStream.pipe(writeStream);
+            stream.on('close', (code: number) => {
+              writeStream.end(() => {
+                conn.end();
+                if (code !== 0) {
+                  reject(new Error(`SSH image download failed for ${remotePath}: ${stderr.trim() || `exit code ${code}`}`));
+                  return;
+                }
+
+                resolve();
+              });
+            });
+
+            stream.pipe(writeStream);
         });
       });
 
-      conn.on('error', (err) => reject(err));
+      conn.on('error', (err) => {
+        reject(err);
+      });
 
       conn.connect({
         host: this.sshHost,
@@ -588,14 +625,20 @@ export class WaasOnboardingJobService {
     });
   }
 
+  private shellQuote(value: string): string {
+    return `'${value.replace(/'/g, `'\\''`)}'`;
+  }
+
   /**
    * Helper to retrieve and format the SSH private key from env.
    * Supports base64 encoded strings, escaped newlines (\n), or raw PEM strings.
    */
   private getPrivateKey(): string | Buffer {
-    let key = (this.sshPrivateKey || '').trim();
+    let key = this.sshPrivateKeyPath
+      ? fs.readFileSync(this.sshPrivateKeyPath, 'utf8').trim()
+      : (this.sshPrivateKey || '').trim();
     if (!key) {
-      throw new Error('ASTPP_SSH_PRIVATE_KEY is not configured');
+      throw new Error('ASTPP_SSH_PRIVATE_KEY or ASTPP_SSH_PRIVATE_KEY_PATH is not configured');
     }
     if ((key.startsWith('"') && key.endsWith('"')) || (key.startsWith("'") && key.endsWith("'"))) {
       key = key.slice(1, -1);
@@ -605,6 +648,9 @@ export class WaasOnboardingJobService {
     }
     if (key.startsWith('-----BEGIN')) {
       return key;
+    }
+    if (/^(ssh-|ecdsa-)/.test(key)) {
+      throw new Error('ASTPP SSH key is a public key; configure the matching private key instead');
     }
     try {
       const decoded = Buffer.from(key, 'base64').toString('utf8');

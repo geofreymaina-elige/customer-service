@@ -34,6 +34,7 @@ export default () => ({
       port: parseInt(process.env.ASTPP_SSH_PORT || '22', 10),
       username: process.env.ASTPP_SSH_USERNAME || 'jeff',
       privateKey: process.env.ASTPP_SSH_PRIVATE_KEY || '',
+      privateKeyPath: process.env.ASTPP_SSH_PRIVATE_KEY_PATH || '',
     },
     imagesPath: process.env.ASTPP_IMAGES_PATH,
   },
