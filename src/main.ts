@@ -34,7 +34,7 @@ async function bootstrap() {
   // Global Idempotency Interceptor
   app.useGlobalInterceptors(new IdempotencyInterceptor(dbService));
 
-  const port = configService.get<number>('port') || 5000;
+  const port = configService.get<number>('port') || 5006;
   await app.listen(port, '0.0.0.0');
 
   console.log(`========================================================================`);

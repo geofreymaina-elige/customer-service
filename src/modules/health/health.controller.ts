@@ -17,7 +17,7 @@ export class HealthController {
     return {
       status: 'ok',
       service: 'ambia-pay',
-      port: 5000,
+      port: process.env.PORT || '5006',
       timestamp: new Date().toISOString(),
       dependencies: {
         database: dbStatus,
