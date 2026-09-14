@@ -105,7 +105,7 @@ export class SasaPayWaasService {
         callbackUrl: this.callbackUrl,
       };
       const url = `${this.baseUrl}/api/v2/waas/personal-onboarding/`;
-      this.logProviderRequest('POST', url);
+      this.logProviderRequest('POST', url, payload);
 
       const response = await axios.post(url, payload, {
         headers: {
@@ -159,7 +159,7 @@ export class SasaPayWaasService {
         callbackUrl: this.callbackUrl,
       };
       const url = `${this.baseUrl}/api/v2/waas/personal-onboarding/`;
-      this.logProviderRequest('POST', url);
+      this.logProviderRequest('POST', url, payload);
 
       const response = await axios.post(url, payload, {
         headers: {
@@ -201,7 +201,7 @@ export class SasaPayWaasService {
         requestId,
       };
       const url = `${this.baseUrl}/api/v2/waas/personal-onboarding/confirmation/`;
-      this.logProviderRequest('POST', url);
+      this.logProviderRequest('POST', url, { ...payload, otp: '[REDACTED]' });
 
       const response = await axios.post(url, payload, {
         headers: {
@@ -252,7 +252,13 @@ export class SasaPayWaasService {
       formData.append('passportSizePhoto', fs.createReadStream(selfieImagePath));
 
       const url = `${this.baseUrl}/api/v2/waas/personal-onboarding/kyc/`;
-      this.logProviderRequest('POST', url);
+      this.logProviderRequest('POST', url, {
+        merchantCode: this.merchantCode,
+        customerMobileNumber,
+        documentImageFront: '[FILE]',
+        documentImageBack: '[FILE]',
+        passportSizePhoto: '[FILE]',
+      });
       const response = await axios.post(url, formData, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -270,8 +276,9 @@ export class SasaPayWaasService {
     }));
   }
 
-  private logProviderRequest(method: string, url: string): void {
-    this.logger.log(`[SASAPAY] Request ${method} ${url}`);
+  private logProviderRequest(method: string, url: string, payload?: unknown): void {
+    const payloadLog = payload === undefined ? '' : `: ${this.formatLogData(payload)}`;
+    this.logger.log(`[SASAPAY] Request ${method} ${url}${payloadLog}`);
   }
 
   private logProviderResponse(url: string, status: number, data: unknown): void {

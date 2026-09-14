@@ -1,5 +1,7 @@
-import { Controller, Post, Body, Req, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, Req, HttpCode, HttpStatus, UseGuards, UnauthorizedException } from '@nestjs/common';
 import { Request } from 'express';
+import * as crypto from 'crypto';
+import { ConfigService } from '@nestjs/config';
 import { OnboardingService } from '../services/onboarding.service';
 import { SasaPayWaasService } from '../services/sasapay-waas.service';
 import {
@@ -24,6 +26,7 @@ export class OnboardingController {
     private readonly messages: MessageService,
     private readonly db: DatabaseService,
     private readonly jobService: JobService,
+    private readonly config: ConfigService,
   ) {}
 
   /**
@@ -211,7 +214,15 @@ export class OnboardingController {
    */
   @Post('callback/sasapay')
   @HttpCode(HttpStatus.OK)
-  async handleSasaPayCallback(@Body() dto: SasaPayOnboardingCallbackDto) {
+  async handleSasaPayCallback(
+    @Body() dto: SasaPayOnboardingCallbackDto,
+    @Req() req: Request,
+  ) {
+    this.verifySasaPayCallback(req, dto);
+    const callbackPayload = dto as SasaPayOnboardingCallbackDto & Record<string, unknown>;
+    const callbackAccountNumber = this.callbackValue(callbackPayload, 'account_number', 'accountNumber');
+    const callbackAccountStatus = this.callbackValue(callbackPayload, 'account_status', 'accountStatus');
+
     const application = await this.db.queryOne(
       `SELECT id, customer_id, kyc_status
        FROM customer_applications
@@ -220,12 +231,12 @@ export class OnboardingController {
          AND sasapay_account_number IS NOT NULL
          AND sasapay_account_status IS NOT NULL
        LIMIT 1`,
-      [dto.accountNumber],
+      [callbackAccountNumber],
     );
 
     if (!application) {
       this.logger.warn(
-        `[SASAPAY CALLBACK] Ignored callback for account ${dto.accountNumber}: no confirmed wallet onboarding found`,
+        `[SASAPAY CALLBACK] Ignored callback for account ${callbackAccountNumber}: no confirmed wallet onboarding found`,
       );
       return {
         success: true,
@@ -234,7 +245,7 @@ export class OnboardingController {
       };
     }
 
-    const kycStatus = dto.accountStatus === 'APPROVED' ? 'approved' : 'rejected';
+    const kycStatus = callbackAccountStatus === 'APPROVED' ? 'approved' : 'rejected';
     await this.db.query(
       `UPDATE customer_applications
        SET sasapay_account_status = $1,
@@ -244,16 +255,73 @@ export class OnboardingController {
        WHERE id = $4
          AND application_type = 'wallet_kyc'
          AND sasapay_account_number IS NOT NULL`,
-      [dto.accountStatus, kycStatus, dto.description || 'SasaPay onboarding rejected', application.id],
+      [callbackAccountStatus, kycStatus, dto.description || 'SasaPay onboarding rejected', application.id],
     );
 
     this.logger.log(
-      `[SASAPAY CALLBACK] Processed ${dto.accountStatus} for customer ${application.customer_id}`,
+      `[SASAPAY CALLBACK] Processed ${callbackAccountStatus} for customer ${application.customer_id}`,
     );
     return {
       success: true,
       processed: true,
       message: 'Callback received and processed',
     };
+  }
+
+  private verifySasaPayCallback(req: Request, dto: SasaPayOnboardingCallbackDto): void {
+    const configuredIps = this.config.get<string[]>('sasapay.callbackSecurity.allowedIps') || [];
+    const sourceIp = this.normalizeIp(req.socket.remoteAddress || req.ip);
+    const allowed = configuredIps.map((ip) => this.normalizeIp(ip)).includes(sourceIp);
+
+    if (!allowed) {
+      this.logger.warn(`[SASAPAY CALLBACK] Rejected request from IP ${sourceIp || 'unknown'}`);
+      throw new UnauthorizedException('Callback source is not allowed.');
+    }
+
+    const signatureHeader = req.header('X-SasaPay-Signature');
+    if (!signatureHeader) {
+      this.logger.warn('[SASAPAY CALLBACK] Rejected request without signature');
+      throw new UnauthorizedException('Callback signature is required.');
+    }
+
+    const payload = dto as SasaPayOnboardingCallbackDto & Record<string, unknown>;
+    const transactionCode = this.callbackValue(payload, 'sasapay_transaction_code', 'sasapayTransactionCode', 'transactionCode');
+    const merchantCode = this.callbackValue(payload, 'merchant_code', 'merchantCode');
+    const accountNumber = this.callbackValue(payload, 'account_number', 'accountNumber');
+    const paymentReference = this.callbackValue(payload, 'payment_reference', 'paymentReference');
+    const amount = this.callbackValue(payload, 'amount');
+
+    if (!transactionCode || !merchantCode || !accountNumber || !paymentReference || amount === undefined) {
+      throw new UnauthorizedException('Callback payload is incomplete.');
+    }
+
+    const message = `${transactionCode}-${merchantCode}-${accountNumber}-${paymentReference}-${amount}`;
+    const expectedSignature = crypto
+      .createHmac('sha512', this.config.get<string>('sasapay.clientId') || '')
+      .update(message, 'utf8')
+      .digest('hex');
+
+    const provided = signatureHeader.trim().toLowerCase();
+    const expected = expectedSignature.toLowerCase();
+    const signaturesMatch = provided.length === expected.length &&
+      crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected));
+
+    if (!signaturesMatch) {
+      this.logger.warn(`[SASAPAY CALLBACK] Rejected invalid signature for account ${accountNumber}`);
+      throw new UnauthorizedException('Invalid callback signature.');
+    }
+  }
+
+  private callbackValue(payload: Record<string, unknown>, ...keys: string[]): string | undefined {
+    for (const key of keys) {
+      const value = payload[key];
+      if (value !== undefined && value !== null) return String(value);
+    }
+
+    return undefined;
+  }
+
+  private normalizeIp(ip: string | undefined): string {
+    return (ip || '').replace(/^::ffff:/, '').trim();
   }
 }

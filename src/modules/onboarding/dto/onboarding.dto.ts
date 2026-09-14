@@ -82,6 +82,14 @@ export class PersonalOnboardingConfirmDto {
 }
 
 export class SasaPayOnboardingCallbackDto {
+  @IsOptional()
+  @IsString()
+  sasapay_transaction_code?: string;
+
+  @IsOptional()
+  @IsString()
+  transactionCode?: string;
+
   @IsNotEmpty()
   @IsString()
   merchantCode: string;
@@ -101,4 +109,24 @@ export class SasaPayOnboardingCallbackDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsString()
+  merchant_code?: string;
+
+  @IsOptional()
+  @IsString()
+  account_number?: string;
+
+  @IsOptional()
+  @IsString()
+  account_status?: string;
+
+  @IsOptional()
+  @IsString()
+  payment_reference?: string;
+
+  @IsOptional()
+  @IsString()
+  amount?: string;
 }

@@ -56,6 +56,20 @@ export default () => ({
     merchantCode: process.env.SASAPAY_MERCHANT_CODE || '',
     baseUrl: process.env.SASAPAY_BASE_URL || '',
     callbackUrl: process.env.SASAPAY_CALLBACK_URL || '',
+    callbackSecurity: {
+      allowedIps: (process.env.SASAPAY_CALLBACK_ALLOWED_IPS || [
+        '47.129.43.141',
+        '13.229.247.179',
+        '13.215.155.141',
+        '13.214.60.231',
+        '54.169.74.198',
+        '18.142.226.87',
+        '47.129.243.116',
+        '13.250.110.3',
+        '155.12.30.40',
+        '155.12.30.58',
+      ].join(',')).split(',').map((ip) => ip.trim()).filter(Boolean),
+    },
   },
   notification: {
     url: process.env.NOTIFICATION_SERVICE_URL || '',
