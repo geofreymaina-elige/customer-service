@@ -8,6 +8,7 @@ import { PersonalOnboardingDto, PersonalOnboardingConfirmDto } from '../dto/onbo
 export class SasaPayWaasService {
   private readonly logger = new Logger(SasaPayWaasService.name);
   private readonly baseUrl: string;
+  private readonly apiRootUrl: string;
   private readonly clientId: string;
   private readonly clientSecret: string;
   private readonly merchantCode: string;
@@ -17,7 +18,9 @@ export class SasaPayWaasService {
     private readonly config: ConfigService,
     private readonly appCache: AppCacheService,
   ) {
-    this.baseUrl = this.config.get<string>('sasapay.baseUrl') || 'https://sandbox.sasapay.app';
+    const configuredBaseUrl = this.config.get<string>('sasapay.baseUrl') || 'https://sandbox.sasapay.app';
+    this.baseUrl = configuredBaseUrl.replace(/\/+$/, '').replace(/\/api\/v2\/waas$/i, '');
+    this.apiRootUrl = this.baseUrl;
     this.clientId = this.config.get<string>('sasapay.clientId') || '';
     this.clientSecret = this.config.get<string>('sasapay.clientSecret') || '';
     this.merchantCode = this.config.get<string>('sasapay.merchantCode') || '';
@@ -36,7 +39,7 @@ export class SasaPayWaasService {
     }
 
     // Cache miss or expired - fetch new token
-    const url = `${this.baseUrl}/auth/token/?grant_type=client_credentials`;
+    const url = `${this.apiRootUrl}/api/v2/waas/auth/token/?grant_type=client_credentials`;
     this.logProviderRequest('GET', url);
     try {
       const authHeader = Buffer.from(`${this.clientId}:${this.clientSecret}`).toString('base64');
@@ -101,7 +104,7 @@ export class SasaPayWaasService {
         email: dto.email,
         callbackUrl: this.callbackUrl,
       };
-      const url = `${this.baseUrl}/personal-onboarding/`;
+      const url = `${this.baseUrl}/api/v2/waas/personal-onboarding/`;
       this.logProviderRequest('POST', url);
 
       const response = await axios.post(url, payload, {
@@ -155,7 +158,7 @@ export class SasaPayWaasService {
         email: data.email,
         callbackUrl: this.callbackUrl,
       };
-      const url = `${this.baseUrl}/personal-onboarding/`;
+      const url = `${this.baseUrl}/api/v2/waas/personal-onboarding/`;
       this.logProviderRequest('POST', url);
 
       const response = await axios.post(url, payload, {
@@ -197,7 +200,7 @@ export class SasaPayWaasService {
         otp: dto.otp,
         requestId,
       };
-      const url = `${this.baseUrl}/personal-onboarding/confirmation/`;
+      const url = `${this.baseUrl}/api/v2/waas/personal-onboarding/confirmation/`;
       this.logProviderRequest('POST', url);
 
       const response = await axios.post(url, payload, {
@@ -248,7 +251,7 @@ export class SasaPayWaasService {
       formData.append('documentImageBack', fs.createReadStream(backImagePath));
       formData.append('passportSizePhoto', fs.createReadStream(selfieImagePath));
 
-      const url = `${this.baseUrl}/personal-onboarding/kyc/`;
+      const url = `${this.baseUrl}/api/v2/waas/personal-onboarding/kyc/`;
       this.logProviderRequest('POST', url);
       const response = await axios.post(url, formData, {
         headers: {
