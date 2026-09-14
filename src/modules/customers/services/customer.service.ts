@@ -3,6 +3,8 @@ import { DatabaseService } from '../../../core/database/database.service';
 import { MessageService } from '../../../core/messages/message.service';
 import { EventService } from '../../../core/events/event.service';
 import { UpdateCustomerProfileDto, SubmitKycDocumentsDto } from '../dto/customer.dto';
+import { UpdateSasaPayCustomerDto } from '../dto/sasapay-customer.dto';
+import { SasaPayWaasService } from '../../onboarding/services/sasapay-waas.service';
 
 @Injectable()
 export class CustomerService {
@@ -10,6 +12,7 @@ export class CustomerService {
     private readonly db: DatabaseService,
     private readonly messages: MessageService,
     private readonly events: EventService,
+    private readonly sasaPayWaas: SasaPayWaasService,
   ) {}
 
   /**
@@ -19,7 +22,8 @@ export class CustomerService {
     const customer = await this.db.queryOne(
       `SELECT c.id, c.uuid, c.astpp_id, c.phone_number, c.email,
               c.first_name, c.last_name, c.date_of_birth, c.timezone, 
-              c.status, c.balance, c.credit_limit,
+              c.status,
+              COALESCE(w.account_number, ca.sasapay_account_number) AS sasapay_account_number,
               c.created_at, c.updated_at,
               (p.pin_hash IS NOT NULL) AS is_pin_set,
               p.is_permanently_locked AS is_pin_permanently_locked,
@@ -31,6 +35,7 @@ export class CustomerService {
        LEFT JOIN customer_pins p ON p.customer_id = c.id
        LEFT JOIN customer_wallets w ON w.customer_id = c.id
        LEFT JOIN customer_devices d ON d.customer_id = c.id AND d.status = 'active'
+      LEFT JOIN customer_applications ca ON ca.customer_id = c.id AND ca.application_type = 'wallet_kyc'
        WHERE c.id = $1`,
       [customerId]
     );
@@ -38,6 +43,12 @@ export class CustomerService {
     if (!customer) {
       throw new NotFoundException(this.messages.get('common.notFound'));
     }
+
+    const sasaPayDetails = customer.sasapay_account_number
+      ? await this.sasaPayWaas.getCustomerDetails(String(customer.sasapay_account_number))
+      : null;
+    const sasaPayWallet = sasaPayDetails?.data?.CustomerWallets?.[0];
+    const balance = Number(sasaPayWallet?.account_balance_derived || 0);
 
     // Get primary KYC application details
     const primaryKyc = await this.db.queryOne(
@@ -75,8 +86,7 @@ export class CustomerService {
       dateOfBirth: customer.date_of_birth,
       timezone: customer.timezone,
       status: customer.status,
-      balance: customer.balance || 0,
-      creditLimit: customer.credit_limit || 0,
+      balance,
       createdAt: customer.created_at,
       hasWallet,
       security: {
@@ -144,6 +154,24 @@ export class CustomerService {
     );
 
     return this.getProfile(customerId);
+  }
+
+  async updateSasaPayProfile(customerId: number, dto: UpdateSasaPayCustomerDto) {
+    const customer = await this.db.queryOne<{ account_number: string | null }>(
+      `SELECT COALESCE(w.account_number, ca.sasapay_account_number) AS account_number
+       FROM customers c
+       LEFT JOIN customer_wallets w ON w.customer_id = c.id
+       LEFT JOIN customer_applications ca ON ca.customer_id = c.id AND ca.application_type = 'wallet_kyc'
+       WHERE c.id = $1
+       LIMIT 1`,
+      [customerId],
+    );
+
+    if (!customer?.account_number) {
+      throw new BadRequestException('SasaPay account number is not available for this customer.');
+    }
+
+    return this.sasaPayWaas.updateCustomerDetails(String(customer.account_number), dto);
   }
 
   /**

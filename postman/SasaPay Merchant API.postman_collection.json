@@ -1,0 +1,545 @@
+{
+  "info": {
+    "_postman_id": "09cb2ddd-614a-4fb7-8dcb-ee6885a3b508",
+    "name": "SasaPay Merchant API",
+    "description": "SasaPay Merchant API collection (api/v1) - covers Customer to Business (C2B), Business to Customer (B2C), Business to Business (B2B), Checkout/Card Payments, Remittances, Utilities, Channel Codes, Account Validation, Internal Fund Movement, Transaction Status, and Account Balance.\n\nThis is a separate API family from the SasaPay WaaS (Wallet as a Service) API - the base URLs, auth endpoint, and some response field names (e.g. `detail` instead of `message`) differ, so this collection has its own environments.\n\nHow to use:\n1. Select the `SasaPay Merchant - Sandbox` or `SasaPay Merchant - Production` environment.\n2. Fill in `client_id` and `client_secret`.\n3. Run `Get Access Token` in the Authentication folder. Its test script automatically saves `merchant_access_token` into the active environment.\n4. All other requests use `Bearer {{merchant_access_token}}` automatically via the collection-level Authorization setting.\n\nNote: this collection shares its environment with the SasaPay WaaS collection. Merchant-API-specific variables are prefixed `merchant_` (e.g. `merchant_base_url`, `merchant_access_token`) to avoid clashing with the WaaS collection's `waas_` prefixed variables.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "38371113"
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Get Access Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Parse the token response and store it in the active environment",
+                  "let jsonData;",
+                  "try {",
+                  "    jsonData = pm.response.json();",
+                  "} catch (e) {",
+                  "    console.error('Could not parse auth response as JSON', e);",
+                  "    jsonData = null;",
+                  "}",
+                  "",
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "if (jsonData && jsonData.access_token) {",
+                  "    pm.environment.set('merchant_access_token', jsonData.access_token);",
+                  "",
+                  "    const expiresIn = jsonData.expires_in || 3600;",
+                  "    const expiryTimestamp = Date.now() + (expiresIn * 1000);",
+                  "    pm.environment.set('merchant_token_expiry', expiryTimestamp);",
+                  "    pm.environment.set('merchant_token_type', jsonData.token_type || 'Bearer');",
+                  "    pm.environment.set('merchant_token_scope', jsonData.scope || '');",
+                  "",
+                  "    console.log('Access token saved to environment. Expires in ' + expiresIn + ' seconds.');",
+                  "",
+                  "    pm.test('access_token was saved to environment', function () {",
+                  "        pm.expect(pm.environment.get('merchant_access_token')).to.eql(jsonData.access_token);",
+                  "    });",
+                  "} else {",
+                  "    console.error('No access_token found in response body:', pm.response.text());",
+                  "    pm.test('Response contains access_token', function () {",
+                  "        pm.expect.fail('No access_token in response - check client_id/client_secret in the environment');",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{client_id}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{client_secret}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{merchant_base_url}}/auth/token/?grant_type=client_credentials",
+              "host": [
+                "{{merchant_base_url}}"
+              ],
+              "path": [
+                "auth",
+                "token",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "grant_type",
+                  "value": "client_credentials"
+                }
+              ]
+            },
+            "description": "Exchange your Client ID and Client Secret for a Bearer access token via the OAuth2 `client_credentials` grant. Same mechanics as the WaaS token endpoint, but this issues a **separate token** since this API sits on `/api/v1` rather than `/api/v2/waas`.\n\n**Auth:** Basic Auth over HTTPS — base64(client_id:client_secret), using `{{client_id}}` / `{{client_secret}}`.\n\n**Query params**\n| Field | Required | Description |\n|---|---|---|\n| grant_type | Yes | Must be `client_credentials` |\n\n**Response**\n| Field | Description |\n|---|---|\n| status | true/false outcome |\n| detail | \"SUCCESS\" |\n| access_token | Bearer token to use on all other Merchant API requests |\n| expires_in | Token lifetime in seconds (typically 3600) |\n| token_type | \"Bearer\" |\n| scope | Services this app is subscribed to, e.g. \"merchants C2B/B2B/B2C\" |\n\nThe Tests script saves `merchant_access_token`, `merchant_token_type`, `merchant_token_expiry`, `merchant_token_scope` into the active environment automatically."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "C2B - Customer to Business",
+      "item": [
+        {
+          "name": "Payment Request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"MerchantCode\": \"{{merchant_code}}\",\n    \"NetworkCode\": \"0\",\n    \"Currency\": \"KES\",\n    \"Amount\": \"1.00\",\n    \"CallBackURL\": \"{{callback_url}}\",\n    \"PhoneNumber\": \"254723444941\",\n    \"TransactionDesc\": \"Request Payment\",\n    \"AccountReference\": \"{{$randomInt}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{merchant_base_url}}/payments/request-payment/",
+              "host": [
+                "{{merchant_base_url}}"
+              ],
+              "path": [
+                "payments",
+                "request-payment",
+                ""
+              ]
+            },
+            "description": "Request payment (pull) from a customer via SasaPay wallet, M-PESA, Airtel Money, or T-Kash. A single endpoint handles all channels — behavior depends on `NetworkCode`.\n\n**Payload**\n| Field | Type | Required | Description |\n|---|---|---|---|\n| MerchantCode | String | Yes | Your Paybill/Till number |\n| NetworkCode | String | Yes | See options below |\n| PhoneNumber | String | Yes | Customer's phone, format 254... |\n| Amount | String | Yes | Amount to collect |\n| Currency | String | Yes | e.g. \"KES\" |\n| AccountReference | String | Yes | Your transaction identifier |\n| TransactionDesc | String | Yes | Description |\n| CallBackURL | String | Yes | Final result URL |\n\n**NetworkCode options**\n| Value | Channel | Flow |\n|---|---|---|\n| 0 | SasaPay wallet | Sends a 6-digit OTP — complete with Process Payment |\n| 63902 | M-PESA | Sends an STK push — no OTP/Process Payment step needed |\n| 63903 | Airtel Money | Sends an STK push |\n| 63907 | T-Kash | Sends an STK push |\n\nBank destinations return a reference for use as narration in Pesalink.\n\n**Response**\n`PaymentGateway`, `CheckoutRequestID` (save for Process Payment / status checks), `TransactionReference`, `CustomerMessage` (manual USSD instructions), `ResponseCode` (\"0\" = accepted & queued)."
+          },
+          "response": []
+        },
+        {
+          "name": "Process Payment (SasaPay OTP Only)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"CheckoutRequestID\": \"{{checkout_request_id}}\",\n    \"MerchantCode\": \"{{merchant_code}}\",\n    \"VerificationCode\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{merchant_base_url}}/payments/process-payment/",
+              "host": [
+                "{{merchant_base_url}}"
+              ],
+              "path": [
+                "payments",
+                "process-payment",
+                ""
+              ]
+            },
+            "description": "Completes a C2B request for the **SasaPay wallet channel only** (NetworkCode \"0\"), using the OTP the customer received. Not needed for M-PESA/Airtel/T-Kash STK push flows.\n\n**Payload**\n| Field | Type | Required | Description |\n|---|---|---|---|\n| MerchantCode | String | Yes | Your merchant code |\n| CheckoutRequestID | String | Yes | From the Payment Request response |\n| VerificationCode | String | Yes | 6-digit OTP |\n\n**Response:** `status`, `detail` (e.g. \"Transaction is being processed\"). Final result is delivered to the `CallBackURL` from the original request."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "B2C - Business to Customer",
+      "item": [
+        {
+          "name": "Send Money (B2C)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"MerchantCode\": \"{{merchant_code}}\",\n    \"MerchantTransactionReference\": \"{{$randomInt}}\",\n    \"Amount\": \"30.00\",\n    \"Currency\": \"KES\",\n    \"ReceiverNumber\": \"254700000000\",\n    \"Channel\": \"0\",\n    \"Reason\": \"Salary payment\",\n    \"CallBackURL\": \"{{callback_url}}\"\n}"
+            },
+            "url": {
+              "raw": "{{merchant_base_url}}/payments/b2c/",
+              "host": [
+                "{{merchant_base_url}}"
+              ],
+              "path": [
+                "payments",
+                "b2c",
+                ""
+              ]
+            },
+            "description": "Send money from your merchant account to a customer — salary payments, promotional payouts, loan disbursements, financial-institution withdrawals, etc. Funds are debited from the **Utility Account** label (use Internal Fund Movement first if it needs topping up from Working Account).\n\n**Payload**\n| Field | Type | Required | Description |\n|---|---|---|---|\n| MerchantCode | String | Yes | Your merchant code |\n| Amount | String | Yes | Amount to send |\n| Currency | String | Yes | e.g. \"KES\" |\n| MerchantTransactionReference | String | Yes | Your unique transaction id |\n| ReceiverNumber | String | Yes | Recipient's mobile or bank account, with country code |\n| Channel | String | Yes | \"0\" = SasaPay, or a bank/mobile money code from Channel Codes |\n| Reason | String | Yes | Purpose of payment |\n| CallBackURL | String | Yes | Final result URL |\n\n**Response**\n`B2CRequestID`, `ConversationID`, `OriginatorConversationID`, `TransactionCharges`, `ResponseCode` (\"0\" = accepted & queued). Final result (with `RecipientName`, `ResultCode`, `MerchantAccountBalance`, etc.) is delivered to `CallBackURL`."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "B2B - Business to Business",
+      "item": [
+        {
+          "name": "Send Money (B2B)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"MerchantCode\": \"{{merchant_code}}\",\n    \"MerchantTransactionReference\": \"{{$randomInt}}\",\n    \"Currency\": \"KES\",\n    \"Amount\": \"1.00\",\n    \"ReceiverMerchantCode\": \"3209\",\n    \"AccountReference\": \"Test\",\n    \"ReceiverAccountType\": \"PAYBILL\",\n    \"NetworkCode\": \"0\",\n    \"CallBackURL\": \"{{callback_url}}\",\n    \"Reason\": \"Payment of transportation fee\"\n}"
+            },
+            "url": {
+              "raw": "{{merchant_base_url}}/payments/b2b/",
+              "host": [
+                "{{merchant_base_url}}"
+              ],
+              "path": [
+                "payments",
+                "b2b",
+                ""
+              ]
+            },
+            "description": "Transfer from your SasaPay Biller number to another SasaPay or M-PESA Biller number.\n\n**Payload**\n| Field | Type | Required | Description |\n|---|---|---|---|\n| MerchantCode | String | Yes | Your merchant code |\n| MerchantTransactionReference | Alpha-Numeric | Yes | Your unique transaction id |\n| Currency | String | Yes | e.g. \"KES\" |\n| Amount | String | Yes | Amount to send |\n| ReceiverMerchantCode | String | Yes | Destination Paybill/Till |\n| AccountReference | String | Optional for TILL | Reference at the receiving business |\n| ReceiverAccountType | String | Yes | \"PAYBILL\" or \"TILL\" |\n| NetworkCode | String | Yes | \"0\" SasaPay, \"63902\" M-PESA |\n| Reason | String | Yes | Purpose of payment |\n| CallBackURL | String | Yes | Final result URL |\n\n**Response**\n`B2BRequestID`, `ConversationID`, `OriginatorConversationID`, `TransactionCharges`, `ResponseCode`. Final result delivered to `CallBackURL`."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Checkout",
+      "item": [
+        {
+          "name": "Card Payments / Checkout Page",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"MerchantCode\": \"{{merchant_code}}\",\n    \"Amount\": \"2.00\",\n    \"Reference\": \"{{$randomInt}}\",\n    \"Description\": \"Payment for goods\",\n    \"Currency\": \"KES\",\n    \"PayerEmail\": \"janedoe@email.com\",\n    \"CallbackUrl\": \"{{callback_url}}\",\n    \"SuccessUrl\": \"https://www.example.com/success\",\n    \"FailureUrl\": \"https://www.example.com/failure\",\n    \"RedirectEnabled\": true,\n    \"SasaPayWalletEnabled\": true,\n    \"MpesaEnabled\": true,\n    \"CardEnabled\": true,\n    \"AirtelEnabled\": true\n}"
+            },
+            "url": {
+              "raw": "{{merchant_base_url}}/payments/card-payments/",
+              "host": [
+                "{{merchant_base_url}}"
+              ],
+              "path": [
+                "payments",
+                "card-payments",
+                ""
+              ]
+            },
+            "description": "Generates a hosted SasaPay checkout page URL supporting SasaPay wallet, M-PESA, Airtel Money, T-Kash, and card payments — redirect your customer there to complete payment.\n\n**Payload**\n| Field | Type | Required | Description |\n|---|---|---|---|\n| MerchantCode | String | Yes | Your merchant code |\n| Amount | String | Yes | Amount to charge |\n| Reference | String | Yes | Your unique transaction reference |\n| Description | String | Yes | Purpose of payment |\n| Currency | String | Yes | e.g. \"KES\" |\n| PayerEmail | String | Yes | Payer's email |\n| CallbackUrl | String | Yes | Async result URL |\n| SuccessUrl / FailureUrl | String | Yes | Post-checkout redirect targets |\n| RedirectEnabled | Boolean | Yes | If true, customer is redirected to SuccessUrl/FailureUrl after checkout |\n| SasaPayWalletEnabled | Boolean | Yes | Show SasaPay wallet as a payment option |\n| MpesaEnabled | Boolean | Yes | Show M-PESA as a payment option |\n| AirtelEnabled | Boolean | Yes | Show Airtel Money as a payment option |\n| CardEnabled | Boolean | Yes | Show card payment as an option |\n\n**Response**\n`CheckoutUrl` — redirect the customer here. Also `PaymentGateway`, `MerchantRequestID`, `CheckoutRequestID`, `ResponseCode`. Final result delivered to `CallbackUrl`."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Remittance",
+      "item": [
+        {
+          "name": "Remittance Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"MerchantCode\": \"{{merchant_code}}\",\n    \"MerchantTransactionReference\": \"{{$randomInt}}\",\n    \"DestinationChannelCode\": \"63902\",\n    \"DestinationChannelName\": \"M-PESA\",\n    \"Currency\": \"KES\",\n    \"Amount\": \"150.00\",\n    \"ReceiverPhoneNumber\": \"254700000000\",\n    \"ReceiverAccountNumber\": \"254700000000\",\n    \"AccountReference\": \"Test\",\n    \"ReceiverAccountType\": \"PAYBILL\",\n    \"ReceiverAccountName\": \"Jane Doe\",\n    \"ForeignCurrency\": \"USD,1\",\n    \"SenderPhoneNumber\": \"254700000104\",\n    \"SenderName\": \"John Doe\",\n    \"SenderDOB\": \"1990-01-01\",\n    \"SenderCountryISO\": \"GB\",\n    \"SenderNationality\": \"British\",\n    \"SenderIDType\": \"National ID\",\n    \"SenderIDNumber\": \"12345678\",\n    \"SenderServiceProviderName\": \"SasaPay Remit\",\n    \"RemittancePurpose\": \"Test\",\n    \"CallbackURL\": \"{{callback_url}}\",\n    \"Remarks\": \"Test\"\n}"
+            },
+            "url": {
+              "raw": "{{merchant_base_url}}/remittances/remittance-payments/",
+              "host": [
+                "{{merchant_base_url}}"
+              ],
+              "path": [
+                "remittances",
+                "remittance-payments",
+                ""
+              ]
+            },
+            "description": "Send a cross-border remittance disbursement to a recipient's mobile money or bank account, with full sender KYC fields for regulatory compliance.\n\n**Key payload fields**\n| Field | Type | Required | Description |\n|---|---|---|---|\n| MerchantCode | String | Yes | Your merchant code |\n| MerchantTransactionReference | String | Yes | Your unique transaction id |\n| DestinationChannelCode / DestinationChannelName | String | Yes | e.g. \"63902\" / \"M-PESA\" — see Channel Codes |\n| Currency | String | Yes | Destination currency, e.g. \"KES\" or \"TZS\" |\n| Amount | String | Yes | Amount the recipient will receive |\n| ReceiverPhoneNumber / ReceiverAccountNumber | String | Yes | Recipient's contact and account |\n| AccountReference | String | Optional for TILL | Reference at the receiving business |\n| ReceiverAccountType | String | Yes | \"PAYBILL\" or \"TILL\" |\n| ReceiverAccountName | String | Yes | Recipient's name |\n| ForeignCurrency | String | No | \"CODE,RATE\" e.g. \"USD,1\" |\n| SenderPhoneNumber / SenderName | String | Yes | Sender details |\n| SenderDOB | String | No | Sender's date of birth |\n| SenderCountryISO | String | Yes | e.g. \"GB\" |\n| SenderNationality | String | Yes | e.g. \"British\" |\n| SenderIDType / SenderIDNumber | String | Yes | Sender's identification |\n| SenderServiceProviderName | String | Yes | Platform the sender used |\n| RemittancePurpose | String | Yes | Reason for the remittance |\n| CallbackURL | String | Yes | Final result URL |\n| Remarks | String | No | Free-text description |\n\n**Response**\n`RequestID`, `MerchantRequestID`, `TransactionCharges`, `ResponseCode`. Final result delivered to `CallbackURL`."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Utilities",
+      "item": [
+        {
+          "name": "Utility Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"transactionReference\": \"{{$randomInt}}\",\n    \"merchantCode\": \"{{merchant_code}}\",\n    \"serviceCode\": \"SP-SAFARICOM\",\n    \"contactNumber\": \"254700000000\",\n    \"accountNumber\": \"254700000000\",\n    \"currencyCode\": \"KES\",\n    \"amount\": 20,\n    \"callbackUrl\": \"{{callback_url}}\"\n}"
+            },
+            "url": {
+              "raw": "{{merchant_base_url}}/utilities/",
+              "host": [
+                "{{merchant_base_url}}"
+              ],
+              "path": [
+                "utilities",
+                ""
+              ]
+            },
+            "description": "Pay for airtime or a bill on behalf of a customer. Note: field names differ slightly from the WaaS Utilities endpoint (`contactNumber` instead of `payerAccountNumber`; `amount` is an integer here).\n\n**Payload**\n| Field | Type | Required | Description |\n|---|---|---|---|\n| transactionReference | String | Yes | Your unique transaction id |\n| merchantCode | String | Yes | Your merchant code |\n| serviceCode | String | Yes | See options below |\n| contactNumber | String | Yes | Phone number to notify about the transaction |\n| accountNumber | String | Yes | Account being paid for (a phone number when purchasing airtime) |\n| currencyCode | String | Yes | e.g. \"KES\" |\n| amount | Integer | Yes | Amount to pay |\n| callbackUrl | URL | Yes | Final result URL |\n\n**serviceCode options:** `AIRTIME`, `SP-SAFARICOM`, `SP-AIRTEL`, `SP-TELKOM` (plus other billers configured on your account, e.g. water/electricity)\n\n**Response**\n`detail`, `merchantReference`, `checkoutRequestId`. Final result (with `Pin`/`Units` for KPLC tokens or printable airtime) delivered to `callbackUrl`."
+          },
+          "response": []
+        },
+        {
+          "name": "Bill Query",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"serviceCode\": \"SP-NRB-WATER\",\n    \"customerMobile\": \"254700000000\",\n    \"accountNumber\": \"5050\"\n}"
+            },
+            "url": {
+              "raw": "{{merchant_base_url}}/utilities/bill-query/",
+              "host": [
+                "{{merchant_base_url}}"
+              ],
+              "path": [
+                "utilities",
+                "bill-query",
+                ""
+              ]
+            },
+            "description": "Look up a bill's amount due before paying it.\n\n**Payload**\n| Field | Type | Required | Description |\n|---|---|---|---|\n| serviceCode | String | Yes | e.g. \"SP-NRB-WATER\" |\n| customerMobile | String | Yes | Mobile number linked to the bill account |\n| accountNumber | String | Yes | Bill account number |\n\n**Response `data`**\n`accountNumber`, `serviceCode`, `dueDate`, `dueAmount`, `currency`, `customerName`."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Accounts & Reference Data",
+      "item": [
+        {
+          "name": "Channel Codes (Banks)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{merchant_base_url}}/payments/channel-codes/",
+              "host": [
+                "{{merchant_base_url}}"
+              ],
+              "path": [
+                "payments",
+                "channel-codes",
+                ""
+              ]
+            },
+            "description": "Returns the list of banks and their channel codes — used as the `Channel` / `DestinationChannelCode` value in B2C, B2B, and Remittance requests.\n\n**Response**\n`data[]` — each `{bank_name, bank_code}`."
+          },
+          "response": []
+        },
+        {
+          "name": "Account Validation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"merchant_code\": \"{{merchant_code}}\",\n    \"channel_code\": \"63902\",\n    \"account_number\": \"254700000000\",\n    \"account_type\": 3\n}"
+            },
+            "url": {
+              "raw": "{{merchant_base_url}}/accounts/account-validation/",
+              "host": [
+                "{{merchant_base_url}}"
+              ],
+              "path": [
+                "accounts",
+                "account-validation",
+                ""
+              ]
+            },
+            "description": "Validate a destination account before sending money to it — confirms it exists and returns the account holder's name, helping avoid misdirected payouts.\n\n**Payload**\n| Field | Type | Required | Description |\n|---|---|---|---|\n| merchant_code | String | Yes | Your merchant code |\n| channel_code | String | Yes | From Channel Codes |\n| account_number | String | Yes | Account/number being validated |\n| account_type | Number | Yes | See options below |\n\n**account_type options**\n| Value | Meaning |\n|---|---|\n| 0 | SasaPay |\n| 1 | Mobile Money |\n| 2 | M-PESA Paybill |\n| 3 | M-PESA Till |\n| 4 | Bank |\n\n**Response (success)**\n`account_details.channel_name`, `account_details.account_name` (the name to confirm against). On failure: `status: false`, `detail` (error reason, e.g. \"Invalid data provided\")."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Transactions & Balances",
+      "item": [
+        {
+          "name": "Internal Fund Movement",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"amount\": \"10.00\",\n    \"merchantCode\": \"{{merchant_code}}\"\n}"
+            },
+            "url": {
+              "raw": "{{merchant_base_url}}/transactions/fund-movement/",
+              "host": [
+                "{{merchant_base_url}}"
+              ],
+              "path": [
+                "transactions",
+                "fund-movement",
+                ""
+              ]
+            },
+            "description": "Move funds from your Working Account label to your Utility Account label within your own merchant account — typically needed to top up the Utility Account before running B2C/B2B payouts.\n\n**Payload**\n| Field | Type | Required | Description |\n|---|---|---|---|\n| merchantCode | String | Yes | Your merchant code |\n| amount | String | Yes | Amount to move |\n\n**Response:** `status`, `message` (e.g. \"SUCCESS,Transaction completed\")."
+          },
+          "response": []
+        },
+        {
+          "name": "Check Transaction Status",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"MerchantCode\": \"{{merchant_code}}\",\n    \"CheckoutRequestId\": \"{{checkout_request_id}}\",\n    \"MerchantTransactionReference\": \"\",\n    \"TransactionCode\": \"\",\n    \"CallbackUrl\": \"{{callback_url}}\"\n}"
+            },
+            "url": {
+              "raw": "{{merchant_base_url}}/transactions/status-query/",
+              "host": [
+                "{{merchant_base_url}}"
+              ],
+              "path": [
+                "transactions",
+                "status-query",
+                ""
+              ]
+            },
+            "description": "Query a transaction's status. Unlike the WaaS version of this endpoint, this call only **acknowledges** the request — the actual result is delivered asynchronously to the `CallbackUrl` you provide.\n\n**Payload** — `MerchantCode` is mandatory; supply **at least one** of the other three fields.\n| Field | Type | Required | Description |\n|---|---|---|---|\n| MerchantCode | String | Yes | Your merchant code |\n| CheckoutRequestId | String | One of these 3 | From the original request |\n| MerchantTransactionReference | String | One of these 3 | Your original transaction reference |\n| TransactionCode | String | One of these 3 | SasaPay's transaction code |\n| CallbackUrl | String | Yes | Where the status result will be POSTed |\n\n**Immediate response:** `status`, `message` (e.g. \"Your request has been received. Check your callback url for response\").\n\n**Callback payload includes:** `TransactionType`, `TransactionDate`, `CheckoutId`, `TransactionAmount`, `Paid`, `AmountPaid`, `PaidDate`, `SourceChannel`, `DestinationChannel`."
+          },
+          "response": []
+        },
+        {
+          "name": "Check Merchant Balance",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{merchant_base_url}}/payments/check-balance/?MerchantCode={{merchant_code}}",
+              "host": [
+                "{{merchant_base_url}}"
+              ],
+              "path": [
+                "payments",
+                "check-balance",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "MerchantCode",
+                  "value": "{{merchant_code}}"
+                }
+              ]
+            },
+            "description": "Check the merchant's account balances across all account labels.\n\n**Query params**\n| Field | Required | Description |\n|---|---|---|\n| MerchantCode | Yes | Your merchant code |\n\n**Response `data`**\n`CurrencyCode`, `OrgAccountBalance`, `Accounts[]` — each `{account_label, account_balance}` (e.g. Bulk Payment, Utility Account, Working Account)."
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{merchant_access_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "merchant_base_url",
+      "value": "{{merchant_base_url}}"
+    }
+  ]
+}

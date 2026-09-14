@@ -4,9 +4,11 @@ import { PinAuthService } from '../services/pin-auth.service';
 import { SetPinDto, VerifyPinDto, ChangePinDto } from '../dto/pin-auth.dto';
 import { MessageService } from '../../../core/messages/message.service';
 import { AuthGuard } from '../../../core/auth/auth.guard';
+import { PinAstppTokenGuard } from '../../../core/auth/pin-astpp-token.guard';
 import { CurrentUser, AuthenticatedUser } from '../../../core/auth/current-user.decorator';
 
 @Controller('api/v1/auth/pin')
+@UseGuards(PinAstppTokenGuard)
 export class PinAuthController {
   constructor(
     private readonly pinAuthService: PinAuthService,

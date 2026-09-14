@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { DatabaseService } from '../../../core/database/database.service';
 import { MessageService } from '../../../core/messages/message.service';
 import { EventService } from '../../../core/events/event.service';
+import { SasaPayWaasService } from '../../onboarding/services/sasapay-waas.service';
 import {
   CustomerQueryDto,
   UpdateCustomerStatusDto,
@@ -16,6 +17,7 @@ export class CustomerOperationsService {
     private readonly db: DatabaseService,
     private readonly messages: MessageService,
     private readonly events: EventService,
+    private readonly sasaPayWaas: SasaPayWaasService,
   ) { }
 
   /**
@@ -100,7 +102,7 @@ export class CustomerOperationsService {
     const customer = await this.db.queryOne(
       `SELECT c.id, c.uuid, c.astpp_id, c.phone_number, c.email,
               c.first_name, c.last_name, c.date_of_birth, c.timezone, c.status,
-              c.balance, c.credit_limit,
+              COALESCE(w.account_number, ca.sasapay_account_number) AS sasapay_account_number,
               c.created_at, c.updated_at,
               p.pin_hash IS NOT NULL AS has_pin, p.failed_attempts AS pin_failed_attempts, p.locked_until AS pin_locked_until,
               p.is_permanently_locked AS pin_is_permanently_locked, p.last_verified_at AS pin_last_verified_at,
@@ -109,6 +111,7 @@ export class CustomerOperationsService {
        FROM customers c
        LEFT JOIN customer_pins p ON p.customer_id = c.id
        LEFT JOIN customer_wallets w ON w.customer_id = c.id
+      LEFT JOIN customer_applications ca ON ca.customer_id = c.id AND ca.application_type = 'wallet_kyc'
        WHERE c.uuid::text = $1`,
       [customerUuid]
     );
@@ -116,6 +119,11 @@ export class CustomerOperationsService {
     if (!customer) {
       throw new NotFoundException(this.messages.get('operations.customerNotFound'));
     }
+
+    const sasaPayDetails = customer.sasapay_account_number
+      ? await this.sasaPayWaas.getCustomerDetails(String(customer.sasapay_account_number))
+      : null;
+    customer.balance = Number(sasaPayDetails?.data?.CustomerWallets?.[0]?.account_balance_derived || 0);
 
     // Fetch registered devices
     const devices = await this.db.query(

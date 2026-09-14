@@ -1,0 +1,919 @@
+{
+  "info": {
+    "_postman_id": "75a0c1c2-f079-408b-95c2-908b2933523e",
+    "name": "SasaPay WaaS API",
+    "description": "SasaPay Wallet as a Service (WaaS) API collection covering Authentication, Personal Onboarding, Business Onboarding, Customers, Payments and Transfers.\n\nHow to use:\n1. Select the `SasaPay - Sandbox` or `SasaPay - Production` environment.\n2. Fill in `client_id` and `client_secret` in that environment.\n3. Run the request in the `Authentication` folder called `Get Access Token`. Its test script automatically saves `waas_access_token` and `waas_token_expiry` into the active environment.\n4. All other requests use `Bearer {{waas_access_token}}` automatically via the collection-level Authorization setting.\n\nNote: this collection shares its environment with the SasaPay Merchant API collection. WaaS-specific variables are prefixed `waas_` (e.g. `waas_base_url`, `waas_access_token`) to avoid clashing with the Merchant API's `merchant_` prefixed variables.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "38371113"
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Get Access Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Parse the token response and store it in the active environment",
+                  "let jsonData;",
+                  "try {",
+                  "    jsonData = pm.response.json();",
+                  "} catch (e) {",
+                  "    console.error('Could not parse auth response as JSON', e);",
+                  "    jsonData = null;",
+                  "}",
+                  "",
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "if (jsonData && jsonData.access_token) {",
+                  "    pm.environment.set('waas_access_token', jsonData.access_token);",
+                  "",
+                  "    const expiresIn = jsonData.expires_in || 3600;",
+                  "    const expiryTimestamp = Date.now() + (expiresIn * 1000);",
+                  "    pm.environment.set('waas_token_expiry', expiryTimestamp);",
+                  "    pm.environment.set('waas_token_type', jsonData.token_type || 'Bearer');",
+                  "",
+                  "    console.log('Access token saved to environment. Expires in ' + expiresIn + ' seconds.');",
+                  "",
+                  "    pm.test('access_token was saved to environment', function () {",
+                  "        pm.expect(pm.environment.get('waas_access_token')).to.eql(jsonData.access_token);",
+                  "    });",
+                  "} else {",
+                  "    console.error('No access_token found in response body:', pm.response.text());",
+                  "    pm.test('Response contains access_token', function () {",
+                  "        pm.expect.fail('No access_token in response - check client_id/client_secret in the environment');",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{client_id}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{client_secret}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{waas_base_url}}/auth/token/?grant_type=client_credentials",
+              "host": [
+                "{{waas_base_url}}"
+              ],
+              "path": [
+                "auth",
+                "token",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "grant_type",
+                  "value": "client_credentials"
+                }
+              ]
+            },
+            "description": "Exchange your Client ID and Client Secret for a Bearer access token using the OAuth2 `client_credentials` grant.\n\n**Auth:** Basic Auth over HTTPS — base64(client_id:client_secret). Configured in this request's Authorization tab using `{{client_id}}` / `{{client_secret}}`.\n\n**Query params**\n| Field | Required | Description |\n|---|---|---|\n| grant_type | Yes | Must be `client_credentials` |\n\n**Response**\n| Field | Description |\n|---|---|\n| status | true/false outcome |\n| responseCode | \"0\" = success |\n| access_token | Bearer token to use on all other WaaS requests |\n| expires_in | Token lifetime in seconds (typically 3600) |\n| token_type | \"Bearer\" |\n| scope | Services this app is subscribed to |\n\nThe Tests script on this request automatically saves `waas_access_token`, `waas_token_type`, and `waas_token_expiry` into the active environment."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Personal Onboarding",
+      "item": [
+        {
+          "name": "Initial Personal Onboarding",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"merchantCode\":\"88387\",\"firstName\":\"Geofrey\",\"middleName\":\"\",\"lastName\":\"Maina\",\"countryCode\":\"254\",\"mobileNumber\":\"0711470771\",\"documentNumber\":\"35761954\",\"documentType\":\"1\",\"email\":\"jeffdevops6@gmail.com\",\"callbackUrl\":\"https://api.ambiapay.com/api/v1/callbacks/sasapay/onboarding\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{waas_base_url}}/personal-onboarding/",
+              "host": [
+                "{{waas_base_url}}"
+              ],
+              "path": [
+                "personal-onboarding",
+                ""
+              ]
+            },
+            "description": "Step 1 of 3 in onboarding an individual beneficiary. Sends a confirmation OTP to the beneficiary's mobile number and returns a `requestId` used in the next step.\n\n**Payload**\n| Field | Type | Required | Description |\n|---|---|---|---|\n| merchantCode | String | Yes | Your merchant Paybill/Till number |\n| firstName | String | Yes | As on ID/passport |\n| middleName | String | No | As on ID/passport |\n| lastName | String | Yes | As on ID/passport |\n| countryCode | String | Yes | Country calling code, e.g. \"254\" |\n| mobileNumber | String | Yes | Beneficiary's mobile number |\n| documentType | String | Yes | \"1\" = ID card, \"2\" = Passport, \"3\" = Alien ID |\n| documentNumber | String | Yes | Number on the chosen document |\n| email | String | Yes | Beneficiary's email |\n| callbackUrl | String | Yes | Where onboarding status updates are POSTed |\n\n**Response**\n| Field | Description |\n|---|---|\n| status / responseCode | Outcome of the request |\n| message | e.g. \"Confirmation code has been sent to 254*****573\" |\n| requestId | Save this — required for the Confirmation step |"
+          },
+          "response": []
+        },
+        {
+          "name": "Personal Onboarding Confirmation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"merchantCode\": \"{{merchant_code}}\",\n    \"otp\": \"123456\",\n    \"requestId\": \"{{request_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{waas_base_url}}/personal-onboarding/confirmation/",
+              "host": [
+                "{{waas_base_url}}"
+              ],
+              "path": [
+                "personal-onboarding",
+                "confirmation",
+                ""
+              ]
+            },
+            "description": "Step 2 of 3. Confirms the OTP sent in step 1 and finalizes the account.\n\n**Payload**\n| Field | Type | Required | Description |\n|---|---|---|---|\n| merchantCode | String | Yes | Your merchant code |\n| otp | String | Yes | OTP the beneficiary received by SMS |\n| requestId | String | Yes | From the Initial Onboarding response |\n\n**Response `data`**\n| Field | Description |\n|---|---|\n| accountNumber | Beneficiary's new wallet account number |\n| displayName | Beneficiary's name |\n| accountStatus | See table below |\n| accountBalance | Wallet balance (starts at 0) |\n\n**accountStatus options**\n| Status | Meaning | Next step |\n|---|---|---|\n| ACTIVE | Verified, ready to use | None |\n| AWAITING_APPROVAL | KYC submitted, pending review | Wait for verification |\n| AWAITING_KYC_UPLOAD | Needs KYC docs | Call Personal KYC Upload |"
+          },
+          "response": []
+        },
+        {
+          "name": "Personal KYC Upload",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "merchantCode",
+                  "value": "{{merchant_code}}",
+                  "type": "text"
+                },
+                {
+                  "key": "customerMobileNumber",
+                  "value": "254700000000",
+                  "type": "text"
+                },
+                {
+                  "key": "passportSizePhoto",
+                  "type": "file",
+                  "value": null
+                },
+                {
+                  "key": "documentImageFront",
+                  "type": "file",
+                  "value": null
+                },
+                {
+                  "key": "documentImageBack",
+                  "type": "file",
+                  "value": null
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{waas_base_url}}/personal-onboarding/kyc/",
+              "host": [
+                "{{waas_base_url}}"
+              ],
+              "path": [
+                "personal-onboarding",
+                "kyc",
+                ""
+              ]
+            },
+            "description": "Step 3 of 3 — only required if accountStatus from the Confirmation step was `AWAITING_KYC_UPLOAD`.\n\n**Payload (multipart/form-data)**\n| Field | Type | Required | Description |\n|---|---|---|---|\n| merchantCode | Text | Yes | Your merchant code |\n| customerMobileNumber | Text | Yes | Beneficiary's mobile number |\n| passportSizePhoto | File | Yes | Current selfie/passport-style photo |\n| documentImageFront | File | Yes | Front of ID/passport |\n| documentImageBack | File | Yes | Back of ID/passport |\n\n**Response**\n| Field | Description |\n|---|---|\n| status / responseCode | Outcome |\n| message | e.g. \"Documents uploaded successfully.\" |\n\nNote: the onboarding `callbackUrl` you supplied in step 1 will later receive an `accountStatus` of APPROVED or REJECTED once your KYC has been reviewed."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Business Onboarding",
+      "item": [
+        {
+          "name": "Initial Business Onboarding",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"merchantCode\": \"{{merchant_code}}\",\n    \"businessName\": \"Test Shop\",\n    \"billNumber\": \"123456\",\n    \"description\": \"Test Shop\",\n    \"productType\": 3,\n    \"countryId\": \"2\",\n    \"subregionId\": 4,\n    \"industryId\": 2,\n    \"subIndustryId\": 1,\n    \"bankId\": 2,\n    \"bankAccountNumber\": \"1190000022478\",\n    \"mobileNumber\": \"0700000091\",\n    \"businessTypeId\": 1,\n    \"email\": \"testshop@email.com\",\n    \"registrationNumber\": \"K1000012PO\",\n    \"kraPin\": \"J1002003Y\",\n    \"referralCode\": \"1234\",\n    \"dealerNumber\": \"123456\",\n    \"purpose\": \"Collection\",\n    \"natureOfBusiness\": \"Retail shop\",\n    \"physicalAddress\": \"Nairobi\",\n    \"estimatedMonthlyTransactionAmount\": 500000.00,\n    \"estimatedMonthlyTransactionCount\": 10,\n    \"callbackUrl\": \"{{callback_url}}\",\n    \"directors\": [\n        {\n            \"directorName\": \"John Doe\",\n            \"directorIdnumber\": \"23320012\",\n            \"directorMobileNumber\": \"254700000059\",\n            \"directorKraPin\": \"254700000059\",\n            \"directorDocumentType\": \"ID_NUMBER\",\n            \"directorCountryCode\": \"256\"\n        }\n    ]\n}"
+            },
+            "url": {
+              "raw": "{{waas_base_url}}/business-onboarding/",
+              "host": [
+                "{{waas_base_url}}"
+              ],
+              "path": [
+                "business-onboarding",
+                ""
+              ]
+            },
+            "description": "Step 1 of 3 for onboarding a business/entity beneficiary. Sends a confirmation OTP to the business's registered mobile number.\n\n**Key payload fields**\n| Field | Type | Required | Description |\n|---|---|---|---|\n| merchantCode | String | Yes | Your merchant code |\n| businessName | String | Yes | Legal/trading name |\n| billNumber | Numeric | No | Business's own Paybill/Till, if any |\n| description | String | Yes | Short description |\n| productType | Numeric | Yes | See Reference Data → Account Product Types |\n| countryId | Numeric | Yes | See Reference Data → Countries |\n| subregionId | Numeric | Yes | See Reference Data → Country Sub Regions |\n| industryId | Numeric | Yes | See Reference Data → Industries |\n| subIndustryId | Numeric | Yes | See Reference Data → Sub Industries |\n| bankId / bankAccountNumber | Numeric/String | No | See Reference Data → Channel Codes |\n| mobileNumber | Numeric | Yes | Business's registered mobile |\n| businessTypeId | String | Yes | See Reference Data → Business Types |\n| email | String | Yes | Business email |\n| registrationNumber | String | Yes | Business registration number |\n| kraPin | String | Yes | KRA PIN |\n| referralCode | String | No | Onboarding agent alias |\n| dealerNumber | String | No | Attaches the business to a dealer |\n| purpose | String | Yes | \"Collection\", \"Disbursement\", or \"Remittance\" |\n| natureOfBusiness | String | Yes | e.g. \"Retail Shop\" |\n| physicalAddress | String | Yes | Physical location |\n| estimatedMonthlyTransactionAmount | String | Yes | Expected monthly volume (KES) |\n| estimatedMonthlyTransactionCount | String | Yes | Expected monthly transaction count |\n| callbackUrl | URL | Yes | Onboarding status updates |\n| directors | Array | Yes | List of director objects (see below) |\n\n**Each `directors[]` entry**\n`directorName`, `directorIdnumber`, `directorMobileNumber`, `directorKraPin`, `directorDocumentType` (options: `ID_NUMBER`, `PASSPORT`, `ALIEN_ID`), `directorCountryCode`.\n\n**Response**\nSame shape as Personal Onboarding: `status`, `responseCode`, `message`, `requestId` — save `requestId` for the Confirmation step."
+          },
+          "response": []
+        },
+        {
+          "name": "Business Onboarding Confirmation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"merchantCode\": \"{{merchant_code}}\",\n    \"otp\": \"123456\",\n    \"requestId\": \"{{request_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{waas_base_url}}/business-onboarding/confirmation/",
+              "host": [
+                "{{waas_base_url}}"
+              ],
+              "path": [
+                "business-onboarding",
+                "confirmation",
+                ""
+              ]
+            },
+            "description": "Step 2 of 3. Confirms the OTP sent to the business's mobile number.\n\n**Payload**\n| Field | Type | Required | Description |\n|---|---|---|---|\n| merchantCode | String | Yes | Your merchant code |\n| otp | String | Yes | 4-digit OTP |\n| requestId | String | Yes | From the Initial request |\n\n**Response `data`**\n`requestId`, `merchantCode`, `accountNumber`, `displayName`, `accountStatus` (`ACTIVE` / `AWAITING_APPROVAL` / `AWAITING_KYC_UPLOAD`), `accountBalance`."
+          },
+          "response": []
+        },
+        {
+          "name": "Business KYC Upload",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"merchantCode\": \"{{merchant_code}}\",\n    \"requestId\": \"{{request_id}}\",\n    \"businessKraPin\": \"IMAGE.JPG\",\n    \"businessRegistrationCertificate\": \"IMAGE.JPG\",\n    \"boardResolution\": \"IMAGE.JPG\",\n    \"cr12Document\": \"IMAGE.JPG\",\n    \"proofOfAddressDocument\": \"IMAGE.JPG\",\n    \"proofOfBankDocument\": \"IMAGE.JPG\",\n    \"directorsKyc\": [\n        {\n            \"directorKraPinNumber\": \"A007774P\",\n            \"directorIdCardFront\": \"IMAGE.JPG\",\n            \"directorIdCardBack\": \"IMAGE.JPG\",\n            \"directorKraPin\": \"IMAGE.JPG\"\n        }\n    ]\n}"
+            },
+            "url": {
+              "raw": "{{waas_base_url}}/business-onboarding/kyc/",
+              "host": [
+                "{{waas_base_url}}"
+              ],
+              "path": [
+                "business-onboarding",
+                "kyc",
+                ""
+              ]
+            },
+            "description": "Step 3 of 3 — required if accountStatus is `AWAITING_KYC_UPLOAD`.\n\n**Payload**\n| Field | Type | Required | Description |\n|---|---|---|---|\n| merchantCode | String | Yes | Your merchant code |\n| requestId | String | Yes | From onboarding |\n| businessKraPin | Image | Yes | Photo of business KRA PIN certificate |\n| businessRegistrationCertificate | Image | Yes | Registration certificate |\n| boardResolution | Image | Yes | Board resolution document |\n| cr12Document | Image | Yes | CR12 certificate |\n| proofOfAddressDocument | Image | Yes | Proof of address |\n| proofOfBankDocument | Image | Yes | Proof of bank account |\n| directorsKyc | Array | Yes | Per-director objects (see below) |\n\n**Each `directorsKyc[]` entry**\n`directorKraPinNumber`, `directorIdCardFront`, `directorIdCardBack`, `directorKraPin`.\n\nNote: the top-level `directorIdCardFront`/`directorIdCardBack`/`directorKraPin` fields shown in the body are deprecated in favor of the `directorsKyc` array.\n\n**Response:** `status`, `responseCode`, `message` (e.g. \"Business KYC uploaded.\")"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Merchant Customers",
+      "item": [
+        {
+          "name": "Get Customers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{waas_base_url}}/customers/?merchant_code={{merchant_code}}",
+              "host": [
+                "{{waas_base_url}}"
+              ],
+              "path": [
+                "customers",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "merchant_code",
+                  "value": "{{merchant_code}}"
+                }
+              ]
+            },
+            "description": "Lists all your beneficiaries/customers.\n\n**Query params**\n| Field | Required | Description |\n|---|---|---|\n| merchant_code | Yes | Your merchant code |\n\n**Response**\nPaginated (`links.next`/`links.previous`, `count`, `pages`). `results.customers[]` each has `client.display_name`, `account_number`, `currency_code`, `account_balance_derived`, `account_type`."
+          },
+          "response": []
+        },
+        {
+          "name": "Customer Details",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"merchantCode\": \"{{merchant_code}}\",\n    \"accountNumber\": \"254700000000\",\n    \"countryCode\": \"254\"\n}"
+            },
+            "url": {
+              "raw": "{{waas_base_url}}/customer-details/",
+              "host": [
+                "{{waas_base_url}}"
+              ],
+              "path": [
+                "customer-details",
+                ""
+              ]
+            },
+            "description": "Retrieve one beneficiary's profile and wallet(s) by account number.\n\n**Payload**\n| Field | Type | Required | Description |\n|---|---|---|---|\n| merchantCode | String | Yes | Your merchant code |\n| accountNumber | String | Yes | Beneficiary's account number |\n| countryCode | String | Yes | e.g. \"254\" |\n\n**Response `data`**\n`profile` (`display_name`, `mobile_number`, `account_status`), `CustomerWallets[]` (`account_number`, `currency_code`, `account_balance_derived`), `merchantCode`."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Customer Details",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"merchantCode\": \"{{merchant_code}}\",\n    \"accountNumber\": \"12345\",\n    \"firstName\": \"John\",\n    \"middleName\": \"\",\n    \"lastName\": \"Doe\",\n    \"documentNumber\": \"1234328\",\n    \"documentType\": \"1\",\n    \"email\": \"johndoe@gmail.com\",\n    \"callbackUrl\": \"{{callback_url}}\"\n}"
+            },
+            "url": {
+              "raw": "{{waas_base_url}}/customer-details/update/",
+              "host": [
+                "{{waas_base_url}}"
+              ],
+              "path": [
+                "customer-details",
+                "update",
+                ""
+              ]
+            },
+            "description": "Amend a beneficiary's KYC details — typically used after a rejection during verification, so they can resubmit corrected info.\n\n**Payload**\n| Field | Type | Required | Description |\n|---|---|---|---|\n| merchantCode | String | Yes | Your merchant code |\n| accountNumber | String | Yes | Beneficiary's account number (from onboarding) |\n| firstName / lastName | String | Yes | As on ID |\n| middleName | String | No | As on ID |\n| email | String | No | Updated email |\n| documentType | String | Yes | \"1\" ID card, \"2\" Passport, \"3\" Alien ID |\n| documentNumber | String | Yes | Updated document number |\n| callbackUrl | URL | Yes | Where the re-verification result is sent |\n\n**Response:** `status`, `responseCode`, `message` (e.g. prompts to re-upload KYC)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Payments",
+      "item": [
+        {
+          "name": "Request Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"merchantReference\": \"REF{{$randomInt}}\",\n    \"networkCode\": \"0\",\n    \"mobileNumber\": \"0700000000\",\n    \"receiverAccountNumber\": \"{{merchant_code}}-1\",\n    \"amount\": \"50.00\",\n    \"transactionFee\": \"0.00\",\n    \"commissionAccountNumber\": \"123456\",\n    \"commissionAmount\": \"5.00\",\n    \"currencyCode\": \"KES\",\n    \"merchantCode\": \"{{merchant_code}}\",\n    \"transactionDesc\": \"Request payment\",\n    \"callbackUrl\": \"{{callback_url}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{waas_base_url}}/payments/request-payment/",
+              "host": [
+                "{{waas_base_url}}"
+              ],
+              "path": [
+                "payments",
+                "request-payment",
+                ""
+              ]
+            },
+            "description": "Request a payment from a beneficiary or another mobile money provider (pull payment). Behavior depends on `networkCode`.\n\n**Payload**\n| Field | Type | Required | Description |\n|---|---|---|---|\n| merchantReference | String | Yes | Your unique transaction identifier |\n| merchantCode | String | Yes | Your merchant code |\n| networkCode | String | Yes | \"0\" SasaPay, \"63902\" M-PESA, \"63903\" Airtel Money, \"63907\" T-Kash |\n| mobileNumber | String | Yes | Payer's mobile number |\n| receiverAccountNumber | String | Yes | Wallet account to be credited |\n| amount | String | Yes | Amount to collect |\n| transactionFee | String | Yes | Fee charged for the top-up |\n| commissionAccountNumber | String | No | Dealer/referrer account for commission |\n| commissionAmount | String | No | Commission amount |\n| currencyCode | String | Yes | e.g. \"KES\" |\n| transactionDesc | String | Yes | Description |\n| callbackUrl | String | Yes | Final result delivery URL |\n\n**Response**\n`checkoutRequestID` (save this — needed for Process Payment when `networkCode` is \"0\"/SasaPay), `merchantReference`, `customerMessage` (manual USSD instructions), `paymentGateway`."
+          },
+          "response": []
+        },
+        {
+          "name": "Process Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"merchantCode\": \"{{merchant_code}}\",\n    \"receiverAccountNumber\": \"{{merchant_code}}-100\",\n    \"checkoutRequestId\": \"{{checkout_request_id}}\",\n    \"verificationCode\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{waas_base_url}}/payments/process-payment/",
+              "host": [
+                "{{waas_base_url}}"
+              ],
+              "path": [
+                "payments",
+                "process-payment",
+                ""
+              ]
+            },
+            "description": "Completes a Request Payment transaction using the verification code the payer received by SMS. Required for the SasaPay wallet channel.\n\n**Payload**\n| Field | Type | Required | Description |\n|---|---|---|---|\n| merchantCode | String | Yes | Your merchant code |\n| receiverAccountNumber | String | Yes | Wallet account being credited |\n| checkoutRequestId | String | Yes | From the Request Payment response |\n| verificationCode | String | Yes | 6-digit code sent to the payer |\n\n**Response:** `status`, `responseCode`, `message` (e.g. \"Transaction is being processed\"). Final result arrives at the `callbackUrl` from the original request."
+          },
+          "response": []
+        },
+        {
+          "name": "Payments (LIPA) - Pay Bills",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"merchantCode\": \"{{merchant_code}}\",\n    \"transactionReference\": \"REF{{$randomInt}}\",\n    \"currencyCode\": \"KES\",\n    \"amount\": \"100.00\",\n    \"senderAccountNumber\": \"{{merchant_code}}\",\n    \"receiverMerchantCode\": \"900000\",\n    \"accountReference\": \"254700000000\",\n    \"chargeAccount\": \"{{merchant_code}}\",\n    \"transactionFee\": \"9.00\",\n    \"billerType\": \"PAYBILL\",\n    \"networkCode\": \"0\",\n    \"callbackUrl\": \"{{callback_url}}\",\n    \"reason\": \"Payment of bill\"\n}"
+            },
+            "url": {
+              "raw": "{{waas_base_url}}/payments/pay-bills/",
+              "host": [
+                "{{waas_base_url}}"
+              ],
+              "path": [
+                "payments",
+                "pay-bills",
+                ""
+              ]
+            },
+            "description": "Pay a Paybill or Till number provided by SasaPay or M-PESA.\n\n**Payload**\n| Field | Type | Required | Description |\n|---|---|---|---|\n| merchantCode | String | Yes | Your merchant code |\n| transactionReference | String | Yes | Your unique transaction id |\n| currencyCode | String | Yes | e.g. \"KES\" |\n| amount | String | Yes | Amount to pay |\n| senderAccountNumber | String | Yes | Account paying the bill |\n| receiverMerchantCode | String | Yes | Paybill/Till being paid |\n| accountReference | String | Yes | Account reference at the receiving business |\n| chargeAccount | String | Yes | Account charged transaction fees |\n| transactionFee | String | Yes | Fee amount |\n| billerType | String | Yes | \"PAYBILL\" or \"TILL\" |\n| networkCode | String | Yes | \"0\" SasaPay, \"63902\" M-PESA |\n| callbackUrl | String | Yes | Final result URL |\n| reason | String | No | Description |\n\n**Response**\n`checkoutRequestId`, `merchantReference`, `transactionCharges`, `merchantFees`."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Transfers",
+      "item": [
+        {
+          "name": "Merchant Transfers",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"merchantCode\": \"{{merchant_code}}\",\n    \"transactionReference\": \"REF{{$randomInt}}\",\n    \"currencyCode\": \"KES\",\n    \"TransactionDesc\": \"Send Money\",\n    \"amount\": 100,\n    \"reason\": \"Send Money\",\n    \"channel\": \"01\",\n    \"receiverNumber\": \"0700000000\",\n    \"callbackUrl\": \"{{callback_url}}\"\n}"
+            },
+            "url": {
+              "raw": "{{waas_base_url}}/payments/merchant-transfers/",
+              "host": [
+                "{{waas_base_url}}"
+              ],
+              "path": [
+                "payments",
+                "merchant-transfers",
+                ""
+              ]
+            },
+            "description": "Transfer funds from your merchant account directly to a customer's wallet or another mobile money provider.\n\n**Payload**\n| Field | Type | Required | Description |\n|---|---|---|---|\n| merchantCode | Numeric | Yes | Your merchant code |\n| transactionReference | Alpha-Numeric | Yes | Your unique transaction id |\n| currencyCode | Numeric | Yes | e.g. \"KES\" |\n| TransactionDesc | String | Yes | Description |\n| amount | Numeric | Yes | Amount to send |\n| reason | String | No | Purpose of transaction |\n| channel | String | Yes | See Reference Data → Channel Codes (mobile money/bank destination) |\n| receiverNumber | String | Yes | Recipient's phone/account number |\n| callbackUrl | URL | Yes | Final result URL |\n\n**Response**\n`checkoutRequestId`, `merchantReference`, `transactionCharges`."
+          },
+          "response": []
+        },
+        {
+          "name": "Transfer Funds (Send Money)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"merchantCode\": \"{{merchant_code}}\",\n    \"transactionReference\": \"REF{{$randomInt}}\",\n    \"currencyCode\": \"KES\",\n    \"TransactionDesc\": \"Send Money\",\n    \"senderNumber\": \"{{merchant_code}}\",\n    \"amount\": \"100.00\",\n    \"reason\": \"Send Money\",\n    \"chargeAccount\": \"{{merchant_code}}\",\n    \"transactionFee\": \"0.00\",\n    \"channel\": \"01\",\n    \"receiverNumber\": \"0700000000\",\n    \"callbackUrl\": \"{{callback_url}}\"\n}"
+            },
+            "url": {
+              "raw": "{{waas_base_url}}/payments/send-money/",
+              "host": [
+                "{{waas_base_url}}"
+              ],
+              "path": [
+                "payments",
+                "send-money",
+                ""
+              ]
+            },
+            "description": "Transfer funds from a beneficiary's own wallet to another mobile money provider (M-PESA, Airtel Money, T-Kash).\n\n**Payload**\n| Field | Type | Required | Description |\n|---|---|---|---|\n| merchantCode | String | Yes | Your merchant code |\n| transactionReference | String | Yes | Your unique transaction id |\n| currencyCode | String | Yes | e.g. \"KES\" |\n| TransactionDesc | String | Yes | Description |\n| senderNumber | String | Yes | Beneficiary's wallet account number |\n| amount | String | Yes | Amount to send |\n| reason | String | No | Purpose of transaction |\n| chargeAccount | String | Yes | Account charged the transaction fee (merchant or beneficiary) |\n| transactionFee | String | Yes | Fee amount |\n| channel | String | Yes | See Reference Data → Channel Codes |\n| receiverNumber | String | Yes | Recipient's phone/account number |\n| callbackUrl | String | Yes | Final result URL |\n\n**Response**\n`checkoutRequestId`, `merchantReference`, `transactionCharges`, `merchantFees`."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Wallets & Transactions",
+      "item": [
+        {
+          "name": "Create Sub-Wallet",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"merchantCode\": \"{{merchant_code}}\",\n    \"accountNumber\": \"123456\",\n    \"mobileNumber\": \"254700000000\",\n    \"subwalletType\": \"Personal\",\n    \"walletName\": \"Shop Wallet\",\n    \"purpose\": \"Collection\",\n    \"physicalAddress\": \"Nairobi, Kenya\",\n    \"natureOfBusiness\": \"Retail shop\",\n    \"estimatedMonthlyTransactionAmount\": \"500000\",\n    \"estimatedMonthlyTransactionCount\": \"1000\"\n}"
+            },
+            "url": {
+              "raw": "{{waas_base_url}}/sub-wallets/",
+              "host": [
+                "{{waas_base_url}}"
+              ],
+              "path": [
+                "sub-wallets",
+                ""
+              ]
+            },
+            "description": "Create a secondary wallet for an existing customer. A customer may have at most 2 wallets total (main + one sub-wallet).\n\n**Payload**\n| Field | Type | Required | Description |\n|---|---|---|---|\n| merchantCode | String | Yes | Your merchant code |\n| accountNumber | String | Yes | Customer's main account number |\n| mobileNumber | String | Yes | Customer's mobile number |\n| subwalletType | String | Yes | \"Personal\" or \"Business\" |\n| walletName | String | Yes | Display name, e.g. \"Shop Wallet\" |\n| purpose | String | Yes | e.g. \"Collection\" |\n| physicalAddress | String | Yes | Merchant's physical address |\n| natureOfBusiness | String | Yes | e.g. \"Retail shop\" |\n| estimatedMonthlyTransactionAmount | String | Yes | Expected monthly volume |\n| estimatedMonthlyTransactionCount | String | Yes | Expected monthly count |\n\n**Response `data`**\n`accountNumber` (new sub-wallet number), `displayName`, `accountStatus`, `accountBalance`."
+          },
+          "response": []
+        },
+        {
+          "name": "Transactions Statement",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{waas_base_url}}/transactions/?merchantCode={{merchant_code}}&accountNumber={{account_number}}",
+              "host": [
+                "{{waas_base_url}}"
+              ],
+              "path": [
+                "transactions",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "merchantCode",
+                  "value": "{{merchant_code}}"
+                },
+                {
+                  "key": "accountNumber",
+                  "value": "{{account_number}}"
+                }
+              ]
+            },
+            "description": "Fetch a paginated statement of transactions for a merchant/account.\n\n⚠️ Per SasaPay docs, this endpoint is **Production only** — it will not work against Sandbox.\n\n**Query params**\n| Field | Required | Description |\n|---|---|---|\n| merchantCode | Yes | Your merchant code |\n| accountNumber | Yes | Account to fetch transactions for |\n\n**Response**\nPaginated (`count`, `current_page`, `pages`, `links`). `data.transactions[]` each has `transaction_amount`, `transaction_charges`, `transaction_type` (\"TRANSACTION IN\"/\"TRANSACTION OUT\"), `transaction_code`, `transaction_reference`, `transaction_date`, `payment_details` (`channel_name`, `party_B_account_number`), `result_code`, `result_description`, `reversal_status`."
+          },
+          "response": []
+        },
+        {
+          "name": "Check Transaction Status",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"merchantCode\": \"{{merchant_code}}\",\n    \"checkoutRequestId\": \"{{checkout_request_id}}\",\n    \"merchantTransactionReference\": \"\",\n    \"transactionCode\": \"\"\n}"
+            },
+            "url": {
+              "raw": "{{waas_base_url}}/transactions/status/",
+              "host": [
+                "{{waas_base_url}}"
+              ],
+              "path": [
+                "transactions",
+                "status",
+                ""
+              ]
+            },
+            "description": "Check the outcome of a transaction. The result is returned directly (synchronously) in this WaaS version.\n\n**Payload** — `merchantCode` is mandatory; supply **at least one** of the other three fields.\n| Field | Type | Required | Description |\n|---|---|---|---|\n| merchantCode | Number | Yes | Your merchant code |\n| checkoutRequestId | Alpha-Numeric | One of these 3 | From the original payment request |\n| merchantTransactionReference | Alpha-Numeric | One of these 3 | Your original transaction reference |\n| transactionCode | Alpha-Numeric | One of these 3 | SasaPay's transaction code |\n\n**Response `data`**\n`TransactionType` (e.g. B2C, C2B), `TransactionDate`, `TransactionAmount`, `Paid`, `AmountPaid`, `PaidDate`, `SourceChannel`, `DestinationChannel`, `TransactionCode`."
+          },
+          "response": []
+        },
+        {
+          "name": "Merchant's Account Balance",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{waas_base_url}}/merchant-balances/?merchantCode={{merchant_code}}",
+              "host": [
+                "{{waas_base_url}}"
+              ],
+              "path": [
+                "merchant-balances",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "merchantCode",
+                  "value": "{{merchant_code}}"
+                }
+              ]
+            },
+            "description": "Check the merchant's account balances across account labels.\n\n**Query params**\n| Field | Required | Description |\n|---|---|---|\n| merchantCode | Yes | Your merchant code |\n\n**Response `data`**\n`CurrencyCode`, `OrgAccountBalance`, `Accounts[]` — each `{account_label, account_balance}` for labels like Bulk Payment, Utility Account, Working Account, Wallet as Service."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Utilities",
+      "item": [
+        {
+          "name": "Utility Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"transactionReference\": \"REF{{$randomInt}}\",\n    \"merchantCode\": \"{{merchant_code}}\",\n    \"serviceCode\": \"SP-SAFARICOM\",\n    \"payerAccountNumber\": \"{{merchant_code}}\",\n    \"accountNumber\": \"0700000000\",\n    \"currencyCode\": \"KES\",\n    \"amount\": \"20.00\",\n    \"transactionFee\": \"0.00\",\n    \"callbackUrl\": \"{{callback_url}}\"\n}"
+            },
+            "url": {
+              "raw": "{{waas_base_url}}/utilities/",
+              "host": [
+                "{{waas_base_url}}"
+              ],
+              "path": [
+                "utilities",
+                ""
+              ]
+            },
+            "description": "Pay for airtime or a bill on behalf of a customer.\n\n**Payload**\n| Field | Type | Required | Description |\n|---|---|---|---|\n| transactionReference | String | Yes | Your unique transaction id |\n| merchantCode | String | Yes | Your merchant code |\n| serviceCode | String | Yes | See options below |\n| payerAccountNumber | String | Yes | Account paying for the utility |\n| accountNumber | String | Yes | Account being paid for (a phone number when purchasing airtime) |\n| currencyCode | String | Yes | e.g. \"KES\" |\n| amount | String | Yes | Amount to pay |\n| transactionFee | String | Yes | Fee amount |\n| callbackUrl | String | Yes | Final result URL |\n\n**serviceCode options:** `AIRTIME`, `SP-SAFARICOM`, `SP-AIRTEL`, `SP-TELKOM` (plus other bill-payment billers configured on your account, e.g. water/electricity)\n\n**Response**\n`checkoutRequestId`, `merchantReference`."
+          },
+          "response": []
+        },
+        {
+          "name": "Bill Query",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"merchantCode\": \"{{merchant_code}}\",\n    \"serviceCode\": \"SP-NRB-WATER\",\n    \"customerMobile\": \"0700000000\",\n    \"accountNumber\": \"5050\"\n}"
+            },
+            "url": {
+              "raw": "{{waas_utilities_base_url}}/utilities/bill-query/",
+              "host": [
+                "{{waas_utilities_base_url}}"
+              ],
+              "path": [
+                "utilities",
+                "bill-query",
+                ""
+              ]
+            },
+            "description": "Look up a bill's amount due before paying it.\n\n**Payload**\n| Field | Type | Required | Description |\n|---|---|---|---|\n| merchantCode | String | Yes | Your merchant code |\n| serviceCode | String | Yes | e.g. \"SP-NRB-WATER\" |\n| customerMobile | String | Yes | Mobile number linked to the bill account |\n| accountNumber | String | Yes | Bill account number |\n\n**Response `data`**\n`accountNumber`, `serviceCode`, `dueDate`, `dueAmount`, `currency`, `customerName`. Fields may be blank if not available for that biller."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Reference Data",
+      "item": [
+        {
+          "name": "Channel Codes (Banks)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{waas_base_url}}/channel-codes/",
+              "host": [
+                "{{waas_base_url}}"
+              ],
+              "path": [
+                "channel-codes",
+                ""
+              ]
+            },
+            "description": "Returns the list of banks and their channel codes — used as the `channel` value in Merchant Transfers / Send Money.\n\n**Response**\n`data[]` — each `{bank_name, bank_code}`."
+          },
+          "response": []
+        },
+        {
+          "name": "Countries",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{waas_base_url}}/countries/",
+              "host": [
+                "{{waas_base_url}}"
+              ],
+              "path": [
+                "countries",
+                ""
+              ]
+            },
+            "description": "Returns active countries supported for onboarding.\n\n**Response**\n`data[]` — each `{id, name, calling_code, country_code}`. Use `id` as `countryId` when onboarding a business."
+          },
+          "response": []
+        },
+        {
+          "name": "Country Sub Regions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{waas_base_url}}/countries/sub-regions/?callingCode=254",
+              "host": [
+                "{{waas_base_url}}"
+              ],
+              "path": [
+                "countries",
+                "sub-regions",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "callingCode",
+                  "value": "254"
+                }
+              ]
+            },
+            "description": "Returns sub-regions for a given country.\n\n**Query params**\n| Field | Required | Description |\n|---|---|---|\n| callingCode | Yes | Country calling code, e.g. \"254\" |\n\n**Response**\n`data[]` — each `{id, name}`. Use `id` as `subregionId` when onboarding a business."
+          },
+          "response": []
+        },
+        {
+          "name": "Industries",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{waas_base_url}}/industries/",
+              "host": [
+                "{{waas_base_url}}"
+              ],
+              "path": [
+                "industries",
+                ""
+              ]
+            },
+            "description": "Returns the list of industries.\n\n**Response**\n`data[]` — each `{id, code_value}`. Use `id` as `industryId` when onboarding a business."
+          },
+          "response": []
+        },
+        {
+          "name": "Sub Industries",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{waas_base_url}}/sub-industries/?industryId=62",
+              "host": [
+                "{{waas_base_url}}"
+              ],
+              "path": [
+                "sub-industries",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "industryId",
+                  "value": "62"
+                }
+              ]
+            },
+            "description": "Returns sub-industries for a given industry.\n\n**Query params**\n| Field | Required | Description |\n|---|---|---|\n| industryId | Yes | From the Industries endpoint |\n\n**Response**\n`data[]` — each `{id, sub_industry}`. Use `id` as `subIndustryId` when onboarding a business."
+          },
+          "response": []
+        },
+        {
+          "name": "Business Types",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{waas_base_url}}/business-types/",
+              "host": [
+                "{{waas_base_url}}"
+              ],
+              "path": [
+                "business-types",
+                ""
+              ]
+            },
+            "description": "Returns business legal-structure types.\n\n**Response**\n`data[]` — each `{id, name}` (e.g. \"Sole Proprietor\", \"Private Limited Liability Companies\"). Use `id` as `businessTypeId` when onboarding a business."
+          },
+          "response": []
+        },
+        {
+          "name": "Account Product Types",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{waas_base_url}}/products/",
+              "host": [
+                "{{waas_base_url}}"
+              ],
+              "path": [
+                "products",
+                ""
+              ]
+            },
+            "description": "Returns account/product types.\n\n**Response**\n`data[]` — each `{id, name, description, currency_code}` (e.g. \"Till-BusinessOption\", \"PayBill-CustomerOption\"). Use `id` as `productType` when onboarding a business."
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{waas_access_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "waas_base_url",
+      "value": "{{waas_base_url}}"
+    }
+  ]
+}

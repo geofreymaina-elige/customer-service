@@ -1,4 +1,4 @@
-import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
 import { PinResetService } from '../services/pin-reset.service';
 import {
   InitiatePinResetDto,
@@ -6,8 +6,10 @@ import {
   CompletePinResetDto,
 } from '../dto/pin-reset.dto';
 import { MessageService } from '../../../core/messages/message.service';
+import { PinAstppTokenGuard } from '../../../core/auth/pin-astpp-token.guard';
 
 @Controller('api/v1/auth/reset-pin')
+@UseGuards(PinAstppTokenGuard)
 export class PinResetController {
   constructor(
     private readonly pinResetService: PinResetService,

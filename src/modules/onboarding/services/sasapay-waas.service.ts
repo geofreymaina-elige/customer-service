@@ -4,6 +4,26 @@ import axios from 'axios';
 import { AppCacheService } from '../../../core/cache/app-cache.service';
 import { PersonalOnboardingDto, PersonalOnboardingConfirmDto } from '../dto/onboarding.dto';
 
+export interface SasaPayCustomerDetails {
+  status: boolean;
+  responseCode: string;
+  message: string;
+  data?: {
+    profile?: {
+      display_name?: string;
+      mobile_number?: string;
+      account_status?: string;
+    };
+    CustomerWallets?: Array<{
+      account_number?: string;
+      currency_code?: string;
+      description?: string;
+      account_balance_derived?: string | number;
+    }>;
+    merchantCode?: string;
+  };
+}
+
 @Injectable()
 export class SasaPayWaasService {
   private readonly logger = new Logger(SasaPayWaasService.name);
@@ -273,6 +293,81 @@ export class SasaPayWaasService {
       status: true,
       responseCode: '0',
       message: 'Documents uploaded successfully.',
+    }));
+  }
+
+  async getCustomerDetails(accountNumber: string): Promise<SasaPayCustomerDetails> {
+    return this.callSasaPayApi(async (token) => {
+      const payload = {
+        merchantCode: this.merchantCode,
+        accountNumber,
+        countryCode: '254',
+      };
+      const url = `${this.baseUrl}/api/v2/waas/customer-details/`;
+      this.logProviderRequest('POST', url, payload);
+
+      const response = await axios.post(url, payload, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 15000,
+      });
+      this.logProviderResponse(url, response.status, response.data);
+
+      return response.data;
+    }, () => ({
+      status: true,
+      responseCode: '0',
+      message: 'Customer retrieved successfully',
+      data: {
+        CustomerWallets: [],
+        merchantCode: this.merchantCode,
+      },
+    }));
+  }
+
+  async updateCustomerDetails(
+    accountNumber: string,
+    data: {
+      firstName?: string;
+      middleName?: string;
+      lastName?: string;
+      email?: string;
+      documentType?: string;
+      documentNumber?: string;
+      callbackUrl?: string;
+    },
+  ): Promise<Record<string, unknown>> {
+    return this.callSasaPayApi(async (token) => {
+      const payload = {
+        merchantCode: this.merchantCode,
+        accountNumber,
+        firstName: data.firstName,
+        middleName: data.middleName || '',
+        lastName: data.lastName,
+        email: data.email,
+        documentType: data.documentType,
+        documentNumber: data.documentNumber,
+        callbackUrl: data.callbackUrl || this.callbackUrl,
+      };
+      const url = `${this.baseUrl}/api/v2/waas/customer-details/update/`;
+      this.logProviderRequest('POST', url, payload);
+
+      const response = await axios.post(url, payload, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 15000,
+      });
+      this.logProviderResponse(url, response.status, response.data);
+
+      return response.data;
+    }, () => ({
+      status: true,
+      responseCode: '0',
+      message: 'Customer details update submitted successfully',
     }));
   }
 

@@ -1,6 +1,7 @@
 import { Controller, Get, Patch, Post, Body, UseGuards, Query } from '@nestjs/common';
 import { CustomerService } from '../services/customer.service';
 import { UpdateCustomerProfileDto, SubmitKycDocumentsDto } from '../dto/customer.dto';
+import { UpdateSasaPayCustomerDto } from '../dto/sasapay-customer.dto';
 import { AuthGuard } from '../../../core/auth/auth.guard';
 import { CurrentUser, AuthenticatedUser } from '../../../core/auth/current-user.decorator';
 
@@ -22,6 +23,16 @@ export class CustomerController {
   @UseGuards(AuthGuard)
   async updateMyProfile(@CurrentUser() user: AuthenticatedUser, @Body() dto: UpdateCustomerProfileDto) {
     const data = await this.customerService.updateProfile(user.id, dto);
+    return {
+      success: true,
+      data,
+    };
+  }
+
+  @Patch('me/sasapay')
+  @UseGuards(AuthGuard)
+  async updateMySasaPayProfile(@CurrentUser() user: AuthenticatedUser, @Body() dto: UpdateSasaPayCustomerDto) {
+    const data = await this.customerService.updateSasaPayProfile(user.id, dto);
     return {
       success: true,
       data,
