@@ -39,10 +39,18 @@ export class OnboardingController {
     return {
       success: true,
       message: result.otpPending
-        ? this.messages.get('wallets.onboarding.awaitingOtp')
+        ? this.messages.get('wallets.onboarding.awaitingOtp', {
+            phoneNumber: this.maskPhoneNumber(result.user.phoneNumber),
+          })
         : this.messages.get('onboarding.welcome'),
       data: result,
     };
+  }
+
+  private maskPhoneNumber(phoneNumber: string): string {
+    if (!phoneNumber || phoneNumber.length <= 6) return 'your registered phone number';
+
+    return `${phoneNumber.slice(0, 3)}${'*'.repeat(phoneNumber.length - 6)}${phoneNumber.slice(-3)}`;
   }
 
   /**
