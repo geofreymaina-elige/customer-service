@@ -347,7 +347,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     payload JSONB NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'RUNNING', 'COMPLETED', 'FAILED')),
     attempts INT NOT NULL DEFAULT 0,
-    max_attempts INT NOT NULL DEFAULT 5,
+    max_attempts INT NOT NULL DEFAULT 3,
     available_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     locked_at TIMESTAMPTZ,
     locked_by VARCHAR(128),

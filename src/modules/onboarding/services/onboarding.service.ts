@@ -87,18 +87,42 @@ export class OnboardingService {
         ]
       );
 
-      // Create customer identity record
+      // Create the primary KYC application and identity details.
       const docTypeEnum = astppCustomer.identityDocumentType === 3 ? 'PASSPORT' :
                           astppCustomer.identityDocumentType === 2 ? 'ALIEN_CARD' :
                           astppCustomer.identityDocumentType === 1 ? 'SERVICE_CARD' : 'NATIONAL_ID';
 
       await this.db.query(
-        `INSERT INTO customer_identities (
-          customer_id, document_type, document_number, kyc_status, iprs_verified, created_at, updated_at
+        `INSERT INTO customer_applications (
+          customer_id, astpp_id, application_id, application_type, kyc_status, created_at, updated_at
         )
-        VALUES ($1, $2, $3, 'approved', TRUE, NOW(), NOW())
-        ON CONFLICT (customer_id) DO NOTHING`,
-        [customer.id, docTypeEnum, astppCustomer.identityDocumentNumber || `ID${dto.astpp_id}`]
+        VALUES ($1, $2, NULL, 'primary_kyc', 'approved', NOW(), NOW())
+        ON CONFLICT (customer_id, application_type) DO UPDATE SET
+          kyc_status = EXCLUDED.kyc_status,
+          updated_at = NOW()
+        RETURNING application_id`,
+        [customer.id, dto.astpp_id]
+      );
+
+      await this.db.query(
+        `INSERT INTO customer_applicant_details (
+          application_id, customer_id, astpp_id, name,
+          identity_document_type, identity_document_number, synced_at, created_at, updated_at
+        )
+        SELECT ca.application_id, $1, $2, $3, $4, $5, NOW(), NOW(), NOW()
+        FROM customer_applications ca
+        WHERE ca.customer_id = $1 AND ca.application_type = 'primary_kyc'
+        ON CONFLICT (application_id) DO UPDATE SET
+          identity_document_type = EXCLUDED.identity_document_type,
+          identity_document_number = EXCLUDED.identity_document_number,
+          updated_at = NOW()`,
+        [
+          customer.id,
+          dto.astpp_id,
+          `${astppCustomer.firstName || ''} ${astppCustomer.lastName || ''}`.trim() || 'Customer',
+          docTypeEnum,
+          astppCustomer.identityDocumentNumber || `ID${dto.astpp_id}`,
+        ]
       );
     }
 

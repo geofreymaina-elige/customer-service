@@ -36,8 +36,8 @@ export class CustomerOperationsService {
         c.first_name ILIKE $${idx} OR
         c.last_name ILIKE $${idx} OR
         c.email ILIKE $${idx} OR
-        ci.document_number ILIKE $${idx} OR
-        c.astpp_id ILIKE $${idx}
+        cad.identity_document_number ILIKE $${idx} OR
+        c.astpp_id::text ILIKE $${idx}
       )`);
     }
 
@@ -48,7 +48,7 @@ export class CustomerOperationsService {
 
     if (dto.kycStatus) {
       params.push(dto.kycStatus);
-      whereClauses.push(`ci.kyc_status = $${params.length}`);
+      whereClauses.push(`ca.kyc_status = $${params.length}`);
     }
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
@@ -56,7 +56,9 @@ export class CustomerOperationsService {
     const countSql = `
       SELECT COUNT(DISTINCT c.id) as total
       FROM customers c
-      LEFT JOIN customer_identities ci ON ci.customer_id = c.id
+      LEFT JOIN customer_applications ca
+        ON ca.customer_id = c.id AND ca.application_type = 'primary_kyc'
+      LEFT JOIN customer_applicant_details cad ON cad.application_id = ca.application_id
       ${whereSql}
     `;
     const countResult = await this.db.queryOne(countSql, params);
@@ -73,6 +75,9 @@ export class CustomerOperationsService {
              w.status AS wallet_status, w.is_locked AS wallet_is_locked
       FROM customers c
       LEFT JOIN customer_wallets w ON w.customer_id = c.id
+      LEFT JOIN customer_applications ca
+        ON ca.customer_id = c.id AND ca.application_type = 'primary_kyc'
+      LEFT JOIN customer_applicant_details cad ON cad.application_id = ca.application_id
       ${whereSql}
       ORDER BY c.created_at DESC
       LIMIT ${limitParam} OFFSET ${offsetParam}
@@ -199,7 +204,7 @@ export class CustomerOperationsService {
     const tierLevel = dto.tierLevel || 'TIER_1';
 
     await this.db.query(
-      `UPDATE customer_identities
+      `UPDATE customer_applications
        SET kyc_status = $1,
            kyc_tier = $2,
            kyc_verified_at = CASE WHEN $1 = 'approved' THEN NOW() ELSE NULL END,
@@ -208,7 +213,7 @@ export class CustomerOperationsService {
            reviewed_by = $5,
            reviewed_at = NOW(),
            updated_at = NOW()
-       WHERE customer_id = $6`,
+           WHERE customer_id = $6 AND application_type = 'primary_kyc'`,
       [
         newKycStatus,
         tierLevel,

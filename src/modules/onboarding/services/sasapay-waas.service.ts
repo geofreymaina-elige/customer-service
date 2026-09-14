@@ -62,9 +62,8 @@ export class SasaPayWaasService {
       
       // If authentication failed, clear cache to force retry
       this.appCache.setSystemConfig('sasapay_access_token', null, 0);
-      
-      // In sandbox / mock fallback:
-      return 'mock_sasapay_token';
+
+      throw error;
     }
   }
 
@@ -285,9 +284,8 @@ export class SasaPayWaasService {
       }
     } catch (error) {
       console.error('[SASAPAY API] Error:', error?.response?.data || error?.message);
-      
-      // Return fallback response for offline sandbox testing
-      return fallback();
+
+      throw error;
     }
   }
 }

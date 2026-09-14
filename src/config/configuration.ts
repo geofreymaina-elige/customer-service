@@ -35,7 +35,7 @@ export default () => ({
       username: process.env.ASTPP_SSH_USERNAME || 'jeff',
       privateKey: process.env.ASTPP_SSH_PRIVATE_KEY || '',
     },
-    imagesPath: process.env.ASTPP_IMAGES_PATH || '/var/www/html/astpp/application_images',
+    imagesPath: process.env.ASTPP_IMAGES_PATH,
   },
   kafka: {
     brokers: (process.env.KAFKA_BROKERS || 'localhost:9092').split(','),

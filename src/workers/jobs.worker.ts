@@ -57,6 +57,7 @@ export class JobsWorker implements OnModuleInit, OnModuleDestroy {
           this.logger.log(`[WAAS JOB] Step 1 — initiating WaaS for customer ${payload.customerId}`);
           await this.waasOnboardingJob.step1_InitiateSasaPayWaaS(payload);
           await this.jobService.markCompleted(job.id);
+          this.logger.log(`[JOBS WORKER] Completed job ${job.job_type} (${job.uuid})`);
           break;
         }
 
@@ -77,6 +78,7 @@ export class JobsWorker implements OnModuleInit, OnModuleDestroy {
           await this.waasOnboardingJob.step3_UploadKycToSasaPay(payload, stateAfterFetch);
 
           await this.jobService.markCompleted(job.id);
+          this.logger.log(`[JOBS WORKER] Completed job ${job.job_type} (${job.uuid})`);
           break;
         }
 
@@ -84,26 +86,59 @@ export class JobsWorker implements OnModuleInit, OnModuleDestroy {
           this.logger.log(`[KYC JOB] Executing automated verification for customer ${job.payload?.customerId}`);
           // Simulate / execute automated KYC / IPRS lookup
           await this.jobService.markCompleted(job.id);
+          this.logger.log(`[JOBS WORKER] Completed job ${job.job_type} (${job.uuid})`);
           break;
 
         case 'CustomerNotificationJob':
           this.logger.log(`[NOTIFICATION JOB] Dispatching notification to ${job.payload?.recipient}`);
           // Simulate / send SMS / push notification
           await this.jobService.markCompleted(job.id);
+          this.logger.log(`[JOBS WORKER] Completed job ${job.job_type} (${job.uuid})`);
           break;
 
         case 'DeviceCleanupJob':
           this.logger.log(`[DEVICE CLEANUP JOB] Cleaning up inactive customer device sessions`);
           await this.jobService.markCompleted(job.id);
+          this.logger.log(`[JOBS WORKER] Completed job ${job.job_type} (${job.uuid})`);
           break;
 
         default:
           this.logger.warn(`[JOB] Unknown job type: ${job.job_type} — marking completed`);
           await this.jobService.markCompleted(job.id);
+          this.logger.log(`[JOBS WORKER] Completed job ${job.job_type} (${job.uuid})`);
       }
     } catch (error) {
-      this.logger.error(`[JOBS WORKER] Job ${job.job_type} (${job.uuid}) failed: ${error?.message}`);
-      await this.jobService.markFailed(job.id, error.message);
+      const errorDetails = this.formatError(error);
+      this.logger.error(`[JOBS WORKER] Job ${job.job_type} (${job.uuid}) failed: ${errorDetails}`);
+      await this.jobService.markFailed(job.id, errorDetails);
+    }
+  }
+
+  private formatError(error: unknown): string {
+    if (!error || typeof error !== 'object') {
+      return String(error || 'Unknown error');
+    }
+
+    const candidate = error as {
+      message?: string;
+      stack?: string;
+      code?: string;
+      response?: { status?: number; data?: unknown };
+    };
+
+    const details: Record<string, unknown> = {
+      message: candidate.message || 'Unknown error',
+    };
+
+    if (candidate.code) details.code = candidate.code;
+    if (candidate.response?.status) details.httpStatus = candidate.response.status;
+    if (candidate.response?.data !== undefined) details.response = candidate.response.data;
+    if (candidate.stack) details.stack = candidate.stack;
+
+    try {
+      return JSON.stringify(details);
+    } catch {
+      return candidate.message || 'Unknown error';
     }
   }
 }
