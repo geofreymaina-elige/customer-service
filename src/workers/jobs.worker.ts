@@ -15,10 +15,11 @@ export class JobsWorker implements OnModuleInit, OnModuleDestroy {
     private readonly waasOnboardingJob: WaasOnboardingJobService,
   ) {}
 
-  onModuleInit() {
+  async onModuleInit() {
     this.isRunning = true;
     this.logger.log(`[JOBS WORKER] Initialized customer management worker ${this.workerId}`);
-    this.pollLoop();
+    this.logger.log('[JOBS WORKER] Checking for pending jobs at startup');
+    await this.pollLoop();
   }
 
   onModuleDestroy() {
@@ -34,6 +35,7 @@ export class JobsWorker implements OnModuleInit, OnModuleDestroy {
     try {
       const job = await this.jobService.claimNextJob(this.workerId);
       if (job) {
+        this.logger.log(`[JOBS WORKER] Found pending job ${job.job_type} (${job.uuid})`);
         this.logger.log(`[JOBS WORKER] Processing job ${job.job_type} (${job.uuid})`);
         await this.processJob(job);
       }
@@ -121,7 +123,6 @@ export class JobsWorker implements OnModuleInit, OnModuleDestroy {
 
     const candidate = error as {
       message?: string;
-      stack?: string;
       code?: string;
       response?: { status?: number; data?: unknown };
     };
@@ -133,7 +134,6 @@ export class JobsWorker implements OnModuleInit, OnModuleDestroy {
     if (candidate.code) details.code = candidate.code;
     if (candidate.response?.status) details.httpStatus = candidate.response.status;
     if (candidate.response?.data !== undefined) details.response = candidate.response.data;
-    if (candidate.stack) details.stack = candidate.stack;
 
     try {
       return JSON.stringify(details);

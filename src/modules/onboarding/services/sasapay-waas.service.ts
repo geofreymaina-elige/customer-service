@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import { AppCacheService } from '../../../core/cache/app-cache.service';
@@ -6,6 +6,7 @@ import { PersonalOnboardingDto, PersonalOnboardingConfirmDto } from '../dto/onbo
 
 @Injectable()
 export class SasaPayWaasService {
+  private readonly logger = new Logger(SasaPayWaasService.name);
   private readonly baseUrl: string;
   private readonly clientId: string;
   private readonly clientSecret: string;
@@ -35,14 +36,17 @@ export class SasaPayWaasService {
     }
 
     // Cache miss or expired - fetch new token
+    const url = `${this.baseUrl}/api/v1/auth/token/?grant_type=client_credentials`;
+    this.logProviderRequest('GET', url);
     try {
       const authHeader = Buffer.from(`${this.clientId}:${this.clientSecret}`).toString('base64');
-      const response = await axios.get(`${this.baseUrl}/api/v1/auth/token/?grant_type=client_credentials`, {
+      const response = await axios.get(url, {
         headers: {
           Authorization: `Basic ${authHeader}`,
         },
         timeout: 10000,
       });
+      this.logProviderResponse(url, response.status, response.data);
 
       if (response.data && response.data.access_token) {
         const accessToken = response.data.access_token;
@@ -58,7 +62,7 @@ export class SasaPayWaasService {
 
       throw new Error('Failed to retrieve SasaPay access token');
     } catch (error) {
-      console.error('[SASAPAY AUTH] Error obtaining token:', error?.response?.data || error?.message);
+      this.logProviderError(error, url);
       
       // If authentication failed, clear cache to force retry
       this.appCache.setSystemConfig('sasapay_access_token', null, 0);
@@ -97,14 +101,17 @@ export class SasaPayWaasService {
         email: dto.email,
         callbackUrl: this.callbackUrl,
       };
+      const url = `${this.baseUrl}/api/v2/waas/personal-onboarding/`;
+      this.logProviderRequest('POST', url);
 
-      const response = await axios.post(`${this.baseUrl}/api/v2/waas/personal-onboarding/`, payload, {
+      const response = await axios.post(url, payload, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
         timeout: 15000,
       });
+      this.logProviderResponse(url, response.status, response.data);
 
       return response.data;
     }, () => ({
@@ -148,14 +155,17 @@ export class SasaPayWaasService {
         email: data.email,
         callbackUrl: this.callbackUrl,
       };
+      const url = `${this.baseUrl}/api/v2/waas/personal-onboarding/`;
+      this.logProviderRequest('POST', url);
 
-      const response = await axios.post(`${this.baseUrl}/api/v2/waas/personal-onboarding/`, payload, {
+      const response = await axios.post(url, payload, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
         timeout: 15000,
       });
+      this.logProviderResponse(url, response.status, response.data);
 
       return response.data;
     }, () => ({
@@ -187,14 +197,17 @@ export class SasaPayWaasService {
         otp: dto.otp,
         requestId,
       };
+      const url = `${this.baseUrl}/api/v2/waas/personal-onboarding/confirmation/`;
+      this.logProviderRequest('POST', url);
 
-      const response = await axios.post(`${this.baseUrl}/api/v2/waas/personal-onboarding/confirmation/`, payload, {
+      const response = await axios.post(url, payload, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
         timeout: 15000,
       });
+      this.logProviderResponse(url, response.status, response.data);
 
       return response.data;
     }, () => ({
@@ -235,13 +248,16 @@ export class SasaPayWaasService {
       formData.append('documentImageBack', fs.createReadStream(backImagePath));
       formData.append('passportSizePhoto', fs.createReadStream(selfieImagePath));
 
-      const response = await axios.post(`${this.baseUrl}/api/v2/waas/personal-onboarding/kyc/`, formData, {
+      const url = `${this.baseUrl}/api/v2/waas/personal-onboarding/kyc/`;
+      this.logProviderRequest('POST', url);
+      const response = await axios.post(url, formData, {
         headers: {
           Authorization: `Bearer ${token}`,
           ...formData.getHeaders(),
         },
         timeout: 30000,
       });
+      this.logProviderResponse(url, response.status, response.data);
 
       return response.data;
     }, () => ({
@@ -249,6 +265,31 @@ export class SasaPayWaasService {
       responseCode: '0',
       message: 'Documents uploaded successfully.',
     }));
+  }
+
+  private logProviderRequest(method: string, url: string): void {
+    this.logger.log(`[SASAPAY] Request ${method} ${url}`);
+  }
+
+  private logProviderResponse(url: string, status: number, data: unknown): void {
+    this.logger.log(`[SASAPAY] Response ${status} ${url}: ${this.formatLogData(data)}`);
+  }
+
+  private logProviderError(error: any, fallbackUrl?: string): void {
+    const url = error?.config?.url || fallbackUrl || 'unknown URL';
+    const status = error?.response?.status || 'NO_STATUS';
+    const data = error?.response?.data ?? { message: error?.message || 'Unknown provider error' };
+    this.logger.error(`[SASAPAY] Response ${status} ${url}: ${this.formatLogData(data)}`);
+  }
+
+  private formatLogData(data: unknown): string {
+    if (typeof data === 'string') return data;
+
+    try {
+      return JSON.stringify(data);
+    } catch {
+      return String(data);
+    }
   }
 
   /**
@@ -283,7 +324,7 @@ export class SasaPayWaasService {
         throw error;
       }
     } catch (error) {
-      console.error('[SASAPAY API] Error:', error?.response?.data || error?.message);
+      this.logProviderError(error);
 
       throw error;
     }
