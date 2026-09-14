@@ -33,7 +33,18 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         errors = Array.isArray(res.message) ? res.message : res.errors || [];
       }
     } else if (exception instanceof Error) {
-      console.error('[UNHANDLED ERROR]', exception);
+      const providerError = exception as Error & {
+        code?: string;
+        response?: { status?: number; data?: unknown };
+      };
+      const details = {
+        message: providerError.message || 'Unknown error',
+        ...(providerError.code ? { code: providerError.code } : {}),
+        ...(providerError.response?.status ? { httpStatus: providerError.response.status } : {}),
+        ...(providerError.response?.data !== undefined ? { response: providerError.response.data } : {}),
+      };
+
+      console.error('[UNHANDLED ERROR]', JSON.stringify(details));
       message = exception.message || message;
     }
 

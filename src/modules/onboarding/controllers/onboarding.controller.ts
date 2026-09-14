@@ -38,7 +38,9 @@ export class OnboardingController {
 
     return {
       success: true,
-      message: this.messages.get('onboarding.welcome'),
+      message: result.otpPending
+        ? this.messages.get('wallets.onboarding.awaitingOtp')
+        : this.messages.get('onboarding.welcome'),
       data: result,
     };
   }
@@ -106,6 +108,15 @@ export class OnboardingController {
     const accountStatus = result.data?.accountStatus;
     const accountNumber = result.data?.accountNumber;
 
+    await this.db.query(
+      `UPDATE customer_applications
+       SET sasapay_account_number = $1,
+           sasapay_account_status = $2,
+           updated_at = NOW()
+       WHERE id = $3 AND application_type = 'wallet_kyc'`,
+      [accountNumber, accountStatus, appRow.pg_app_id],
+    );
+
     this.logger.log(
       `[OTP CONFIRM] Customer ${customerId} — SasaPay accountStatus: ${accountStatus}, accountNumber: ${accountNumber}`,
     );
@@ -159,6 +170,13 @@ export class OnboardingController {
     } else {
       // AWAITING_APPROVAL or unknown — lock wallet, no KYC job
       await this.db.query(
+        `UPDATE customer_applications
+         SET kyc_status = 'pending', updated_at = NOW()
+         WHERE id = $1 AND application_type = 'wallet_kyc'`,
+        [appRow.pg_app_id],
+      );
+
+      await this.db.query(
         `INSERT INTO customer_wallets (
            customer_id, astpp_id, account_number, status,
            is_locked, lock_reason, locked_by, created_at, updated_at
@@ -186,9 +204,47 @@ export class OnboardingController {
   @Post('callback/sasapay')
   @HttpCode(HttpStatus.OK)
   async handleSasaPayCallback(@Body() dto: SasaPayOnboardingCallbackDto) {
-    console.log('[SASAPAY CALLBACK] Received status update:', dto);
+    const application = await this.db.queryOne(
+      `SELECT id, customer_id, kyc_status
+       FROM customer_applications
+       WHERE application_type = 'wallet_kyc'
+         AND sasapay_account_number = $1
+         AND sasapay_account_number IS NOT NULL
+         AND sasapay_account_status IS NOT NULL
+       LIMIT 1`,
+      [dto.accountNumber],
+    );
+
+    if (!application) {
+      this.logger.warn(
+        `[SASAPAY CALLBACK] Ignored callback for account ${dto.accountNumber}: no confirmed wallet onboarding found`,
+      );
+      return {
+        success: true,
+        processed: false,
+        message: 'Callback ignored because no confirmed wallet onboarding exists for this account.',
+      };
+    }
+
+    const kycStatus = dto.accountStatus === 'APPROVED' ? 'approved' : 'rejected';
+    await this.db.query(
+      `UPDATE customer_applications
+       SET sasapay_account_status = $1,
+           kyc_status = $2,
+           rejection_reason = CASE WHEN $2 = 'rejected' THEN $3 ELSE NULL END,
+           updated_at = NOW()
+       WHERE id = $4
+         AND application_type = 'wallet_kyc'
+         AND sasapay_account_number IS NOT NULL`,
+      [dto.accountStatus, kycStatus, dto.description || 'SasaPay onboarding rejected', application.id],
+    );
+
+    this.logger.log(
+      `[SASAPAY CALLBACK] Processed ${dto.accountStatus} for customer ${application.customer_id}`,
+    );
     return {
       success: true,
+      processed: true,
       message: 'Callback received and processed',
     };
   }

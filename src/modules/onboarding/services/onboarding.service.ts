@@ -30,6 +30,7 @@ export class OnboardingService {
   async onboardUserDevice(dto: OnboardUserDeviceDto, ipAddress: string = '127.0.0.1'): Promise<{
     user: any;
     token: any;
+    otpPending: boolean;
   }> {
     // 1. Sync from ASTPP or check existing customer (with 3-second timeout safety)
     let astppCustomer = null;
@@ -154,6 +155,7 @@ export class OnboardingService {
       `SELECT id FROM customer_wallets WHERE customer_id = $1 AND status IN ('active', 'locked', 'frozen')`,
       [customer.id],
     );
+    let otpPending = false;
 
     if (existingWallet) {
       this.logger.log(`[ONBOARDING] Customer ${customer.id} already has a wallet — skipping WaaS job enqueue`);
@@ -170,6 +172,7 @@ export class OnboardingService {
 
       if (existingJob) {
         this.logger.log(`[ONBOARDING] Pending WaaS job already exists for customer ${customer.id} — skipping duplicate`);
+        otpPending = true;
       } else {
         await this.jobService.enqueue('sasapay_waas_onboarding', {
           customerId: customer.id,
@@ -177,6 +180,7 @@ export class OnboardingService {
           applicationId: null,
         });
         this.logger.log(`[ONBOARDING] Enqueued sasapay_waas_onboarding job for customer ${customer.id}`);
+        otpPending = true;
       }
     }
 
@@ -196,6 +200,7 @@ export class OnboardingService {
         isWalletPinSet,
       },
       token,
+      otpPending,
     };
   }
 }
