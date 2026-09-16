@@ -33,6 +33,14 @@ interface OnboardingJobState {
 export class WaasOnboardingJobService {
   private readonly logger = new Logger(WaasOnboardingJobService.name);
 
+  private async writeAuditLog(customerId: number, eventType: string, details: Record<string, unknown>): Promise<void> {
+    await this.db.query(
+      `INSERT INTO customer_activity_logs (customer_id, event_type, actor_type, actor_id, details, created_at)
+       VALUES ($1, $2, 'SYSTEM', 'SASAPAY_WAAS_JOB', $3::jsonb, NOW())`,
+      [customerId, eventType, JSON.stringify(details)],
+    );
+  }
+
   // SSH Configuration for ASTPP server
   private readonly sshHost: string;
   private readonly sshPort: number;
@@ -123,6 +131,16 @@ export class WaasOnboardingJobService {
          updated_at = NOW()`,
       [customer.id, customer.astpp_id, result.requestId],
     );
+
+    await this.writeAuditLog(customer.id, 'SASAPAY_PERSONAL_ONBOARDING_INITIATED', {
+      requestId: result.requestId,
+      firstName: customer.first_name,
+      lastName: customer.last_name,
+      mobileNumber: customer.phone_number,
+      documentType: this.mapDocTypeToSasaPay(primaryKyc?.identity_document_type || 'NATIONAL_ID'),
+      documentNumber: primaryKyc?.identity_document_number || `ID${customer.astpp_id}`,
+      status: 'otp_sent',
+    });
 
     this.logger.log(`[STEP 1] OTP sent — requestId: ${result.requestId}`);
 
@@ -518,6 +536,14 @@ export class WaasOnboardingJobService {
     );
 
     try {
+      await this.writeAuditLog(payload.customerId, 'SASAPAY_KYC_UPLOAD_STARTED', {
+        requestId: state.sasapay_request_id || null,
+        accountNumber: state.sasapay_account_number || null,
+        frontImage: state.images?.front || null,
+        backImage: state.images?.back || null,
+        selfieImage: state.images?.selfie || null,
+      });
+
       await this.sasapayWaas.uploadKycDocuments(
         customer.phone_number.replace(/^\+?254/, ''),
         state.images.front,
@@ -526,10 +552,22 @@ export class WaasOnboardingJobService {
       );
 
       await fsPromises.rm(path.dirname(state.images.front), { recursive: true, force: true });
+
+      await this.writeAuditLog(payload.customerId, 'SASAPAY_KYC_UPLOAD_SUCCEEDED', {
+        requestId: state.sasapay_request_id || null,
+        accountNumber: state.sasapay_account_number || null,
+      });
     } catch (error) {
       this.logger.warn(
         `[STEP 3] SasaPay upload failed; staged files retained for retry in ${path.dirname(state.images.front)}`,
       );
+
+      await this.writeAuditLog(payload.customerId, 'SASAPAY_KYC_UPLOAD_FAILED', {
+        requestId: state.sasapay_request_id || null,
+        accountNumber: state.sasapay_account_number || null,
+        error: error instanceof Error ? error.message : String(error),
+      });
+
       throw error;
     }
 
@@ -547,6 +585,12 @@ export class WaasOnboardingJobService {
        WHERE customer_id = $1 AND application_type = 'wallet_kyc'`,
       [payload.customerId],
     );
+
+    await this.writeAuditLog(payload.customerId, 'SASAPAY_WALLET_APPROVED', {
+      requestId: state.sasapay_request_id || null,
+      accountNumber: state.sasapay_account_number || null,
+      status: 'wallet_active',
+    });
 
     this.logger.log(`[STEP 3] KYC upload complete — wallet activated for customer ${payload.customerId}`);
 

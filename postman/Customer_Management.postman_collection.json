@@ -111,6 +111,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Astpp-Token",
+                "value": "{{astppToken}}",
+                "description": "Required ASTPP encrypted token for this account"
               }
             ],
             "body": {
@@ -146,6 +151,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Astpp-Token",
+                "value": "{{astppToken}}",
+                "description": "Required ASTPP encrypted token for this account"
               }
             ],
             "body": {
@@ -181,6 +191,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Astpp-Token",
+                "value": "{{astppToken}}",
+                "description": "Required ASTPP encrypted token for this account"
               }
             ],
             "body": {
@@ -224,6 +239,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Astpp-Token",
+                "value": "{{astppToken}}",
+                "description": "Required ASTPP encrypted token for this account"
               }
             ],
             "body": {
@@ -272,6 +292,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Astpp-Token",
+                "value": "{{astppToken}}",
+                "description": "Required ASTPP encrypted token for this account"
               }
             ],
             "body": {
@@ -301,6 +326,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Astpp-Token",
+                "value": "{{astppToken}}",
+                "description": "Required ASTPP encrypted token for this account"
               }
             ],
             "body": {
@@ -330,6 +360,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Astpp-Token",
+                "value": "{{astppToken}}",
+                "description": "Required ASTPP encrypted token for this account"
               }
             ],
             "body": {
@@ -514,6 +549,45 @@
                 "me"
               ]
             }
+          }
+        },
+        {
+          "name": "Update SasaPay Customer Details",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Jonathan\",\n  \"middleName\": \"\",\n  \"lastName\": \"Doe\",\n  \"email\": \"jonathan.doe@example.com\",\n  \"documentType\": \"1\",\n  \"documentNumber\": \"1234328\",\n  \"callbackUrl\": \"{{sasapayCallbackUrl}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/customers/me/sasapay",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "customers",
+                "me",
+                "sasapay"
+              ]
+            },
+            "description": "Updates the authenticated customer's SasaPay beneficiary details. The service resolves the SasaPay account number from the customer's wallet/application record."
           }
         }
       ]

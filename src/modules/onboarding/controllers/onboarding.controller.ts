@@ -83,6 +83,14 @@ export class OnboardingController {
    *    - ACTIVE              → insert wallet as 'active'.
    *    - AWAITING_APPROVAL   → insert wallet as 'locked' (awaiting SasaPay manual review).
    */
+  private async writeAuditLog(customerId: number, eventType: string, details: Record<string, unknown>): Promise<void> {
+    await this.db.query(
+      `INSERT INTO customer_activity_logs (customer_id, event_type, actor_type, actor_id, details, created_at)
+       VALUES ($1, $2, 'SYSTEM', 'ONBOARDING_CONTROLLER', $3::jsonb, NOW())`,
+      [customerId, eventType, JSON.stringify(details)],
+    );
+  }
+
   @Post('personal/confirm')
   @HttpCode(HttpStatus.OK)
   async confirmPersonalOnboarding(@Body() dto: PersonalOnboardingConfirmDto) {
@@ -98,6 +106,11 @@ export class OnboardingController {
     );
 
     if (!appRow?.sasapay_request_id) {
+      await this.writeAuditLog(customerId, 'SASAPAY_PERSONAL_ONBOARDING_MISSING_REQUEST', {
+        customerId,
+        reason: 'No pending onboarding found for this customer. Please initiate onboarding first.',
+      });
+
       return {
         success: false,
         message: 'No pending onboarding found for this customer. Please initiate onboarding first.',
@@ -110,6 +123,12 @@ export class OnboardingController {
     const result = await this.sasapayWaas.confirmPersonalOnboarding(dto, requestId);
 
     if (!result.status) {
+      await this.writeAuditLog(customerId, 'SASAPAY_OTP_VERIFICATION_FAILED', {
+        requestId,
+        otp: dto.otp,
+        message: result.message,
+      });
+
       return {
         success: false,
         message: result.message,
@@ -127,6 +146,13 @@ export class OnboardingController {
        WHERE id = $3 AND application_type = 'wallet_kyc'`,
       [accountNumber, accountStatus, appRow.pg_app_id],
     );
+
+    await this.writeAuditLog(customerId, 'SASAPAY_OTP_CONFIRMED', {
+      requestId,
+      accountNumber,
+      accountStatus,
+      message: result.message,
+    });
 
     this.logger.log(
       `[OTP CONFIRM] Customer ${customerId} — SasaPay accountStatus: ${accountStatus}, accountNumber: ${accountNumber}`,
@@ -152,11 +178,25 @@ export class OnboardingController {
         [customerId],
       );
 
+      await this.writeAuditLog(customerId, 'SASAPAY_KYC_UPLOAD_REQUIRED', {
+        requestId,
+        accountNumber,
+        accountStatus,
+        reason: 'Awaiting KYC upload',
+      });
+
       // Enqueue KYC image upload job
-      await this.jobService.enqueue('sasapay_waas_kyc_upload', {
+      const kycJobUuid = await this.jobService.enqueue('sasapay_waas_kyc_upload', {
         customerId,
         astppId: appRow.astpp_id,
         applicationId: null,
+      });
+
+      await this.writeAuditLog(customerId, 'SASAPAY_KYC_UPLOAD_JOB_QUEUED', {
+        requestId,
+        accountNumber,
+        jobUuid: kycJobUuid,
+        jobType: 'sasapay_waas_kyc_upload',
       });
 
       this.logger.log(`[OTP CONFIRM] Enqueued sasapay_waas_kyc_upload for customer ${customerId}`);
@@ -178,6 +218,13 @@ export class OnboardingController {
         [customerId],
       );
 
+      await this.writeAuditLog(customerId, 'SASAPAY_WALLET_READY', {
+        requestId,
+        accountNumber,
+        accountStatus,
+        status: 'active',
+      });
+
     } else {
       // AWAITING_APPROVAL or unknown — lock wallet, no KYC job
       await this.db.query(
@@ -196,6 +243,13 @@ export class OnboardingController {
          ON CONFLICT (account_number) DO NOTHING`,
         [customerId, appRow.astpp_id, accountNumber],
       );
+
+      await this.writeAuditLog(customerId, 'SASAPAY_AWAITING_APPROVAL', {
+        requestId,
+        accountNumber,
+        accountStatus,
+        status: 'locked_awaiting_manual_review',
+      });
     }
 
     return {
