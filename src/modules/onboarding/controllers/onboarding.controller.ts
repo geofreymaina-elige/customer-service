@@ -1,6 +1,8 @@
 import { Controller, Post, Body, Req, HttpCode, HttpStatus, UseGuards, UnauthorizedException } from '@nestjs/common';
 import { Request } from 'express';
 import * as crypto from 'crypto';
+import * as fs from 'fs';
+import * as path from 'path';
 import { ConfigService } from '@nestjs/config';
 import { OnboardingService } from '../services/onboarding.service';
 import { SasaPayWaasService } from '../services/sasapay-waas.service';
@@ -264,6 +266,41 @@ export class OnboardingController {
   }
 
   /**
+   * Log SasaPay callback payload to separate file
+   */
+  private logSasaPayCallback(payload: Record<string, unknown>, req: Request): void {
+    try {
+      const logsDir = path.join(process.cwd(), 'logs');
+      if (!fs.existsSync(logsDir)) {
+        fs.mkdirSync(logsDir, { recursive: true });
+      }
+
+      const logFilePath = path.join(logsDir, 'sasapay-callbacks.log');
+      const timestamp = new Date().toISOString();
+      const sourceIp = this.normalizeIp(req.socket.remoteAddress || req.ip);
+      const headers = {
+        'x-sasapay-signature': req.header('X-SasaPay-Signature'),
+        'content-type': req.header('Content-Type'),
+        'user-agent': req.header('User-Agent'),
+      };
+
+      const logEntry = {
+        timestamp,
+        sourceIp,
+        headers,
+        payload,
+      };
+
+      const logLine = JSON.stringify(logEntry, null, 2) + '\n' + '-'.repeat(80) + '\n';
+      fs.appendFileSync(logFilePath, logLine, 'utf8');
+
+      this.logger.log(`[SASAPAY CALLBACK] Full payload logged to ${logFilePath}`);
+    } catch (error) {
+      this.logger.error(`[SASAPAY CALLBACK] Failed to write callback log: ${error.message}`);
+    }
+  }
+
+  /**
    * SasaPay WaaS Webhook Callback
    */
   @Post('callback/sasapay')
@@ -272,8 +309,11 @@ export class OnboardingController {
     @Body() dto: SasaPayOnboardingCallbackDto,
     @Req() req: Request,
   ) {
-    this.verifySasaPayCallback(req, dto);
+    // Log the full callback payload first
     const callbackPayload = dto as SasaPayOnboardingCallbackDto & Record<string, unknown>;
+    this.logSasaPayCallback(callbackPayload, req);
+
+    this.verifySasaPayCallback(req, dto);
     const callbackAccountNumber = this.callbackValue(callbackPayload, 'account_number', 'accountNumber');
     const callbackAccountStatus = this.callbackValue(callbackPayload, 'account_status', 'accountStatus');
 
