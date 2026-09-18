@@ -214,10 +214,29 @@ export class SasaPayWaasService {
       accountBalance: number;
     };
   }> {
+    return this.confirmPersonalOnboardingByRequestId(requestId, dto.otp);
+  }
+
+  /**
+   * Confirm Personal Onboarding by RequestId (Job-based flow)
+   * Accepts requestId and OTP directly without DTO wrapper
+   */
+  async confirmPersonalOnboardingByRequestId(requestId: string, otp: string): Promise<{
+    status: boolean;
+    responseCode: string;
+    message: string;
+    data: {
+      merchantCode: string;
+      accountNumber: string;
+      displayName: string;
+      accountStatus: 'ACTIVE' | 'AWAITING_APPROVAL' | 'AWAITING_KYC_UPLOAD';
+      accountBalance: number;
+    };
+  }> {
     return this.callSasaPayApi(async (token) => {
       const payload = {
         merchantCode: this.merchantCode,
-        otp: dto.otp,
+        otp,
         requestId,
       };
       const url = `${this.baseUrl}/api/v2/waas/personal-onboarding/confirmation/`;

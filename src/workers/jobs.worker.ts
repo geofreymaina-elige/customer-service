@@ -64,6 +64,19 @@ export class JobsWorker implements OnModuleInit, OnModuleDestroy {
         }
 
         // -----------------------------------------------------------------------
+        // SasaPay WaaS: Step 1.5 — OTP Confirmation (creates wallet account)
+        // Uses SELECT FOR UPDATE SKIP LOCKED to prevent duplicate processing
+        // -----------------------------------------------------------------------
+        case 'sasapay_otp_confirmation': {
+          const payload = job.payload as OnboardingJobPayload & { requestId: string; otp: string };
+          this.logger.log(`[OTP CONFIRM JOB] Processing OTP confirmation for customer ${payload.customerId}`);
+          await this.waasOnboardingJob.confirmOtpAndCreateWallet(payload);
+          await this.jobService.markCompleted(job.id);
+          this.logger.log(`[JOBS WORKER] Completed job ${job.job_type} (${job.uuid})`);
+          break;
+        }
+
+        // -----------------------------------------------------------------------
         // SasaPay WaaS: Step 2+3 — Fetch KYC images via SSH and upload to SasaPay
         // -----------------------------------------------------------------------
         case 'sasapay_waas_kyc_upload': {

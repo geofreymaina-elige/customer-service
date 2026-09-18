@@ -77,13 +77,18 @@ export class OnboardingController {
   /**
    * SasaPay WaaS Step 2: Personal Onboarding Confirmation with OTP.
    *
-   * Flow:
-   * 1. Look up sasapay_request_id from customer_applications (wallet_kyc) by customerId.
-   * 2. Call SasaPay /personal-onboarding/confirmation/ with the OTP + requestId.
-   * 3. Based on accountStatus from SasaPay:
-   *    - AWAITING_KYC_UPLOAD → insert wallet as 'locked', enqueue sasapay_waas_kyc_upload job.
-   *    - ACTIVE              → insert wallet as 'active'.
-   *    - AWAITING_APPROVAL   → insert wallet as 'locked' (awaiting SasaPay manual review).
+   * Job-Based Flow (Prevents Race Conditions):
+   * 1. Validate customer and check for existing wallet
+   * 2. Enqueue 'sasapay_otp_confirmation' job with OTP and customer details
+   * 3. Worker claims job using SELECT FOR UPDATE SKIP LOCKED (single worker guarantee)
+   * 4. Worker calls SasaPay API and creates wallet
+   * 5. If AWAITING_KYC_UPLOAD, enqueue 'sasapay_waas_kyc_upload' job
+   *
+   * Benefits:
+   * - SELECT FOR UPDATE SKIP LOCKED prevents duplicate processing
+   * - Automatic retry on failure (max_attempts in jobs table)
+   * - Full audit trail in jobs table
+   * - Works with multiple app instances/workers
    */
   private async writeAuditLog(customerId: number, eventType: string, details: Record<string, unknown>): Promise<void> {
     await this.db.query(
@@ -94,11 +99,11 @@ export class OnboardingController {
   }
 
   @Post('personal/confirm')
-  @HttpCode(HttpStatus.OK)
+  @HttpCode(HttpStatus.ACCEPTED)
   async confirmPersonalOnboarding(@Body() dto: PersonalOnboardingConfirmDto) {
-    // --- 1. Look up customer and requestId from DB by ASTPP ID ---
+    // --- 1. Look up customer and validate ---
     const appRow = await this.db.queryOne(
-      `SELECT ca.id AS pg_app_id, ca.sasapay_request_id, ca.astpp_id, c.id AS customer_id
+      `SELECT ca.id AS pg_app_id, ca.sasapay_request_id, ca.sasapay_account_number, ca.astpp_id, c.id AS customer_id
        FROM customer_applications ca
        JOIN customers c ON c.id = ca.customer_id
        WHERE c.astpp_id = $1
@@ -107,10 +112,12 @@ export class OnboardingController {
     );
 
     if (!appRow?.sasapay_request_id) {
-      await this.writeAuditLog(appRow?.customer_id || null, 'SASAPAY_PERSONAL_ONBOARDING_MISSING_REQUEST', {
-        astppId: dto.astppId,
-        reason: 'No pending onboarding found for this customer. Please initiate onboarding first.',
-      });
+      if (appRow?.customer_id) {
+        await this.writeAuditLog(appRow.customer_id, 'SASAPAY_PERSONAL_ONBOARDING_MISSING_REQUEST', {
+          astppId: dto.astppId,
+          reason: 'No pending onboarding found for this customer. Please initiate onboarding first.',
+        });
+      }
 
       return {
         success: false,
@@ -121,146 +128,53 @@ export class OnboardingController {
     const customerId = appRow.customer_id;
     const requestId: string = appRow.sasapay_request_id;
 
-    // --- 2. Call SasaPay OTP confirmation ---
-    const result = await this.sasapayWaas.confirmPersonalOnboarding(dto, requestId);
+    // --- 2. IDEMPOTENCY CHECK: Return existing wallet if already created ---
+    if (appRow.sasapay_account_number) {
+      this.logger.log(
+        `[OTP CONFIRM] Customer ${customerId} already has SasaPay account ${appRow.sasapay_account_number}. Returning existing wallet.`,
+      );
 
-    if (!result.status) {
-      await this.writeAuditLog(customerId, 'SASAPAY_OTP_VERIFICATION_FAILED', {
-        requestId,
-        otp: dto.otp,
-        message: result.message,
+      await this.writeAuditLog(customerId, 'SASAPAY_OTP_DUPLICATE_ATTEMPT', {
+        astppId: dto.astppId,
+        existingAccountNumber: appRow.sasapay_account_number,
+        reason: 'OTP confirmation already processed for this customer.',
       });
 
       return {
-        success: false,
-        message: result.message,
+        success: true,
+        message: 'Your wallet has already been created.',
+        data: {
+          accountNumber: appRow.sasapay_account_number,
+          alreadyExists: true,
+        },
       };
     }
 
-    const accountStatus = result.data?.accountStatus;
-    const accountNumber = result.data?.accountNumber;
-
-    await this.db.query(
-      `UPDATE customer_applications
-       SET sasapay_account_number = $1,
-           sasapay_account_status = $2,
-           updated_at = NOW()
-       WHERE id = $3`,
-      [accountNumber, accountStatus, appRow.pg_app_id],
-    );
-
-    await this.writeAuditLog(customerId, 'SASAPAY_OTP_CONFIRMED', {
+    // --- 3. ENQUEUE JOB: Let worker handle SasaPay API call ---
+    const jobUuid = await this.jobService.enqueue('sasapay_otp_confirmation', {
+      customerId,
+      astppId: appRow.astpp_id,
+      applicationId: appRow.pg_app_id,
       requestId,
-      accountNumber,
-      accountStatus,
-      message: result.message,
+      otp: dto.otp,
     });
 
-    this.logger.log(
-      `[OTP CONFIRM] Customer ${customerId} — SasaPay accountStatus: ${accountStatus}, accountNumber: ${accountNumber}`,
-    );
+    await this.writeAuditLog(customerId, 'SASAPAY_OTP_JOB_QUEUED', {
+      astppId: dto.astppId,
+      requestId,
+      jobUuid,
+      jobType: 'sasapay_otp_confirmation',
+      reason: 'OTP confirmation enqueued for processing',
+    });
 
-    // --- 3. Persist wallet + update application based on accountStatus ---
-    if (accountStatus === 'AWAITING_KYC_UPLOAD') {
-      // Insert wallet as locked pending KYC upload
-      await this.db.query(
-        `INSERT INTO customer_wallets (
-           customer_id, astpp_id, account_number, status,
-           is_locked, lock_reason, locked_by, created_at, updated_at
-         )
-         VALUES ($1, $2, $3, 'locked', TRUE, 'Awaiting KYC upload', 'SYSTEM_KYC', NOW(), NOW())
-         ON CONFLICT (account_number) DO NOTHING`,
-        [customerId, appRow.astpp_id, accountNumber],
-      );
-
-      await this.db.query(
-        `UPDATE customer_applications
-         SET kyc_status = 'requires_kyc_upload', updated_at = NOW()
-         WHERE customer_id = $1`,
-        [customerId],
-      );
-
-      await this.writeAuditLog(customerId, 'SASAPAY_KYC_UPLOAD_REQUIRED', {
-        requestId,
-        accountNumber,
-        accountStatus,
-        reason: 'Awaiting KYC upload',
-      });
-
-      // Enqueue KYC image upload job
-      const kycJobUuid = await this.jobService.enqueue('sasapay_waas_kyc_upload', {
-        customerId,
-        astppId: appRow.astpp_id,
-        applicationId: null,
-      });
-
-      await this.writeAuditLog(customerId, 'SASAPAY_KYC_UPLOAD_JOB_QUEUED', {
-        requestId,
-        accountNumber,
-        jobUuid: kycJobUuid,
-        jobType: 'sasapay_waas_kyc_upload',
-      });
-
-      this.logger.log(`[OTP CONFIRM] Enqueued sasapay_waas_kyc_upload for customer ${customerId}`);
-
-    } else if (accountStatus === 'ACTIVE') {
-      await this.db.query(
-        `INSERT INTO customer_wallets (
-           customer_id, astpp_id, account_number, status, created_at, updated_at
-         )
-         VALUES ($1, $2, $3, 'active', NOW(), NOW())
-         ON CONFLICT (account_number) DO NOTHING`,
-        [customerId, appRow.astpp_id, accountNumber],
-      );
-
-      await this.db.query(
-        `UPDATE customer_applications
-         SET kyc_status = 'approved', updated_at = NOW()
-         WHERE customer_id = $1`,
-        [customerId],
-      );
-
-      await this.writeAuditLog(customerId, 'SASAPAY_WALLET_READY', {
-        requestId,
-        accountNumber,
-        accountStatus,
-        status: 'active',
-      });
-
-    } else {
-      // AWAITING_APPROVAL or unknown — lock wallet, no KYC job
-      await this.db.query(
-        `UPDATE customer_applications
-         SET kyc_status = 'pending', updated_at = NOW()
-         WHERE id = $1`,
-        [appRow.pg_app_id],
-      );
-
-      await this.db.query(
-        `INSERT INTO customer_wallets (
-           customer_id, astpp_id, account_number, status,
-           is_locked, lock_reason, locked_by, created_at, updated_at
-         )
-         VALUES ($1, $2, $3, 'locked', TRUE, 'Awaiting SasaPay approval', 'SYSTEM_KYC', NOW(), NOW())
-         ON CONFLICT (account_number) DO NOTHING`,
-        [customerId, appRow.astpp_id, accountNumber],
-      );
-
-      await this.writeAuditLog(customerId, 'SASAPAY_AWAITING_APPROVAL', {
-        requestId,
-        accountNumber,
-        accountStatus,
-        status: 'locked_awaiting_manual_review',
-      });
-    }
+    this.logger.log(`[OTP CONFIRM] Enqueued sasapay_otp_confirmation job ${jobUuid} for customer ${customerId}`);
 
     return {
       success: true,
-      message: result.message,
+      message: 'OTP confirmation is being processed. Your wallet will be ready shortly.',
       data: {
-        accountNumber,
-        accountStatus,
-        displayName: result.data?.displayName,
+        jobId: jobUuid,
+        status: 'processing',
       },
     };
   }

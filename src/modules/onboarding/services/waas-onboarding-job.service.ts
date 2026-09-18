@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { DatabaseService } from '../../../core/database/database.service';
 import { AstppMysqlService } from '../../../core/astpp-mysql/astpp-mysql.service';
 import { SasaPayWaasService } from './sasapay-waas.service';
+import { JobService } from '../../../core/jobs/job.service';
 import { Client as SSHClient } from 'ssh2';
 import * as fs from 'fs';
 import * as fsPromises from 'fs/promises';
@@ -14,6 +15,8 @@ export interface OnboardingJobPayload {
   customerId: number;
   astppId: number;
   applicationId: number | null;
+  requestId?: string;
+  otp?: string;
 }
 
 interface OnboardingJobState {
@@ -53,6 +56,7 @@ export class WaasOnboardingJobService {
     private readonly db: DatabaseService,
     private readonly astppMysql: AstppMysqlService,
     private readonly sasapayWaas: SasaPayWaasService,
+    private readonly jobService: JobService,
     private readonly config: ConfigService,
   ) {
     this.sshHost = this.config.get<string>('astpp.ssh.host') || 'localhost';
@@ -64,6 +68,184 @@ export class WaasOnboardingJobService {
 
     if (!this.astppImagesPath.startsWith('/')) {
       throw new Error(`astpp.imagesPath must be an absolute path, got: "${this.astppImagesPath}"`);
+    }
+  }
+
+  /**
+   * Confirm OTP and Create SasaPay Wallet.
+   * 
+   * Job-based handler that processes OTP confirmation.
+   * Called by job worker after claiming job with SELECT FOR UPDATE SKIP LOCKED.
+   * 
+   * Flow:
+   * 1. Double-check wallet doesn't already exist (idempotency)
+   * 2. Call SasaPay OTP confirmation API
+   * 3. Create wallet record based on accountStatus:
+   *    - AWAITING_KYC_UPLOAD → locked wallet, enqueue KYC upload job
+   *    - ACTIVE → active wallet
+   *    - AWAITING_APPROVAL → locked wallet, no KYC job
+   */
+  async confirmOtpAndCreateWallet(payload: OnboardingJobPayload & { requestId: string; otp: string }): Promise<void> {
+    const { customerId, astppId, applicationId, requestId, otp } = payload;
+
+    this.logger.log(`[OTP CONFIRM JOB] Processing OTP for customer ${customerId}, requestId: ${requestId}`);
+
+    // --- 1. IDEMPOTENCY CHECK: Verify wallet doesn't already exist ---
+    const existingApp = await this.db.queryOne(
+      `SELECT sasapay_account_number FROM customer_applications WHERE id = $1`,
+      [applicationId],
+    );
+
+    if (existingApp?.sasapay_account_number) {
+      this.logger.warn(
+        `[OTP CONFIRM JOB] Wallet already exists for customer ${customerId}: ${existingApp.sasapay_account_number}. Skipping.`,
+      );
+      await this.writeAuditLog(customerId, 'SASAPAY_OTP_JOB_SKIPPED_DUPLICATE', {
+        requestId,
+        existingAccountNumber: existingApp.sasapay_account_number,
+        reason: 'Wallet already created, job was idempotent retry',
+      });
+      return; // Job completes successfully (idempotent)
+    }
+
+    // --- 2. Call SasaPay OTP Confirmation API ---
+    const result = await this.sasapayWaas.confirmPersonalOnboardingByRequestId(requestId, otp);
+
+    if (!result.status) {
+      await this.writeAuditLog(customerId, 'SASAPAY_OTP_JOB_FAILED', {
+        requestId,
+        otp,
+        message: result.message,
+        reason: 'SasaPay API returned error',
+      });
+
+      throw new Error(`SasaPay OTP confirmation failed: ${result.message}`);
+    }
+
+    const accountStatus = result.data?.accountStatus;
+    const accountNumber = result.data?.accountNumber;
+
+    if (!accountNumber) {
+      throw new Error('SasaPay API did not return account number');
+    }
+
+    // --- 3. Update application with account details ---
+    await this.db.query(
+      `UPDATE customer_applications
+       SET sasapay_account_number = $1,
+           sasapay_account_status = $2,
+           updated_at = NOW()
+       WHERE id = $3`,
+      [accountNumber, accountStatus, applicationId],
+    );
+
+    await this.writeAuditLog(customerId, 'SASAPAY_OTP_CONFIRMED', {
+      requestId,
+      accountNumber,
+      accountStatus,
+      message: result.message,
+    });
+
+    this.logger.log(
+      `[OTP CONFIRM JOB] Customer ${customerId} — SasaPay accountStatus: ${accountStatus}, accountNumber: ${accountNumber}`,
+    );
+
+    // --- 4. Create wallet based on accountStatus ---
+    if (accountStatus === 'AWAITING_KYC_UPLOAD') {
+      // Insert wallet as locked pending KYC upload
+      await this.db.query(
+        `INSERT INTO customer_wallets (
+           customer_id, astpp_id, account_number, status,
+           is_locked, lock_reason, locked_by, created_at, updated_at
+         )
+         VALUES ($1, $2, $3, 'locked', TRUE, 'Awaiting KYC upload', 'SYSTEM_KYC', NOW(), NOW())
+         ON CONFLICT (account_number) DO NOTHING`,
+        [customerId, astppId, accountNumber],
+      );
+
+      await this.db.query(
+        `UPDATE customer_applications
+         SET kyc_status = 'requires_kyc_upload', updated_at = NOW()
+         WHERE customer_id = $1`,
+        [customerId],
+      );
+
+      await this.writeAuditLog(customerId, 'SASAPAY_KYC_UPLOAD_REQUIRED', {
+        requestId,
+        accountNumber,
+        accountStatus,
+        reason: 'Awaiting KYC upload',
+      });
+
+      // Enqueue KYC image upload job
+      const kycJobUuid = await this.jobService.enqueue('sasapay_waas_kyc_upload', {
+        customerId,
+        astppId,
+        applicationId: null,
+      });
+
+      await this.writeAuditLog(customerId, 'SASAPAY_KYC_UPLOAD_JOB_QUEUED', {
+        requestId,
+        accountNumber,
+        jobUuid: kycJobUuid,
+        jobType: 'sasapay_waas_kyc_upload',
+      });
+
+      this.logger.log(`[OTP CONFIRM JOB] Enqueued sasapay_waas_kyc_upload for customer ${customerId}`);
+
+    } else if (accountStatus === 'ACTIVE') {
+      await this.db.query(
+        `INSERT INTO customer_wallets (
+           customer_id, astpp_id, account_number, status, created_at, updated_at
+         )
+         VALUES ($1, $2, $3, 'active', NOW(), NOW())
+         ON CONFLICT (account_number) DO NOTHING`,
+        [customerId, astppId, accountNumber],
+      );
+
+      await this.db.query(
+        `UPDATE customer_applications
+         SET kyc_status = 'approved', updated_at = NOW()
+         WHERE customer_id = $1`,
+        [customerId],
+      );
+
+      await this.writeAuditLog(customerId, 'SASAPAY_WALLET_READY', {
+        requestId,
+        accountNumber,
+        accountStatus,
+        status: 'active',
+      });
+
+      this.logger.log(`[OTP CONFIRM JOB] Wallet activated for customer ${customerId}`);
+
+    } else {
+      // AWAITING_APPROVAL or unknown — lock wallet, no KYC job
+      await this.db.query(
+        `UPDATE customer_applications
+         SET kyc_status = 'pending', updated_at = NOW()
+         WHERE id = $1`,
+        [applicationId],
+      );
+
+      await this.db.query(
+        `INSERT INTO customer_wallets (
+           customer_id, astpp_id, account_number, status,
+           is_locked, lock_reason, locked_by, created_at, updated_at
+         )
+         VALUES ($1, $2, $3, 'locked', TRUE, 'Awaiting SasaPay approval', 'SYSTEM_KYC', NOW(), NOW())
+         ON CONFLICT (account_number) DO NOTHING`,
+        [customerId, astppId, accountNumber],
+      );
+
+      await this.writeAuditLog(customerId, 'SASAPAY_AWAITING_APPROVAL', {
+        requestId,
+        accountNumber,
+        accountStatus,
+        status: 'locked_awaiting_manual_review',
+      });
+
+      this.logger.log(`[OTP CONFIRM JOB] Wallet locked for customer ${customerId}, awaiting SasaPay approval`);
     }
   }
 
