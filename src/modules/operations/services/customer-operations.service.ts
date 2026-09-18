@@ -58,9 +58,9 @@ export class CustomerOperationsService {
     const countSql = `
       SELECT COUNT(DISTINCT c.id) as total
       FROM customers c
-      LEFT JOIN customer_applications ca
-        ON ca.customer_id = c.id
-      LEFT JOIN customer_applicant_details cad ON cad.customer_application_id = ca.id AND cad.application_type = 'primary_kyc'
+      LEFT JOIN customer_applications ca ON ca.customer_id = c.id
+      LEFT JOIN customer_applicant_details cad ON cad.customer_application_id = ca.id 
+        AND cad.application_type IN ('wallet_kyc', 'primary_kyc')
       ${whereSql}
     `;
     const countResult = await this.db.queryOne(countSql, params);
@@ -72,16 +72,19 @@ export class CustomerOperationsService {
     const offsetParam = `$${params.length}`;
 
     const dataSql = `
-      SELECT c.id, c.uuid, c.astpp_id, c.phone_number, c.email,
+      SELECT DISTINCT ON (c.id) 
+             c.id, c.uuid, c.astpp_id, c.phone_number, c.email,
              c.first_name, c.last_name, c.status, c.created_at,
              w.status AS wallet_status, w.is_locked AS wallet_is_locked
       FROM customers c
       LEFT JOIN customer_wallets w ON w.customer_id = c.id
-      LEFT JOIN customer_applications ca
-        ON ca.customer_id = c.id
-      LEFT JOIN customer_applicant_details cad ON cad.customer_application_id = ca.id AND cad.application_type = 'primary_kyc'
+      LEFT JOIN customer_applications ca ON ca.customer_id = c.id
+      LEFT JOIN customer_applicant_details cad ON cad.customer_application_id = ca.id
+        AND cad.application_type IN ('wallet_kyc', 'primary_kyc')
       ${whereSql}
-      ORDER BY c.created_at DESC
+      ORDER BY c.id, 
+               CASE cad.application_type WHEN 'wallet_kyc' THEN 1 WHEN 'primary_kyc' THEN 2 ELSE 3 END ASC,
+               c.created_at DESC
       LIMIT ${limitParam} OFFSET ${offsetParam}
     `;
 

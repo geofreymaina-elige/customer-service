@@ -34,15 +34,17 @@ export class PinResetService {
     maskedPhone: string;
     expiresInMinutes: number;
   }> {
-    // Find customer and primary KYC identity details.
+    // Find customer and identity details (prioritize wallet_kyc over primary_kyc)
     const customer = await this.db.queryOne(
       `SELECT c.id, c.uuid, c.phone_number, cad.identity_document_number AS document_number
        FROM customers c
-       LEFT JOIN customer_applications ca
-         ON ca.customer_id = c.id
-       LEFT JOIN customer_applicant_details cad ON cad.customer_application_id = ca.id AND cad.application_type = 'primary_kyc'
+       LEFT JOIN customer_applications ca ON ca.customer_id = c.id
+       LEFT JOIN customer_applicant_details cad ON cad.customer_application_id = ca.id
+         AND cad.application_type IN ('wallet_kyc', 'primary_kyc')
        WHERE (c.astpp_id::text = $1 OR c.uuid::text = $1)
-       ORDER BY ca.created_at DESC NULLS LAST
+       ORDER BY 
+         ca.created_at DESC NULLS LAST,
+         CASE cad.application_type WHEN 'wallet_kyc' THEN 1 WHEN 'primary_kyc' THEN 2 ELSE 3 END ASC
        LIMIT 1`,
       [dto.astppId]
     );
