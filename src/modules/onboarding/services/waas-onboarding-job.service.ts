@@ -93,12 +93,15 @@ export class WaasOnboardingJobService {
       customer = await this.fetchFromMysqlAndUpsert(payload.astppId);
     }
 
-    // --- 1b. Fetch primary KYC details for document info ---
-    const primaryKyc = await this.db.queryOne(
-      `SELECT cad.identity_document_type, cad.identity_document_number
+    // --- 1b. Fetch KYC details (prioritize wallet_kyc, fallback to primary_kyc) ---
+    const kycDetails = await this.db.queryOne(
+      `SELECT cad.identity_document_type, cad.identity_document_number, cad.application_type
        FROM customer_applications ca
-       JOIN customer_applicant_details cad ON cad.application_id = ca.application_id
-       WHERE ca.customer_id = $1 AND ca.application_type = 'primary_kyc'
+       JOIN customer_applicant_details cad ON cad.customer_application_id = ca.id
+       WHERE ca.customer_id = $1
+         AND cad.application_type IN ('wallet_kyc', 'primary_kyc')
+       ORDER BY 
+         CASE cad.application_type WHEN 'wallet_kyc' THEN 1 ELSE 2 END ASC
        LIMIT 1`,
       [payload.customerId],
     );
@@ -111,25 +114,20 @@ export class WaasOnboardingJobService {
       lastName: customer.last_name,
       countryCode: '254',
       mobileNumber: customer.phone_number.replace(/^\+?254/, '0'),
-      documentType: this.mapDocTypeToSasaPay(primaryKyc?.identity_document_type || 'NATIONAL_ID'),
-      documentNumber: primaryKyc?.identity_document_number || `ID${customer.astpp_id}`,
+      documentType: this.mapDocTypeToSasaPay(kycDetails?.identity_document_type || 'NATIONAL_ID'),
+      documentNumber: kycDetails?.identity_document_number || `ID${customer.astpp_id}`,
       email: customer.email,
     });
 
-    // --- 1d. Persist requestId into customer_applications (wallet_kyc) ---
+    // --- 1d. Persist requestId into customer_applications ---
     await this.db.query(
-      `INSERT INTO customer_applications (
-         customer_id, astpp_id, application_type, sasapay_request_id,
-         kyc_status, submitted_at, created_at, updated_at
-       )
-       VALUES ($1, $2, 'wallet_kyc', $3, 'pending', NOW(), NOW(), NOW())
-       ON CONFLICT (customer_id, application_type)
-       DO UPDATE SET
-         sasapay_request_id = EXCLUDED.sasapay_request_id,
-         kyc_status = 'pending',
-         submitted_at = NOW(),
-         updated_at = NOW()`,
-      [customer.id, customer.astpp_id, result.requestId],
+      `UPDATE customer_applications
+       SET sasapay_request_id = $1,
+           kyc_status = 'pending',
+           submitted_at = NOW(),
+           updated_at = NOW()
+       WHERE customer_id = $2`,
+      [result.requestId, customer.id],
     );
 
     await this.writeAuditLog(customer.id, 'SASAPAY_PERSONAL_ONBOARDING_INITIATED', {
@@ -137,8 +135,9 @@ export class WaasOnboardingJobService {
       firstName: customer.first_name,
       lastName: customer.last_name,
       mobileNumber: customer.phone_number,
-      documentType: this.mapDocTypeToSasaPay(primaryKyc?.identity_document_type || 'NATIONAL_ID'),
-      documentNumber: primaryKyc?.identity_document_number || `ID${customer.astpp_id}`,
+      documentType: this.mapDocTypeToSasaPay(kycDetails?.identity_document_type || 'NATIONAL_ID'),
+      documentNumber: kycDetails?.identity_document_number || `ID${customer.astpp_id}`,
+      kycSource: kycDetails?.application_type || 'fallback',
       status: 'otp_sent',
     });
 
@@ -257,18 +256,19 @@ export class WaasOnboardingJobService {
 
       // 2. Upsert primary_kyc customer_applications + applicant_details
       if (application && applicant_details) {
-        await client.query(
+        const appResult = await client.query(
           `INSERT INTO customer_applications (
              customer_id, astpp_id, application_id, application_number,
-             application_type, kyc_status, approved_at, rejected_at,
+             kyc_status, approved_at, rejected_at,
              synced_at, created_at, updated_at
-           ) VALUES ($1,$2,$3,$4,'primary_kyc',$5,$6,$7, NOW(),$8, NOW())
+           ) VALUES ($1,$2,$3,$4,$5,$6,$7, NOW(),$8, NOW())
            ON CONFLICT (application_id) DO UPDATE SET
              kyc_status = EXCLUDED.kyc_status,
              approved_at = EXCLUDED.approved_at,
              rejected_at = EXCLUDED.rejected_at,
              synced_at = NOW(),
-             updated_at = NOW()`,
+             updated_at = NOW()
+           RETURNING id`,
           [
             customerId,
             account.id,
@@ -281,22 +281,24 @@ export class WaasOnboardingJobService {
           ],
         );
 
+        const customerApplicationId = appResult.rows[0].id;
+
         await client.query(
           `INSERT INTO customer_applicant_details (
-             application_id, customer_id, astpp_id, name,
+             customer_application_id, customer_id, astpp_id, name,
              identity_document_type, identity_document_number,
              date_of_birth, gender, nationality, physical_address,
              passport_photo_url, doc_front_url, doc_back_url,
-             registration_type, synced_at, created_at, updated_at
-           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14, NOW(), NOW(), NOW())
-           ON CONFLICT (application_id) DO UPDATE SET
+             registration_type, application_type, synced_at, created_at, updated_at
+           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'primary_kyc', NOW(), NOW(), NOW())
+           ON CONFLICT (customer_application_id, application_type) DO UPDATE SET
              name = EXCLUDED.name,
              identity_document_number = EXCLUDED.identity_document_number,
              date_of_birth = EXCLUDED.date_of_birth,
              synced_at = NOW(),
              updated_at = NOW()`,
           [
-            application.application_id,
+            customerApplicationId,
             customerId,
             account.id,
             applicant_details.name || '',
@@ -419,21 +421,21 @@ export class WaasOnboardingJobService {
   ): Promise<OnboardingJobState> {
     this.logger.log(`[STEP 2] Fetching KYC images via SSH for customer ${payload.customerId}`);
 
-    // Single query: both wallet_kyc and primary_kyc, wallet_kyc sorted first
+    // Query for both primary and wallet KYC details
     const rows = await this.db.query(
       `SELECT ca.id AS pg_application_id,
               ca.application_id AS astpp_application_id,
-              ca.application_type,
+              cad.application_type,
               cad.doc_front_url,
               cad.doc_back_url,
               cad.passport_photo_url,
               cad.images
        FROM customer_applications ca
-       JOIN customer_applicant_details cad ON cad.application_id = ca.application_id
+       JOIN customer_applicant_details cad ON cad.customer_application_id = ca.id
        WHERE ca.customer_id = $1
-         AND ca.application_type IN ('wallet_kyc', 'primary_kyc')
+         AND cad.application_type IN ('wallet_kyc', 'primary_kyc')
        ORDER BY
-         CASE ca.application_type WHEN 'wallet_kyc' THEN 1 ELSE 2 END ASC,
+         CASE cad.application_type WHEN 'wallet_kyc' THEN 1 ELSE 2 END ASC,
          ca.created_at DESC`,
       [payload.customerId],
     );
@@ -582,7 +584,7 @@ export class WaasOnboardingJobService {
     await this.db.query(
       `UPDATE customer_applications
        SET kyc_status = 'approved', updated_at = NOW()
-       WHERE customer_id = $1 AND application_type = 'wallet_kyc'`,
+       WHERE customer_id = $1`,
       [payload.customerId],
     );
 

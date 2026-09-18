@@ -39,8 +39,8 @@ export class PinResetService {
       `SELECT c.id, c.uuid, c.phone_number, cad.identity_document_number AS document_number
        FROM customers c
        LEFT JOIN customer_applications ca
-         ON ca.customer_id = c.id AND ca.application_type = 'primary_kyc'
-       LEFT JOIN customer_applicant_details cad ON cad.application_id = ca.application_id
+         ON ca.customer_id = c.id
+       LEFT JOIN customer_applicant_details cad ON cad.customer_application_id = ca.id AND cad.application_type = 'primary_kyc'
        WHERE (c.astpp_id::text = $1 OR c.uuid::text = $1)
        ORDER BY ca.created_at DESC NULLS LAST
        LIMIT 1`,

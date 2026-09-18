@@ -59,8 +59,8 @@ export class CustomerOperationsService {
       SELECT COUNT(DISTINCT c.id) as total
       FROM customers c
       LEFT JOIN customer_applications ca
-        ON ca.customer_id = c.id AND ca.application_type = 'primary_kyc'
-      LEFT JOIN customer_applicant_details cad ON cad.application_id = ca.application_id
+        ON ca.customer_id = c.id
+      LEFT JOIN customer_applicant_details cad ON cad.customer_application_id = ca.id AND cad.application_type = 'primary_kyc'
       ${whereSql}
     `;
     const countResult = await this.db.queryOne(countSql, params);
@@ -78,8 +78,8 @@ export class CustomerOperationsService {
       FROM customers c
       LEFT JOIN customer_wallets w ON w.customer_id = c.id
       LEFT JOIN customer_applications ca
-        ON ca.customer_id = c.id AND ca.application_type = 'primary_kyc'
-      LEFT JOIN customer_applicant_details cad ON cad.application_id = ca.application_id
+        ON ca.customer_id = c.id
+      LEFT JOIN customer_applicant_details cad ON cad.customer_application_id = ca.id AND cad.application_type = 'primary_kyc'
       ${whereSql}
       ORDER BY c.created_at DESC
       LIMIT ${limitParam} OFFSET ${offsetParam}
@@ -111,7 +111,7 @@ export class CustomerOperationsService {
        FROM customers c
        LEFT JOIN customer_pins p ON p.customer_id = c.id
        LEFT JOIN customer_wallets w ON w.customer_id = c.id
-      LEFT JOIN customer_applications ca ON ca.customer_id = c.id AND ca.application_type = 'wallet_kyc'
+       LEFT JOIN customer_applications ca ON ca.customer_id = c.id
        WHERE c.uuid::text = $1`,
       [customerUuid]
     );
@@ -221,7 +221,7 @@ export class CustomerOperationsService {
            reviewed_by = $5,
            reviewed_at = NOW(),
            updated_at = NOW()
-           WHERE customer_id = $6 AND application_type = 'primary_kyc'`,
+           WHERE customer_id = $6`,
       [
         newKycStatus,
         tierLevel,

@@ -332,13 +332,13 @@ export class CdcConsumerWorker implements OnModuleInit, OnModuleDestroy {
       const kyc_status = this.mapKycStatus(status);
 
       // Upsert application
-      await client.query(`
+      const appResult = await client.query(`
         INSERT INTO customer_applications (
           customer_id, astpp_id, application_id, application_number,
-          application_type, kyc_status, approved_at, rejected_at,
+          kyc_status, approved_at, rejected_at,
           sync_version, synced_at, created_at, updated_at
         ) VALUES (
-          $1, $2, $3, $4, 'primary_kyc', $5, $6, $7, $8, NOW(), NOW(), NOW()
+          $1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW(), NOW()
         )
         ON CONFLICT (application_id) DO UPDATE SET
           kyc_status = EXCLUDED.kyc_status,
@@ -347,6 +347,7 @@ export class CdcConsumerWorker implements OnModuleInit, OnModuleDestroy {
           sync_version = EXCLUDED.sync_version,
           synced_at = NOW(),
           updated_at = NOW()
+        RETURNING id
       `, [
         customer_id,
         astpp_id,
@@ -357,6 +358,8 @@ export class CdcConsumerWorker implements OnModuleInit, OnModuleDestroy {
         parseTimestampOrNull(rejected_date),
         __source_ts_ms,
       ]);
+
+      const customerApplicationId = appResult.rows[0].id;
 
       // Update customer status if KYC approved
       if (kyc_status === 'approved') {
@@ -396,34 +399,34 @@ export class CdcConsumerWorker implements OnModuleInit, OnModuleDestroy {
     try {
       await client.query('BEGIN');
 
-      // Get customer and their primary application
+      // Get customer and their application
       const result = await client.query(`
-        SELECT c.id as customer_id, ca.application_id
+        SELECT c.id as customer_id, ca.id as customer_application_id
         FROM customers c
-        LEFT JOIN customer_applications ca ON ca.astpp_id = c.astpp_id AND ca.application_type = 'primary_kyc'
+        LEFT JOIN customer_applications ca ON ca.astpp_id = c.astpp_id
         WHERE c.astpp_id = $1
       `, [astpp_id]);
 
-      if (result.rows.length === 0 || !result.rows[0].application_id) {
+      if (result.rows.length === 0 || !result.rows[0].customer_application_id) {
         // Customer or application not yet synced
         await client.query('ROLLBACK');
         return;
       }
 
-      const { customer_id, application_id } = result.rows[0];
+      const { customer_id, customer_application_id } = result.rows[0];
 
       // Upsert applicant details
       await client.query(`
         INSERT INTO customer_applicant_details (
-          application_id, customer_id, astpp_id, name,
+          customer_application_id, customer_id, astpp_id, name,
           identity_document_type, identity_document_number,
           date_of_birth, gender, nationality, physical_address,
           passport_photo_url, doc_front_url, doc_back_url,
-          registration_type, sync_version, synced_at, created_at, updated_at
+          registration_type, application_type, sync_version, synced_at, created_at, updated_at
         ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW(), NOW(), NOW()
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'primary_kyc', $15, NOW(), NOW(), NOW()
         )
-        ON CONFLICT (application_id) DO UPDATE SET
+        ON CONFLICT (customer_application_id, application_type) DO UPDATE SET
           name = EXCLUDED.name,
           identity_document_type = EXCLUDED.identity_document_type,
           identity_document_number = EXCLUDED.identity_document_number,
@@ -438,7 +441,7 @@ export class CdcConsumerWorker implements OnModuleInit, OnModuleDestroy {
           synced_at = NOW(),
           updated_at = NOW()
       `, [
-        application_id,
+        customer_application_id,
         customer_id,
         astpp_id,
         name || '',

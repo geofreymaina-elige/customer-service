@@ -267,22 +267,28 @@ export class SnapshotWorker {
       );
       const customerId = customerResult.rows[0].id;
 
-      // 2. Upsert primary KYC application (if exists)
-      if (application && applicant_details) {
-        await client.query(`
+      // 2. Upsert customer application (single record per customer)
+      if (application) {
+        const appResult = await client.query(`
           INSERT INTO customer_applications (
             customer_id, astpp_id, application_id, application_number,
-            application_type, kyc_status, approved_at, rejected_at,
+            kyc_status, approved_at, rejected_at,
+            rejection_reason, system_notes, reviewed_at, reviewed_by,
             synced_at, created_at, updated_at
           ) VALUES (
-            $1, $2, $3, $4, 'primary_kyc', $5, $6, $7, NOW(), $8, NOW()
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), $12, NOW()
           )
           ON CONFLICT (application_id) DO UPDATE SET
             kyc_status = EXCLUDED.kyc_status,
             approved_at = EXCLUDED.approved_at,
             rejected_at = EXCLUDED.rejected_at,
+            rejection_reason = EXCLUDED.rejection_reason,
+            system_notes = EXCLUDED.system_notes,
+            reviewed_at = EXCLUDED.reviewed_at,
+            reviewed_by = EXCLUDED.reviewed_by,
             synced_at = NOW(),
             updated_at = NOW()
+          RETURNING id
         `, [
           customerId,
           account.id,
@@ -291,113 +297,92 @@ export class SnapshotWorker {
           kycStatus,
           parseTimestampOrNull(application.approved_date),
           parseTimestampOrNull(application.rejected_date),
+          wallet_kyc?.rejection_reason || null,
+          wallet_kyc?.system_notes || null,
+          parseTimestampOrNull(wallet_kyc?.reviewed_at),
+          wallet_kyc?.reviewed_by || null,
           parseTimestampOrNull(application.creation_date) || new Date(),
         ]);
 
-        // Insert applicant details
-        await client.query(`
-          INSERT INTO customer_applicant_details (
-            application_id, customer_id, astpp_id, name,
-            identity_document_type, identity_document_number,
-            date_of_birth, gender, nationality, physical_address,
-            passport_photo_url, doc_front_url, doc_back_url,
-            registration_type, synced_at, created_at, updated_at
-          ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW(), NOW(), NOW()
-          )
-          ON CONFLICT (application_id) DO UPDATE SET
-            name = EXCLUDED.name,
-            identity_document_number = EXCLUDED.identity_document_number,
-            date_of_birth = EXCLUDED.date_of_birth,
-            synced_at = NOW(),
-            updated_at = NOW()
-        `, [
-          application.application_id,
-          customerId,
-          account.id,
-          applicant_details.name || '',
-          this.mapDocumentType(applicant_details.identity_document_type),
-          applicant_details.identity_document_number || '',
-          parseDateOrNull(applicant_details.date_of_birth),
-          this.mapGender(applicant_details.gender),
-          applicant_details.nationality || null,
-          applicant_details.physical_address || null,
-          applicant_details.id_verification || null,
-          applicant_details.identity_document || null,
-          applicant_details.identity_document_back || null,
-          applicant_details.registration_type || null,
-        ]);
-      }
+        const customerApplicationId = appResult.rows[0].id;
 
-      // 3. Upsert secondary wallet KYC (if exists)
-      if (wallet_kyc) {
-        await client.query(`
-          INSERT INTO customer_applications (
-            customer_id, astpp_id, application_id, application_type,
-            kyc_status, rejection_reason, system_notes, reviewed_at, reviewed_by,
-            synced_at, created_at, updated_at
-          ) VALUES (
-            $1, $2, $3, 'wallet_kyc', $4, $5, $6, $7, $8, NOW(), $9, $10
-          )
-          ON CONFLICT (application_id) DO UPDATE SET
-            kyc_status = EXCLUDED.kyc_status,
-            rejection_reason = EXCLUDED.rejection_reason,
-            system_notes = EXCLUDED.system_notes,
-            reviewed_at = EXCLUDED.reviewed_at,
-            synced_at = NOW(),
-            updated_at = EXCLUDED.updated_at
-        `, [
-          customerId,
-          account.id,
-          wallet_kyc.id,
-          wallet_kyc.status || 'pending',
-          wallet_kyc.rejection_reason || null,
-          wallet_kyc.system_notes || null,
-          parseTimestampOrNull(wallet_kyc.reviewed_at),
-          wallet_kyc.reviewed_by || null,
-          parseTimestampOrNull(wallet_kyc.created_at) || new Date(),
-          parseTimestampOrNull(wallet_kyc.updated_at) || new Date(),
-        ]);
+        // 3. Insert primary KYC applicant details (if exists)
+        if (applicant_details) {
+          await client.query(`
+            INSERT INTO customer_applicant_details (
+              customer_application_id, customer_id, astpp_id, name,
+              identity_document_type, identity_document_number,
+              date_of_birth, gender, nationality, physical_address,
+              passport_photo_url, doc_front_url, doc_back_url,
+              registration_type, application_type, synced_at, created_at, updated_at
+            ) VALUES (
+              $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'primary_kyc', NOW(), NOW(), NOW()
+            )
+            ON CONFLICT (customer_application_id, application_type) DO UPDATE SET
+              name = EXCLUDED.name,
+              identity_document_number = EXCLUDED.identity_document_number,
+              date_of_birth = EXCLUDED.date_of_birth,
+              synced_at = NOW(),
+              updated_at = NOW()
+          `, [
+            customerApplicationId,
+            customerId,
+            account.id,
+            applicant_details.name || '',
+            this.mapDocumentType(applicant_details.identity_document_type),
+            applicant_details.identity_document_number || '',
+            parseDateOrNull(applicant_details.date_of_birth),
+            this.mapGender(applicant_details.gender),
+            applicant_details.nationality || null,
+            applicant_details.physical_address || null,
+            applicant_details.id_verification || null,
+            applicant_details.identity_document || null,
+            applicant_details.identity_document_back || null,
+            applicant_details.registration_type || null,
+          ]);
+        }
 
-        // Insert wallet KYC applicant details with images
-        const imagesJson = JSON.stringify(wallet_kyc_images.map(img => ({
-          image_id: img.id,
-          filename: img.filename,
-          original_name: img.original_name,
-          image_type: img.image_type,
-          file_size: img.file_size,
-          mime_type: img.mime_type,
-          description: img.description || '',
-          uploaded_at: parseTimestampOrNull(img.upload_date)?.toISOString() || null,
-        })));
+        // 4. Insert wallet KYC applicant details with images (if exists)
+        if (wallet_kyc) {
+          const imagesJson = JSON.stringify(wallet_kyc_images.map(img => ({
+            image_id: img.id,
+            filename: img.filename,
+            original_name: img.original_name,
+            image_type: img.image_type,
+            file_size: img.file_size,
+            mime_type: img.mime_type,
+            description: img.description || '',
+            uploaded_at: parseTimestampOrNull(img.upload_date)?.toISOString() || null,
+          })));
 
-        await client.query(`
-          INSERT INTO customer_applicant_details (
-            application_id, customer_id, astpp_id, name,
-            identity_document_type, identity_document_number,
-            date_of_birth, gender, nationality, physical_address,
-            images, synced_at, created_at, updated_at
-          ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, NOW(), NOW(), NOW()
-          )
-          ON CONFLICT (application_id) DO UPDATE SET
-            name = EXCLUDED.name,
-            images = EXCLUDED.images,
-            synced_at = NOW(),
-            updated_at = NOW()
-        `, [
-          wallet_kyc.id,
-          customerId,
-          account.id,
-          wallet_kyc.name || '',
-          'NATIONAL_ID', // Default, will be updated if needed
-          wallet_kyc.identity_document_number || '',
-          parseDateOrNull(wallet_kyc.date_of_birth),
-          this.mapGender(wallet_kyc.gender),
-          wallet_kyc.nationality || null,
-          wallet_kyc.physical_address || null,
-          imagesJson,
-        ]);
+          await client.query(`
+            INSERT INTO customer_applicant_details (
+              customer_application_id, customer_id, astpp_id, name,
+              identity_document_type, identity_document_number,
+              date_of_birth, gender, nationality, physical_address,
+              images, application_type, synced_at, created_at, updated_at
+            ) VALUES (
+              $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, 'wallet_kyc', NOW(), NOW(), NOW()
+            )
+            ON CONFLICT (customer_application_id, application_type) DO UPDATE SET
+              name = EXCLUDED.name,
+              images = EXCLUDED.images,
+              synced_at = NOW(),
+              updated_at = NOW()
+          `, [
+            customerApplicationId,
+            customerId,
+            account.id,
+            wallet_kyc.name || '',
+            'NATIONAL_ID', // Default, will be updated if needed
+            wallet_kyc.identity_document_number || '',
+            parseDateOrNull(wallet_kyc.date_of_birth),
+            this.mapGender(wallet_kyc.gender),
+            wallet_kyc.nationality || null,
+            wallet_kyc.physical_address || null,
+            imagesJson,
+          ]);
+        }
       }
 
       await client.query('COMMIT');

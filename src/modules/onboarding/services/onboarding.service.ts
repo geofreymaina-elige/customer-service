@@ -93,31 +93,32 @@ export class OnboardingService {
                           astppCustomer.identityDocumentType === 2 ? 'ALIEN_CARD' :
                           astppCustomer.identityDocumentType === 1 ? 'SERVICE_CARD' : 'NATIONAL_ID';
 
-      await this.db.query(
+      const appResult = await this.db.query(
         `INSERT INTO customer_applications (
-          customer_id, astpp_id, application_id, application_type, kyc_status, created_at, updated_at
+          customer_id, astpp_id, application_id, kyc_status, created_at, updated_at
         )
-        VALUES ($1, $2, NULL, 'primary_kyc', 'approved', NOW(), NOW())
-        ON CONFLICT (customer_id, application_type) DO UPDATE SET
+        VALUES ($1, $2, NULL, 'approved', NOW(), NOW())
+        ON CONFLICT (application_id) DO UPDATE SET
           kyc_status = EXCLUDED.kyc_status,
           updated_at = NOW()
-        RETURNING application_id`,
+        RETURNING id`,
         [customer.id, dto.astpp_id]
       );
 
+      const customerApplicationId = appResult.rows[0].id;
+
       await this.db.query(
         `INSERT INTO customer_applicant_details (
-          application_id, customer_id, astpp_id, name,
-          identity_document_type, identity_document_number, synced_at, created_at, updated_at
+          customer_application_id, customer_id, astpp_id, name,
+          identity_document_type, identity_document_number, application_type, synced_at, created_at, updated_at
         )
-        SELECT ca.application_id, $1, $2, $3, $4, $5, NOW(), NOW(), NOW()
-        FROM customer_applications ca
-        WHERE ca.customer_id = $1 AND ca.application_type = 'primary_kyc'
-        ON CONFLICT (application_id) DO UPDATE SET
+        VALUES ($1, $2, $3, $4, $5, $6, 'primary_kyc', NOW(), NOW(), NOW())
+        ON CONFLICT (customer_application_id, application_type) DO UPDATE SET
           identity_document_type = EXCLUDED.identity_document_type,
           identity_document_number = EXCLUDED.identity_document_number,
           updated_at = NOW()`,
         [
+          customerApplicationId,
           customer.id,
           dto.astpp_id,
           `${astppCustomer.firstName || ''} ${astppCustomer.lastName || ''}`.trim() || 'Customer',

@@ -100,9 +100,9 @@ export class OnboardingController {
 
     // --- 1. Look up requestId from DB ---
     const appRow = await this.db.queryOne(
-      `SELECT id AS pg_app_id, sasapay_request_id, astpp_id
-       FROM customer_applications
-       WHERE customer_id = $1 AND application_type = 'wallet_kyc'
+      `SELECT ca.id AS pg_app_id, ca.sasapay_request_id, ca.astpp_id
+       FROM customer_applications ca
+       WHERE ca.customer_id = $1
        LIMIT 1`,
       [customerId],
     );
@@ -145,7 +145,7 @@ export class OnboardingController {
        SET sasapay_account_number = $1,
            sasapay_account_status = $2,
            updated_at = NOW()
-       WHERE id = $3 AND application_type = 'wallet_kyc'`,
+       WHERE id = $3`,
       [accountNumber, accountStatus, appRow.pg_app_id],
     );
 
@@ -176,7 +176,7 @@ export class OnboardingController {
       await this.db.query(
         `UPDATE customer_applications
          SET kyc_status = 'requires_kyc_upload', updated_at = NOW()
-         WHERE customer_id = $1 AND application_type = 'wallet_kyc'`,
+         WHERE customer_id = $1`,
         [customerId],
       );
 
@@ -216,7 +216,7 @@ export class OnboardingController {
       await this.db.query(
         `UPDATE customer_applications
          SET kyc_status = 'approved', updated_at = NOW()
-         WHERE customer_id = $1 AND application_type = 'wallet_kyc'`,
+         WHERE customer_id = $1`,
         [customerId],
       );
 
@@ -232,7 +232,7 @@ export class OnboardingController {
       await this.db.query(
         `UPDATE customer_applications
          SET kyc_status = 'pending', updated_at = NOW()
-         WHERE id = $1 AND application_type = 'wallet_kyc'`,
+         WHERE id = $1`,
         [appRow.pg_app_id],
       );
 
@@ -320,8 +320,7 @@ export class OnboardingController {
     const application = await this.db.queryOne(
       `SELECT id, customer_id, kyc_status
        FROM customer_applications
-       WHERE application_type = 'wallet_kyc'
-         AND sasapay_account_number = $1
+       WHERE sasapay_account_number = $1
          AND sasapay_account_number IS NOT NULL
          AND sasapay_account_status IS NOT NULL
        LIMIT 1`,
@@ -347,7 +346,6 @@ export class OnboardingController {
            rejection_reason = CASE WHEN $2 = 'rejected' THEN $3 ELSE NULL END,
            updated_at = NOW()
        WHERE id = $4
-         AND application_type = 'wallet_kyc'
          AND sasapay_account_number IS NOT NULL`,
       [callbackAccountStatus, kycStatus, dto.description || 'SasaPay onboarding rejected', application.id],
     );

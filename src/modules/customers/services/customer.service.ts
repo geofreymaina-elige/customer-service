@@ -35,7 +35,7 @@ export class CustomerService {
        LEFT JOIN customer_pins p ON p.customer_id = c.id
        LEFT JOIN customer_wallets w ON w.customer_id = c.id
        LEFT JOIN customer_devices d ON d.customer_id = c.id AND d.status = 'active'
-      LEFT JOIN customer_applications ca ON ca.customer_id = c.id AND ca.application_type = 'wallet_kyc'
+       LEFT JOIN customer_applications ca ON ca.customer_id = c.id
        WHERE c.id = $1`,
       [customerId]
     );
@@ -56,8 +56,8 @@ export class CustomerService {
               cad.identity_document_type, cad.identity_document_number, cad.issuing_country,
               cad.doc_front_url, cad.doc_back_url, cad.passport_photo_url
        FROM customer_applications ca
-       LEFT JOIN customer_applicant_details cad ON cad.application_id = ca.application_id
-       WHERE ca.customer_id = $1 AND ca.application_type = 'primary_kyc'
+       LEFT JOIN customer_applicant_details cad ON cad.customer_application_id = ca.id AND cad.application_type = 'primary_kyc'
+       WHERE ca.customer_id = $1
        LIMIT 1`,
       [customerId]
     );
@@ -67,8 +67,8 @@ export class CustomerService {
       `SELECT ca.kyc_status, ca.rejection_reason, ca.reviewed_at, ca.created_at,
               cad.identity_document_number, cad.images
        FROM customer_applications ca
-       LEFT JOIN customer_applicant_details cad ON cad.application_id = ca.application_id
-       WHERE ca.customer_id = $1 AND ca.application_type = 'wallet_kyc'
+       LEFT JOIN customer_applicant_details cad ON cad.customer_application_id = ca.id AND cad.application_type = 'wallet_kyc'
+       WHERE ca.customer_id = $1
        LIMIT 1`,
       [customerId]
     );
@@ -161,7 +161,7 @@ export class CustomerService {
       `SELECT COALESCE(w.account_number, ca.sasapay_account_number) AS account_number
        FROM customers c
        LEFT JOIN customer_wallets w ON w.customer_id = c.id
-       LEFT JOIN customer_applications ca ON ca.customer_id = c.id AND ca.application_type = 'wallet_kyc'
+       LEFT JOIN customer_applications ca ON ca.customer_id = c.id
        WHERE c.id = $1
        LIMIT 1`,
       [customerId],
@@ -188,7 +188,7 @@ export class CustomerService {
     // Check if primary KYC already approved
     const existingKyc = await this.db.queryOne(
       `SELECT kyc_status FROM customer_applications 
-       WHERE customer_id = $1 AND application_type = 'primary_kyc'`,
+       WHERE customer_id = $1`,
       [customerId]
     );
 

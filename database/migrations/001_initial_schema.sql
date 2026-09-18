@@ -73,7 +73,7 @@ COMMENT ON COLUMN customers.sync_version IS 'Kafka event timestamp for idempoten
 -- ============================================================================
 -- 2. CUSTOMER APPLICATIONS (KYC Application Metadata)
 -- Mirrors: ASTPP applications + wallet_kyc_applications tables
--- Handles: Both primary KYC (onboarding) and secondary wallet KYC
+-- Handles: Single application record per customer
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS customer_applications (
@@ -85,15 +85,18 @@ CREATE TABLE IF NOT EXISTS customer_applications (
     astpp_id INTEGER NOT NULL, -- Denormalized for convenience
     
     -- ASTPP references
-    application_id INTEGER NOT NULL UNIQUE, -- From ASTPP applications.id OR wallet_kyc_applications.id
+    application_id INTEGER UNIQUE, -- From ASTPP applications.id (primary reference) - nullable for wallet KYC created before ASTPP registration
     application_number VARCHAR(64), -- From ASTPP applications.applicationid (can be null for wallet KYC)
-    
-    -- Application type (distinguishes primary vs secondary KYC)
-    application_type VARCHAR(20) NOT NULL DEFAULT 'primary_kyc', -- 'primary_kyc' or 'wallet_kyc'
     
     -- KYC Status
     kyc_status VARCHAR(20) NOT NULL DEFAULT 'pending', -- 'pending', 'approved', 'rejected'
     kyc_tier VARCHAR(20) NOT NULL DEFAULT 'TIER_1', -- TIER_0, TIER_1, TIER_2, TIER_3
+    
+    -- SasaPay WaaS Integration (for wallet onboarding)
+    sasapay_request_id VARCHAR(128), -- From SasaPay personal onboarding API
+    sasapay_account_number VARCHAR(64), -- SasaPay wallet account number
+    sasapay_account_status VARCHAR(32), -- AWAITING_KYC_UPLOAD, ACTIVE, AWAITING_APPROVAL, etc.
+    submitted_at TIMESTAMPTZ, -- When KYC was submitted
     
     -- Review tracking
     kyc_verified_at TIMESTAMPTZ,
@@ -113,20 +116,23 @@ CREATE TABLE IF NOT EXISTS customer_applications (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS uq_applications_application_id ON customer_applications(application_id);
-CREATE INDEX IF NOT EXISTS idx_applications_customer ON customer_applications(customer_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_applications_application_id ON customer_applications(application_id) WHERE application_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_applications_customer_id ON customer_applications(customer_id);
 CREATE INDEX IF NOT EXISTS idx_applications_astpp_id ON customer_applications(astpp_id);
-CREATE INDEX IF NOT EXISTS idx_applications_type ON customer_applications(application_type);
 CREATE INDEX IF NOT EXISTS idx_applications_status ON customer_applications(kyc_status);
-CREATE INDEX IF NOT EXISTS idx_applications_type_status ON customer_applications(application_type, kyc_status);
+CREATE INDEX IF NOT EXISTS idx_applications_sasapay_account ON customer_applications(sasapay_account_number) WHERE sasapay_account_number IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_applications_sasapay_req ON customer_applications(sasapay_request_id) WHERE sasapay_request_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_applications_submitted ON customer_applications(submitted_at DESC) WHERE submitted_at IS NOT NULL;
 
-COMMENT ON TABLE customer_applications IS 'KYC applications - handles both primary KYC (ASTPP applications) and secondary wallet KYC (ASTPP wallet_kyc_applications)';
-COMMENT ON COLUMN customer_applications.application_type IS 'primary_kyc = initial onboarding, wallet_kyc = secondary KYC for wallet activation';
+COMMENT ON TABLE customer_applications IS 'KYC applications - one record per customer (merged from ASTPP applications and wallet_kyc_applications)';
+COMMENT ON COLUMN customer_applications.application_id IS 'Primary reference to ASTPP applications.id';
+COMMENT ON COLUMN customer_applications.sasapay_request_id IS 'SasaPay personal onboarding request ID';
+COMMENT ON COLUMN customer_applications.sasapay_account_number IS 'SasaPay wallet account number after successful onboarding';
 
 -- ============================================================================
 -- 3. CUSTOMER APPLICANT DETAILS (KYC Documents & Identity Info)
 -- Mirrors: ASTPP applicant_details + wallet_application_images tables
--- Handles: Documents for both primary and wallet KYC
+-- Handles: Multiple document sets per customer (primary_kyc, wallet_kyc, etc.)
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS customer_applicant_details (
@@ -134,9 +140,12 @@ CREATE TABLE IF NOT EXISTS customer_applicant_details (
     uuid UUID NOT NULL DEFAULT uuid_generate_v4() UNIQUE,
     
     -- Link to application
-    application_id INTEGER NOT NULL REFERENCES customer_applications(application_id) ON DELETE CASCADE,
+    customer_application_id BIGINT NOT NULL REFERENCES customer_applications(id) ON DELETE CASCADE,
     customer_id BIGINT NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
     astpp_id INTEGER NOT NULL,
+    
+    -- Application type (identifies which KYC document set this is)
+    application_type VARCHAR(20) NOT NULL DEFAULT 'primary_kyc', -- 'primary_kyc' or 'wallet_kyc'
     
     -- Personal Information
     name VARCHAR(100) NOT NULL, -- Full name from ASTPP
@@ -170,12 +179,15 @@ CREATE TABLE IF NOT EXISTS customer_applicant_details (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS uq_applicant_details_application_id ON customer_applicant_details(application_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_applicant_details_application_type ON customer_applicant_details(customer_application_id, application_type);
+CREATE INDEX IF NOT EXISTS idx_applicant_details_customer_application ON customer_applicant_details(customer_application_id);
 CREATE INDEX IF NOT EXISTS idx_applicant_details_customer ON customer_applicant_details(customer_id);
 CREATE INDEX IF NOT EXISTS idx_applicant_details_astpp_id ON customer_applicant_details(astpp_id);
 CREATE INDEX IF NOT EXISTS idx_applicant_details_doc_number ON customer_applicant_details(identity_document_number);
 
-COMMENT ON TABLE customer_applicant_details IS 'KYC documents and identity details - linked to customer_applications (handles both primary and wallet KYC documents)';
+COMMENT ON TABLE customer_applicant_details IS 'KYC documents and identity details - multiple records per customer application (primary_kyc, wallet_kyc, etc.)';
+COMMENT ON COLUMN customer_applicant_details.customer_application_id IS 'References customer_applications.id (not ASTPP application_id)';
+COMMENT ON COLUMN customer_applicant_details.application_type IS 'Type of KYC: primary_kyc = initial onboarding, wallet_kyc = secondary KYC for wallet activation';
 COMMENT ON COLUMN customer_applicant_details.images IS 'JSONB array of additional document images from ASTPP wallet_application_images table';
 COMMENT ON COLUMN customer_applicant_details.identity_document_type IS 'Document type as string (ASTPP stores as integer: 0=NATIONAL_ID, 1=PASSPORT, etc.)';
 
