@@ -71,10 +71,10 @@ export class PersonalOnboardingDto {
 }
 
 export class PersonalOnboardingConfirmDto {
-  /** The customer's internal PG id — used to look up the sasapay_request_id server-side */
+  /** The customer's ASTPP ID — used to look up the sasapay_request_id server-side */
   @IsNotEmpty()
   @IsString()
-  customerId: string;
+  astppId: string;
 
   @IsNotEmpty()
   @IsString()

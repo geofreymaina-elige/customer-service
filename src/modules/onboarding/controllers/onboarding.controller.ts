@@ -96,20 +96,19 @@ export class OnboardingController {
   @Post('personal/confirm')
   @HttpCode(HttpStatus.OK)
   async confirmPersonalOnboarding(@Body() dto: PersonalOnboardingConfirmDto) {
-    const customerId = parseInt(dto.customerId, 10);
-
-    // --- 1. Look up requestId from DB ---
+    // --- 1. Look up customer and requestId from DB by ASTPP ID ---
     const appRow = await this.db.queryOne(
-      `SELECT ca.id AS pg_app_id, ca.sasapay_request_id, ca.astpp_id
+      `SELECT ca.id AS pg_app_id, ca.sasapay_request_id, ca.astpp_id, c.id AS customer_id
        FROM customer_applications ca
-       WHERE ca.customer_id = $1
+       JOIN customers c ON c.id = ca.customer_id
+       WHERE c.astpp_id = $1
        LIMIT 1`,
-      [customerId],
+      [dto.astppId],
     );
 
     if (!appRow?.sasapay_request_id) {
-      await this.writeAuditLog(customerId, 'SASAPAY_PERSONAL_ONBOARDING_MISSING_REQUEST', {
-        customerId,
+      await this.writeAuditLog(appRow?.customer_id || null, 'SASAPAY_PERSONAL_ONBOARDING_MISSING_REQUEST', {
+        astppId: dto.astppId,
         reason: 'No pending onboarding found for this customer. Please initiate onboarding first.',
       });
 
@@ -119,6 +118,7 @@ export class OnboardingController {
       };
     }
 
+    const customerId = appRow.customer_id;
     const requestId: string = appRow.sasapay_request_id;
 
     // --- 2. Call SasaPay OTP confirmation ---

@@ -43,7 +43,7 @@
                   "}",
                   "if (jsonData.data && jsonData.data.user) {",
                   "    pm.environment.set('customerUuid', jsonData.data.user.userId);",
-                  "    pm.environment.set('customerId', jsonData.data.user.customerId || jsonData.data.user.id);",
+                  "    pm.environment.set('astppId', jsonData.data.user.astppId);",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -120,7 +120,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"customerId\": \"{{customerId}}\",\n  \"otp\": \"123456\"\n}",
+              "raw": "{\n  \"astppId\": \"{{astppId}}\",\n  \"otp\": \"123456\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -140,7 +140,7 @@
                 "confirm"
               ]
             },
-            "description": "Step 2 — Confirm OTP sent by SasaPay during onboarding.\n\nPayload:\n- customerId: internal PG customer ID (server looks up sasapay_request_id automatically)\n- otp: 6-digit OTP from SMS\n\nResponse includes accountNumber and accountStatus (AWAITING_KYC_UPLOAD | ACTIVE | AWAITING_APPROVAL).\nIf AWAITING_KYC_UPLOAD, the server enqueues a background KYC image upload job automatically."
+            "description": "Step 2 — Confirm OTP sent by SasaPay during onboarding.\n\nPayload:\n- astppId: ASTPP account ID (server looks up sasapay_request_id automatically)\n- otp: 6-digit OTP from SMS\n\nResponse includes accountNumber and accountStatus (AWAITING_KYC_UPLOAD | ACTIVE | AWAITING_APPROVAL).\nIf AWAITING_KYC_UPLOAD, the server enqueues a background KYC image upload job automatically."
           }
         },
         {
@@ -200,7 +200,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"customerId\": \"0000\",\n  \"pin\": \"4920\",\n  \"confirmPin\": \"4920\"\n}"
+              "raw": "{\n  \"astppId\": \"0000\",\n  \"pin\": \"4920\",\n  \"confirmPin\": \"4920\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/pin/set",
@@ -248,7 +248,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"customerId\": \"0000\",\n  \"pin\": \"4920\",\n  \"deviceIdentifier\": \"{{deviceIdentifier}}\",\n  \"deviceModel\": \"Samsung Galaxy S23\",\n  \"mobileType\": \"android\"\n}"
+              "raw": "{\n  \"astppId\": \"0000\",\n  \"pin\": \"4920\",\n  \"deviceIdentifier\": \"{{deviceIdentifier}}\",\n  \"deviceModel\": \"Samsung Galaxy S23\",\n  \"mobileType\": \"android\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/pin/verify",

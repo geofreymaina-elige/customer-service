@@ -3,7 +3,7 @@ import { IsNotEmpty, IsString, Matches, IsOptional } from 'class-validator';
 export class SetPinDto {
   @IsNotEmpty()
   @IsString()
-  customerId: string; // Customer UUID or ASTPP ID
+  astppId: string; // Customer ASTPP ID
 
   @IsNotEmpty()
   @IsString()
@@ -19,7 +19,7 @@ export class SetPinDto {
 export class VerifyPinDto {
   @IsNotEmpty()
   @IsString()
-  customerId: string;
+  astppId: string;
 
   @IsNotEmpty()
   @IsString()

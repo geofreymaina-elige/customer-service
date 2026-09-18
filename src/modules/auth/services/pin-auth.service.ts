@@ -31,10 +31,10 @@ export class PinAuthService {
       throw new BadRequestException(this.messages.get('auth.pin.pinsMustMatch'));
     }
 
-    // Find customer by UUID or ASTPP ID
+    // Find customer by ASTPP ID
     const customer = await this.db.queryOne(
-      `SELECT id, uuid FROM customers WHERE uuid::text = $1 OR astpp_id::text = $1`,
-      [dto.customerId]
+      `SELECT id, uuid FROM customers WHERE astpp_id::text = $1`,
+      [dto.astppId]
     );
 
     if (!customer) {
@@ -156,8 +156,8 @@ export class PinAuthService {
     const customer = await this.db.queryOne(
       `SELECT id, uuid, voip_number, first_name, last_name, email, phone_number, status, timezone
        FROM customers
-       WHERE uuid::text = $1 OR astpp_id::text = $1`,
-      [dto.customerId]
+       WHERE astpp_id::text = $1`,
+      [dto.astppId]
     );
 
     if (!customer) {

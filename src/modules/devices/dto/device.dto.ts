@@ -39,7 +39,7 @@ export class DeviceMetadataDto {
 export class VerifyDeviceDto extends DeviceMetadataDto {
   @IsNotEmpty()
   @IsString()
-  customerId: string;
+  astppId: string;
 }
 
 export class InitiateDeviceLogoutDto {
