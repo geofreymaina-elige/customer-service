@@ -36,17 +36,19 @@
             {
               "listen": "test",
               "script": {
+                "type": "text/javascript",
                 "exec": [
                   "var jsonData = pm.response.json();",
                   "if (jsonData.data && jsonData.data.token) {",
+                  "    pm.environment.set('appAccessToken', jsonData.data.token.accessToken);",
                   "    pm.environment.set('authToken', jsonData.data.token.accessToken);",
+                  "    console.log('Stored app access token. Use PIN Verify to get transactionToken for balance.');",
                   "}",
                   "if (jsonData.data && jsonData.data.user) {",
                   "    pm.environment.set('customerUuid', jsonData.data.user.userId);",
                   "    pm.environment.set('astppId', jsonData.data.user.astppId);",
                   "}"
-                ],
-                "type": "text/javascript"
+                ]
               }
             }
           ],
@@ -84,7 +86,7 @@
                 "user-device"
               ]
             },
-            "description": "Complete onboarding flow: ASTPP sync → Device registration → Wallet creation → Auto SasaPay WaaS initiation. Client only needs to call this endpoint and then the OTP confirmation."
+            "description": "Complete onboarding flow: ASTPP sync, device registration, wallet onboarding job, and app access JWT issuance. The token returned here is long-lived and has app:access only. Use PIN Verify to get a short-lived wallet:transact token for balance and transaction APIs."
           }
         },
         {
@@ -218,18 +220,19 @@
           }
         },
         {
-          "name": "Verify PIN (Get Scoped JWT)",
+          "name": "Verify PIN (Get Transaction JWT)",
           "event": [
             {
               "listen": "test",
               "script": {
+                "type": "text/javascript",
                 "exec": [
                   "var jsonData = pm.response.json();",
                   "if (jsonData.data && jsonData.data.token) {",
-                  "    pm.environment.set('authToken', jsonData.data.token.accessToken);",
+                  "    pm.environment.set('transactionToken', jsonData.data.token.accessToken);",
+                  "    console.log('Stored transaction token for wallet balance/transaction APIs.');",
                   "}"
-                ],
-                "type": "text/javascript"
+                ]
               }
             }
           ],
@@ -262,7 +265,8 @@
                 "pin",
                 "verify"
               ]
-            }
+            },
+            "description": "Verifies the customer PIN and issues the short-lived wallet:transact JWT. This token is required for balance and transaction-scoped APIs and can only be issued for the active registered device."
           }
         }
       ]
@@ -462,8 +466,25 @@
                 "logout",
                 "verify"
               ]
+            },
+            "description": "Completes device recovery and returns a long-lived app:access JWT for the new active device. Run PIN Verify next to get a transaction-scoped token."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.data && jsonData.data.token) {",
+                  "    pm.environment.set('appAccessToken', jsonData.data.token.accessToken);",
+                  "    pm.environment.set('authToken', jsonData.data.token.accessToken);",
+                  "    console.log('Stored app access token for recovered device. Use PIN Verify to get transactionToken.');",
+                  "}"
+                ]
+              }
             }
-          }
+          ]
         },
         {
           "name": "Get Active Device Sessions",
@@ -472,7 +493,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{authToken}}"
+                "value": "Bearer {{appAccessToken}}"
               }
             ],
             "url": {
@@ -502,7 +523,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{authToken}}"
+                "value": "Bearer {{appAccessToken}}"
               }
             ],
             "url": {
@@ -526,7 +547,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{authToken}}"
+                "value": "Bearer {{appAccessToken}}"
               },
               {
                 "key": "Content-Type",
@@ -558,7 +579,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{authToken}}"
+                "value": "Bearer {{appAccessToken}}"
               },
               {
                 "key": "Content-Type",
@@ -630,13 +651,13 @@
           }
         },
         {
-          "name": "Get My Wallet Balance",
+          "name": "Get My Wallet",
           "request": {
             "method": "GET",
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{authToken}}"
+                "value": "Bearer {{appAccessToken}}"
               }
             ],
             "url": {
@@ -650,7 +671,34 @@
                 "wallets",
                 "me"
               ]
-            }
+            },
+            "description": "Returns wallet metadata only. Balance is intentionally exposed only by the dedicated transaction-scoped balance endpoint."
+          }
+        },
+        {
+          "name": "Get My Wallet Balance (Transaction Scope)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{transactionToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/wallets/me/balance",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "wallets",
+                "me",
+                "balance"
+              ]
+            },
+            "description": "Dedicated balance endpoint. Requires the short-lived wallet:transact JWT from PIN Verify."
           }
         }
       ]
