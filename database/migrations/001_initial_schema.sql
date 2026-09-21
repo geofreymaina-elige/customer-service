@@ -311,23 +311,27 @@ CREATE TABLE IF NOT EXISTS customer_wallets (
     astpp_id INTEGER, -- Link to ASTPP for sync tracking
     account_number VARCHAR(32) NOT NULL UNIQUE,
     currency CHAR(3) NOT NULL DEFAULT 'KES',
-    status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'frozen', 'locked', 'closed')),
+    status VARCHAR(20) NOT NULL DEFAULT 'active'
+        CONSTRAINT customer_wallets_status_check
+        CHECK (status IN ('active', 'inactive', 'frozen', 'locked', 'closed')),
     is_locked BOOLEAN NOT NULL DEFAULT FALSE,
     lock_reason TEXT,
-    locked_by VARCHAR(64), -- 'CUSTOMER_SELF_LOCK', 'ADMIN:operator_id', 'SYSTEM_SECURITY'
+    locked_by VARCHAR(64), -- 'CUSTOMER_SELF_LOCK', 'ADMIN:operator_id', 'SYSTEM_SECURITY', 'SYSTEM_CDC'
     locked_at TIMESTAMPTZ,
     freeze_type VARCHAR(32), -- 'customer_initiated', 'admin_compliance', 'suspicious_activity'
     tier_level VARCHAR(20) NOT NULL DEFAULT 'TIER_1',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
+ 
 CREATE INDEX IF NOT EXISTS idx_wallets_customer ON customer_wallets(customer_id);
 CREATE INDEX IF NOT EXISTS idx_wallets_astpp_id ON customer_wallets(astpp_id);
 CREATE INDEX IF NOT EXISTS idx_wallets_status ON customer_wallets(status);
-
+ 
 COMMENT ON TABLE customer_wallets IS 'Customer wallet accounts - linked to ASTPP for balance sync';
 COMMENT ON COLUMN customer_wallets.astpp_id IS 'Link to ASTPP accounts.id for sync tracking';
+COMMENT ON COLUMN customer_wallets.status IS 'active | inactive (set by CDC when ASTPP account is deleted) | frozen | locked | closed';
+ 
 
 -- ============================================================================
 -- 5. CUSTOMER AUDIT TRAIL & LIFECYCLE LOGS
