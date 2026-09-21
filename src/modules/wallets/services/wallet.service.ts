@@ -4,6 +4,7 @@ import { DatabaseService } from '../../../core/database/database.service';
 import { MessageService } from '../../../core/messages/message.service';
 import { EventService } from '../../../core/events/event.service';
 import { LockWalletDto, UnlockWalletDto } from '../dto/wallet.dto';
+import { SasaPayWaasService } from '../../onboarding/services/sasapay-waas.service';
 
 @Injectable()
 export class WalletService {
@@ -11,6 +12,7 @@ export class WalletService {
     private readonly db: DatabaseService,
     private readonly messages: MessageService,
     private readonly events: EventService,
+    private readonly sasaPayWaas: SasaPayWaasService,
   ) {}
 
   /**
@@ -40,6 +42,31 @@ export class WalletService {
       tierLevel: wallet.tier_level,
       createdAt: wallet.created_at,
       updatedAt: wallet.updated_at,
+    };
+  }
+
+  async getBalance(customerId: number) {
+    const wallet = await this.db.queryOne(
+      `SELECT account_number, currency, status
+       FROM customer_wallets
+       WHERE customer_id = $1`,
+      [customerId],
+    );
+
+    if (!wallet) {
+      throw new NotFoundException(this.messages.get('wallets.notFound'));
+    }
+
+    const sasaPayDetails = await this.sasaPayWaas.getCustomerDetails(String(wallet.account_number));
+    const sasaPayWallet = sasaPayDetails?.data?.CustomerWallets?.find(
+      (item) => String(item.account_number) === String(wallet.account_number),
+    ) || sasaPayDetails?.data?.CustomerWallets?.[0];
+
+    return {
+      accountNumber: wallet.account_number,
+      currency: sasaPayWallet?.currency_code || wallet.currency,
+      balance: Number(sasaPayWallet?.account_balance_derived || 0),
+      status: wallet.status,
     };
   }
 

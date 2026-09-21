@@ -247,7 +247,7 @@ export class CdcConsumerWorker implements OnModuleInit, OnModuleDestroy {
         __source_ts_ms,
       ]);
 
-      // If deleted flag changed to true, disable wallet
+      // If deleted flag changed to true, mark wallet inactive
       if (deleted === 1) {
         await this.disableWallet(astpp_id, 'Customer deleted in ASTPP', client);
       }
@@ -287,7 +287,7 @@ export class CdcConsumerWorker implements OnModuleInit, OnModuleDestroy {
         WHERE astpp_id = $1
       `, [astpp_id, sync_version]);
 
-      // Disable wallet
+      // Mark wallet inactive
       await this.disableWallet(astpp_id, 'Customer deleted in ASTPP', client);
 
       await client.query('COMMIT');
@@ -474,11 +474,12 @@ export class CdcConsumerWorker implements OnModuleInit, OnModuleDestroy {
   private async disableWallet(astpp_id: number, reason: string, client: any) {
     await client.query(`
       UPDATE customer_wallets SET
-        status = 'locked',
-        is_locked = true,
+        status = 'inactive',
+        is_locked = false,
         lock_reason = $2,
         locked_by = 'SYSTEM_CDC',
-        locked_at = NOW(),
+        locked_at = NULL,
+        freeze_type = NULL,
         updated_at = NOW()
       WHERE astpp_id = $1 AND status != 'closed'
     `, [astpp_id, reason]);

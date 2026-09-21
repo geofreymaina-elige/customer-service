@@ -33,12 +33,16 @@ export class PinAuthService {
 
     // Find customer by ASTPP ID
     const customer = await this.db.queryOne(
-      `SELECT id, uuid FROM customers WHERE astpp_id::text = $1`,
+      `SELECT id, uuid, deleted_at, status FROM customers WHERE astpp_id::text = $1`,
       [dto.astppId]
     );
 
     if (!customer) {
       throw new NotFoundException(this.messages.get('common.notFound'));
+    }
+
+    if (customer.deleted_at || customer.status === 'closed' || customer.status === 'suspended') {
+      throw new UnauthorizedException('Customer account is inactive or deleted.');
     }
 
     // Check if PIN already set
@@ -154,7 +158,7 @@ export class PinAuthService {
   }> {
     // Find customer
     const customer = await this.db.queryOne(
-      `SELECT id, uuid, voip_number, first_name, last_name, email, phone_number, status, timezone
+      `SELECT id, uuid, voip_number, first_name, last_name, email, phone_number, status, timezone, deleted_at
        FROM customers
        WHERE astpp_id::text = $1`,
       [dto.astppId]
@@ -162,6 +166,10 @@ export class PinAuthService {
 
     if (!customer) {
       throw new NotFoundException(this.messages.get('common.notFound'));
+    }
+
+    if (customer.deleted_at || customer.status === 'closed' || customer.status === 'suspended') {
+      throw new UnauthorizedException('Customer account is inactive or deleted.');
     }
 
     // Check PIN record
@@ -240,19 +248,21 @@ export class PinAuthService {
 
     await this.recordAttempt(customer.id, true, null, ip, userAgent);
 
-    // Compute device hash if device info provided
-    let deviceHash = '';
-    if (dto.deviceIdentifier && dto.deviceModel && dto.mobileType) {
-      deviceHash = this.jwtService.hashDevice(dto.deviceIdentifier, dto.deviceModel, dto.mobileType);
+    if (!dto.deviceIdentifier || !dto.deviceModel || !dto.mobileType) {
+      throw new BadRequestException('Device metadata is required to issue a transaction token.');
     }
 
-    // Generate secure token
-    const token = this.jwtService.generateToken(customer, deviceHash, [
-      'customer:read',
-      'customer:write',
-      'device:manage',
-      'wallet:control',
-    ]);
+    const deviceHash = this.jwtService.hashDevice(dto.deviceIdentifier, dto.deviceModel, dto.mobileType);
+    const activeDevice = await this.db.queryOne(
+      `SELECT id FROM customer_devices WHERE customer_id = $1 AND device_uuid_hash = $2 AND status = 'active'`,
+      [customer.id, deviceHash],
+    );
+
+    if (!activeDevice) {
+      throw new UnauthorizedException('Only the active registered device can receive a transaction token.');
+    }
+
+    const token = this.jwtService.generateTransactionToken(customer, deviceHash);
 
     return {
       customer: {

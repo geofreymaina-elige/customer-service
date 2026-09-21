@@ -33,7 +33,7 @@ export class DeviceLogoutService {
   }> {
     // 1. Find customer and identity details (prioritize wallet_kyc over primary_kyc)
     const customer = await this.db.queryOne(
-      `SELECT c.id, c.uuid, c.phone_number, cad.identity_document_number AS document_number
+      `SELECT c.id, c.uuid, c.phone_number, c.deleted_at, c.status, cad.identity_document_number AS document_number
        FROM customers c
        LEFT JOIN customer_applications ca ON ca.customer_id = c.id
        LEFT JOIN customer_applicant_details cad ON cad.customer_application_id = ca.id
@@ -48,6 +48,10 @@ export class DeviceLogoutService {
 
     if (!customer) {
       throw new NotFoundException(this.messages.get('common.notFound'));
+    }
+
+    if (customer.deleted_at || customer.status === 'closed' || customer.status === 'suspended') {
+      throw new UnauthorizedException('Customer account is inactive or deleted.');
     }
 
     // 2. Validate Document Number
@@ -187,11 +191,15 @@ export class DeviceLogoutService {
 
     // Fetch customer for token generation
     const customer = await this.db.queryOne(
-      `SELECT id, uuid, voip_number FROM customers WHERE id = $1`,
+      `SELECT id, uuid, voip_number, status, deleted_at FROM customers WHERE id = $1`,
       [session.customer_id]
     );
 
-    const token = this.jwtService.generateToken(customer, deviceResult.deviceHash, ['wallet:transact', 'wallet:read']);
+    if (!customer || customer.deleted_at || customer.status === 'closed' || customer.status === 'suspended') {
+      throw new UnauthorizedException('Customer account is inactive or deleted.');
+    }
+
+    const token = this.jwtService.generateAppAccessToken(customer, deviceResult.deviceHash);
 
     return {
       loggedOut: true,

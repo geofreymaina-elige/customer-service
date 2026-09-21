@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger, UnauthorizedException } from '@nestjs/common';
 import { DatabaseService } from '../../../core/database/database.service';
 import { AstppAdapterService } from '../../astpp/astpp-adapter.service';
 import { DeviceGatekeeperService } from '../../devices/services/device-gatekeeper.service';
@@ -45,7 +45,7 @@ export class OnboardingService {
 
     // If ASTPP DB not accessible or no record, check local DB
     let customer = await this.db.queryOne(
-      `SELECT id, uuid, astpp_id, voip_number, phone_number, first_name, last_name, email, date_of_birth, status, timezone
+      `SELECT id, uuid, astpp_id, voip_number, phone_number, first_name, last_name, email, date_of_birth, status, timezone, deleted_at
        FROM customers
        WHERE astpp_id = $1`,
       [dto.astpp_id]
@@ -128,6 +128,10 @@ export class OnboardingService {
       );
     }
 
+    if (customer.deleted_at || customer.status === 'closed' || customer.status === 'suspended') {
+      throw new UnauthorizedException('Customer account is inactive or deleted.');
+    }
+
     // 2. Register / Verify Device with single-device constraint
     const deviceResult = await this.deviceGatekeeper.registerOrVerifyDevice(
       customer.id,
@@ -190,11 +194,8 @@ export class OnboardingService {
       }
     }
 
-    // 5. Generate token if PIN is set
-    let token = null;
-    if (isWalletPinSet) {
-      token = this.jwtService.generateToken(customer, deviceResult.deviceHash, ['wallet:transact', 'wallet:read']);
-    }
+    // 5. Generate long-lived general app token. Transaction tokens require PIN verification.
+    const token = this.jwtService.generateAppAccessToken(customer, deviceResult.deviceHash);
 
     return {
       user: {

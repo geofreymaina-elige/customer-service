@@ -2,6 +2,8 @@ import { Controller, Get, Post, Body, Param, UseGuards, HttpCode, HttpStatus } f
 import { WalletService } from '../services/wallet.service';
 import { LockWalletDto, UnlockWalletDto } from '../dto/wallet.dto';
 import { AuthGuard } from '../../../core/auth/auth.guard';
+import { JwtScopes } from '../../../core/auth/jwt.service';
+import { RequireScopes } from '../../../core/auth/scopes.decorator';
 import { AstppTokenGuard } from '../../../core/auth/astpp-token.guard';
 import { CurrentUser, AuthenticatedUser } from '../../../core/auth/current-user.decorator';
 import { MessageService } from '../../../core/messages/message.service';
@@ -49,6 +51,17 @@ export class WalletController {
         freezeType: data.freezeType,
         tierLevel: data.tierLevel,
       },
+    };
+  }
+
+  @Get('me/balance')
+  @UseGuards(AuthGuard)
+  @RequireScopes(JwtScopes.Transaction)
+  async getMyBalance(@CurrentUser() user: AuthenticatedUser) {
+    const data = await this.walletService.getBalance(user.id);
+    return {
+      success: true,
+      data,
     };
   }
 

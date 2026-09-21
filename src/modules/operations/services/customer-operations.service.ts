@@ -2,7 +2,6 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { DatabaseService } from '../../../core/database/database.service';
 import { MessageService } from '../../../core/messages/message.service';
 import { EventService } from '../../../core/events/event.service';
-import { SasaPayWaasService } from '../../onboarding/services/sasapay-waas.service';
 import {
   CustomerQueryDto,
   UpdateCustomerStatusDto,
@@ -17,7 +16,6 @@ export class CustomerOperationsService {
     private readonly db: DatabaseService,
     private readonly messages: MessageService,
     private readonly events: EventService,
-    private readonly sasaPayWaas: SasaPayWaasService,
   ) { }
 
   /**
@@ -122,11 +120,6 @@ export class CustomerOperationsService {
     if (!customer) {
       throw new NotFoundException(this.messages.get('operations.customerNotFound'));
     }
-
-    const sasaPayDetails = customer.sasapay_account_number
-      ? await this.sasaPayWaas.getCustomerDetails(String(customer.sasapay_account_number))
-      : null;
-    customer.balance = Number(sasaPayDetails?.data?.CustomerWallets?.[0]?.account_balance_derived || 0);
 
     // Fetch registered devices
     const devices = await this.db.query(

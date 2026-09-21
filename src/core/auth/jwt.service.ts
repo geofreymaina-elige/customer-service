@@ -22,14 +22,24 @@ export interface TokenResponse {
   expiresInSeconds: number;
 }
 
+export const JwtScopes = {
+  AppAccess: 'app:access',
+  Transaction: 'wallet:transact',
+} as const;
+
 @Injectable()
 export class SecureJwtService {
   private readonly secret: string;
-  private readonly expiresInSeconds: number;
+  private readonly transactionExpiresInSeconds: number;
+  private readonly appAccessExpiresInSeconds: number;
 
   constructor(private configService: ConfigService) {
     this.secret = this.configService.get<string>('jwt.secret') || 'default_secret';
-    this.expiresInSeconds = this.configService.get<number>('jwt.expiresInSeconds') || 900;
+    this.transactionExpiresInSeconds = this.configService.get<number>('jwt.expiresInSeconds') || 900;
+    const configuredAppAccessTtl = this.configService.get<number>('jwt.appAccessExpiresInSeconds');
+    this.appAccessExpiresInSeconds = Number.isFinite(configuredAppAccessTtl) && configuredAppAccessTtl > 0
+      ? configuredAppAccessTtl
+      : 60 * 60 * 24 * 30;
 
     if (!this.secret || this.secret.length < 32) {
       console.warn('[SECURITY WARNING] JWT_SECRET should be at least 32 characters long for production security.');
@@ -39,7 +49,8 @@ export class SecureJwtService {
   generateToken(
     customer: { id: number; uuid: string; voip_number: string },
     deviceHash: string,
-    scopes: string[] = ['customer:read', 'customer:write', 'device:manage', 'wallet:control']
+    scopes: string[] = [JwtScopes.AppAccess],
+    expiresInSeconds: number = this.transactionExpiresInSeconds,
   ): TokenResponse {
     const jti = crypto.randomUUID();
     const payload: TokenPayload = {
@@ -55,14 +66,28 @@ export class SecureJwtService {
 
     const accessToken = jwt.sign(payload, this.secret, {
       algorithm: 'HS256',
-      expiresIn: this.expiresInSeconds,
+      expiresIn: expiresInSeconds,
     });
 
     return {
       accessToken,
       tokenType: 'Bearer',
-      expiresInSeconds: this.expiresInSeconds,
+      expiresInSeconds,
     };
+  }
+
+  generateAppAccessToken(
+    customer: { id: number; uuid: string; voip_number: string },
+    deviceHash: string,
+  ): TokenResponse {
+    return this.generateToken(customer, deviceHash, [JwtScopes.AppAccess], this.appAccessExpiresInSeconds);
+  }
+
+  generateTransactionToken(
+    customer: { id: number; uuid: string; voip_number: string },
+    deviceHash: string,
+  ): TokenResponse {
+    return this.generateToken(customer, deviceHash, [JwtScopes.Transaction], this.transactionExpiresInSeconds);
   }
 
   verifyToken(token: string, currentDeviceHash?: string): TokenPayload {

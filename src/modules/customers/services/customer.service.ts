@@ -44,12 +44,6 @@ export class CustomerService {
       throw new NotFoundException(this.messages.get('common.notFound'));
     }
 
-    const sasaPayDetails = customer.sasapay_account_number
-      ? await this.sasaPayWaas.getCustomerDetails(String(customer.sasapay_account_number))
-      : null;
-    const sasaPayWallet = sasaPayDetails?.data?.CustomerWallets?.[0];
-    const balance = Number(sasaPayWallet?.account_balance_derived || 0);
-
     // Get primary KYC application details
     const primaryKyc = await this.db.queryOne(
       `SELECT ca.kyc_status, ca.kyc_tier, ca.approved_at, ca.rejected_at, ca.rejection_reason,
@@ -86,7 +80,6 @@ export class CustomerService {
       dateOfBirth: customer.date_of_birth,
       timezone: customer.timezone,
       status: customer.status,
-      balance,
       createdAt: customer.created_at,
       hasWallet,
       security: {

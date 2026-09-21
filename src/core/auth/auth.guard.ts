@@ -3,15 +3,19 @@ import {
   ExecutionContext,
   Injectable,
   UnauthorizedException,
+  ForbiddenException,
 } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { SecureJwtService } from './jwt.service';
 import { DatabaseService } from '../database/database.service';
+import { REQUIRED_SCOPES_KEY } from './scopes.decorator';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
   constructor(
     private readonly jwtService: SecureJwtService,
     private readonly db: DatabaseService,
+    private readonly reflector: Reflector,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -27,14 +31,28 @@ export class AuthGuard implements CanActivate {
 
     const payload = this.jwtService.verifyToken(token, deviceHeader ? String(deviceHeader) : undefined);
 
-    // Verify customer exists and is not suspended or closed
+    // Verify customer exists and is not deleted, suspended, or closed
     const customer = await this.db.queryOne(
-      `SELECT id, uuid, voip_number, status FROM customers WHERE id = $1`,
+      `SELECT id, uuid, voip_number, status, deleted_at FROM customers WHERE id = $1`,
       [payload.customerId]
     );
 
-    if (!customer || customer.status === 'suspended' || customer.status === 'closed') {
+    if (!customer || customer.deleted_at || customer.status === 'suspended' || customer.status === 'closed') {
       throw new UnauthorizedException('Customer account is inactive or not found.');
+    }
+
+    const requiredScopes = this.reflector.getAllAndOverride<string[]>(REQUIRED_SCOPES_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]) || [];
+
+    if (requiredScopes.length > 0) {
+      const tokenScopes = payload.scope || [];
+      const hasAllScopes = requiredScopes.every((scope) => tokenScopes.includes(scope));
+
+      if (!hasAllScopes) {
+        throw new ForbiddenException('Authentication token does not have the required scope.');
+      }
     }
 
     // Verify customer device is still active

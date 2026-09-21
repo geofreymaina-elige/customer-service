@@ -14,6 +14,7 @@ export default () => ({
   jwt: {
     secret: process.env.JWT_SECRET,
     expiresInSeconds: parseInt(process.env.JWT_EXPIRATION_SECONDS, 10),
+    appAccessExpiresInSeconds: parseInt(process.env.JWT_APP_ACCESS_EXPIRATION_SECONDS || '', 10),
   },
   security: {
     deviceUuidSalt: process.env.DEVICE_UUID_SALT,
