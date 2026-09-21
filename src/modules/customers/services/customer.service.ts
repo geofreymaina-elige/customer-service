@@ -111,7 +111,7 @@ export class CustomerService {
         status: walletKyc.kyc_status,
         flaggedAt: walletKyc.created_at,
         rejectionReason: walletKyc.rejection_reason,
-        documentCount: walletKyc.images ? JSON.parse(walletKyc.images).length : 0,
+        documentCount: this.countWalletKycDocuments(walletKyc.images),
       } : {
         required: false,
       },
@@ -150,10 +150,35 @@ export class CustomerService {
     await this.db.query(
       `INSERT INTO customer_activity_logs (customer_id, event_type, actor_type, actor_id, details)
        VALUES ($1, 'PROFILE_UPDATED', 'CUSTOMER', $2, $3::jsonb)`,
-      [customerId, String(customerId), JSON.stringify(dto)]
+      [customerId, String(customerId), dto]
     );
 
     return this.getProfile(customerId);
+  }
+
+  private countWalletKycDocuments(images: unknown): number {
+    if (!images) {
+      return 0;
+    }
+
+    if (Array.isArray(images)) {
+      return images.length;
+    }
+
+    if (typeof images === 'string') {
+      try {
+        const parsed = JSON.parse(images);
+        return Array.isArray(parsed) ? parsed.length : parsed ? 1 : 0;
+      } catch {
+        return 0;
+      }
+    }
+
+    if (typeof images === 'object') {
+      return 1;
+    }
+
+    return 0;
   }
 
   async updateSasaPayProfile(customerId: number, dto: UpdateSasaPayCustomerDto) {
@@ -200,7 +225,7 @@ export class CustomerService {
     await this.db.query(
       `INSERT INTO customer_activity_logs (customer_id, event_type, actor_type, actor_id, details)
        VALUES ($1, 'KYC_DOCUMENTS_SUBMITTED', 'CUSTOMER', $2, $3::jsonb)`,
-      [customerId, String(customerId), JSON.stringify({ documentType: dto.documentType, documentNumber: dto.documentNumber })]
+      [customerId, String(customerId), { documentType: dto.documentType, documentNumber: dto.documentNumber }]
     );
 
     // Dispatch outbox event

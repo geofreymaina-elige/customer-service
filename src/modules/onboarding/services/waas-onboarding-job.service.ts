@@ -40,7 +40,7 @@ export class WaasOnboardingJobService {
     await this.db.query(
       `INSERT INTO customer_activity_logs (customer_id, event_type, actor_type, actor_id, details, created_at)
        VALUES ($1, $2, 'SYSTEM', 'SASAPAY_WAAS_JOB', $3::jsonb, NOW())`,
-      [customerId, eventType, JSON.stringify(details)],
+      [customerId, eventType, details],
     );
   }
 

@@ -183,7 +183,7 @@ export class OnboardingService {
         await this.db.query(
           `INSERT INTO customer_activity_logs (customer_id, event_type, actor_type, actor_id, details)
            VALUES ($1, 'SASAPAY_ONBOARDING_JOB_QUEUED', 'SYSTEM', 'ONBOARDING_SERVICE', $2::jsonb)`,
-          [customer.id, JSON.stringify({ jobUuid, jobType: 'sasapay_waas_onboarding' })],
+          [customer.id, { jobUuid, jobType: 'sasapay_waas_onboarding' }],
         );
         this.logger.log(`[ONBOARDING] Enqueued sasapay_waas_onboarding job for customer ${customer.id}`);
         otpPending = true;
