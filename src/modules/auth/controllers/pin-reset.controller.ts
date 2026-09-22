@@ -1,4 +1,4 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
+import { Controller, Post, Put, Body, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
 import { PinResetService } from '../services/pin-reset.service';
 import {
   InitiatePinResetDto,
@@ -8,7 +8,7 @@ import {
 import { MessageService } from '../../../core/messages/message.service';
 import { PinAstppTokenGuard } from '../../../core/auth/pin-astpp-token.guard';
 
-@Controller('api/v1/auth/reset-pin')
+@Controller('')
 @UseGuards(PinAstppTokenGuard)
 export class PinResetController {
   constructor(
@@ -16,7 +16,7 @@ export class PinResetController {
     private readonly messages: MessageService,
   ) {}
 
-  @Post('initiate')
+  @Post('api/v2/pin-resets')
   @HttpCode(HttpStatus.OK)
   async initiateReset(@Body() dto: InitiatePinResetDto) {
     const data = await this.pinResetService.initiateReset(dto);
@@ -27,7 +27,7 @@ export class PinResetController {
     };
   }
 
-  @Post('verify-otp')
+  @Post('api/v2/pin-resets/otp-verifications')
   @HttpCode(HttpStatus.OK)
   async verifyOtp(@Body() dto: VerifyResetOtpDto) {
     const data = await this.pinResetService.verifyOtp(dto);
@@ -38,7 +38,7 @@ export class PinResetController {
     };
   }
 
-  @Post('complete')
+  @Put('api/v2/pin-resets/pin')
   @HttpCode(HttpStatus.OK)
   async completeReset(@Body() dto: CompletePinResetDto) {
     return this.pinResetService.completeReset(dto);

@@ -74,7 +74,7 @@ export class VerifyDeviceLogoutDto {
 }
 
 export class RevokeDeviceDto {
-  @IsNotEmpty({ message: 'Device UUID is required.' })
+  @IsNotEmpty({ message: 'Session ID is required.' })
   @IsString()
-  deviceUuid: string;
+  sessionId: string;
 }

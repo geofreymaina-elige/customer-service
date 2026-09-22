@@ -1,11 +1,10 @@
-import { Controller, Get, Patch, Post, Body, UseGuards, Query } from '@nestjs/common';
+import { Controller, Get, Patch, Body, UseGuards } from '@nestjs/common';
 import { CustomerService } from '../services/customer.service';
-import { UpdateCustomerProfileDto, SubmitKycDocumentsDto } from '../dto/customer.dto';
-import { UpdateSasaPayCustomerDto } from '../dto/sasapay-customer.dto';
+import { UpdateCustomerProfileDto } from '../dto/customer.dto';
 import { AuthGuard } from '../../../core/auth/auth.guard';
 import { CurrentUser, AuthenticatedUser } from '../../../core/auth/current-user.decorator';
 
-@Controller('api/v1/customers')
+@Controller('api/v2/customers')
 export class CustomerController {
   constructor(private readonly customerService: CustomerService) {}
 
@@ -23,37 +22,6 @@ export class CustomerController {
   @UseGuards(AuthGuard)
   async updateMyProfile(@CurrentUser() user: AuthenticatedUser, @Body() dto: UpdateCustomerProfileDto) {
     const data = await this.customerService.updateProfile(user.id, dto);
-    return {
-      success: true,
-      data,
-    };
-  }
-
-  @Patch('me/sasapay')
-  @UseGuards(AuthGuard)
-  async updateMySasaPayProfile(@CurrentUser() user: AuthenticatedUser, @Body() dto: UpdateSasaPayCustomerDto) {
-    const data = await this.customerService.updateSasaPayProfile(user.id, dto);
-    return {
-      success: true,
-      data,
-    };
-  }
-
-  @Post('kyc/documents')
-  @UseGuards(AuthGuard)
-  async submitKycDocuments(@CurrentUser() user: AuthenticatedUser, @Body() dto: SubmitKycDocumentsDto) {
-    const data = await this.customerService.submitKycDocuments(user.id, dto);
-    return {
-      success: true,
-      message: data.message,
-      data,
-    };
-  }
-
-  @Get('me/activity')
-  @UseGuards(AuthGuard)
-  async getMyActivity(@CurrentUser() user: AuthenticatedUser, @Query('limit') limit?: string) {
-    const data = await this.customerService.getActivityHistory(user.id, limit ? parseInt(limit, 10) : 30);
     return {
       success: true,
       data,

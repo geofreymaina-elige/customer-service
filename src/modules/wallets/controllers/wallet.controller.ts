@@ -1,18 +1,15 @@
-import { Controller, Get, Post, Body, Param, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { WalletService } from '../services/wallet.service';
-import { LockWalletDto, UnlockWalletDto } from '../dto/wallet.dto';
 import { AuthGuard } from '../../../core/auth/auth.guard';
 import { JwtScopes } from '../../../core/auth/jwt.service';
 import { RequireScopes } from '../../../core/auth/scopes.decorator';
 import { AstppTokenGuard } from '../../../core/auth/astpp-token.guard';
 import { CurrentUser, AuthenticatedUser } from '../../../core/auth/current-user.decorator';
-import { MessageService } from '../../../core/messages/message.service';
 
-@Controller('api/v1/wallets')
+@Controller('api/v2/wallets')
 export class WalletController {
   constructor(
     private readonly walletService: WalletService,
-    private readonly messages: MessageService,
   ) {}
 
   @Get('me')
@@ -25,32 +22,13 @@ export class WalletController {
     };
   }
 
-  @Get(':astppId/onboarding-status')
+  @Get('onboarding-status')
   @UseGuards(AstppTokenGuard)
-  async getWalletOnboardingStatus(@Param('astppId') astppId: string) {
+  async getWalletOnboardingStatus(@Query('astppId') astppId: string) {
     const data = await this.walletService.getWalletOnboardingStatusByAstppId(astppId);
     return {
       success: true,
       data,
-    };
-  }
-
-  @Get('me/status')
-  @UseGuards(AuthGuard)
-  async getMyWalletStatus(@CurrentUser() user: AuthenticatedUser) {
-    const data = await this.walletService.getWalletByCustomerId(user.id);
-    return {
-      success: true,
-      data: {
-        walletId: data.walletId,
-        accountNumber: data.accountNumber,
-        status: data.status,
-        isLocked: data.isLocked,
-        lockReason: data.lockReason,
-        lockedAt: data.lockedAt,
-        freezeType: data.freezeType,
-        tierLevel: data.tierLevel,
-      },
     };
   }
 
@@ -59,40 +37,6 @@ export class WalletController {
   @RequireScopes(JwtScopes.Transaction)
   async getMyBalance(@CurrentUser() user: AuthenticatedUser) {
     const data = await this.walletService.getBalance(user.id);
-    return {
-      success: true,
-      data,
-    };
-  }
-
-  @Post('lock')
-  @UseGuards(AuthGuard)
-  @HttpCode(HttpStatus.OK)
-  async lockWallet(@CurrentUser() user: AuthenticatedUser, @Body() dto: LockWalletDto) {
-    const data = await this.walletService.lockWallet(user.id, dto, `CUSTOMER:${user.id}`);
-    return {
-      success: true,
-      message: this.messages.get('wallets.lockedSuccess'),
-      data,
-    };
-  }
-
-  @Post('unlock')
-  @UseGuards(AuthGuard)
-  @HttpCode(HttpStatus.OK)
-  async unlockWallet(@CurrentUser() user: AuthenticatedUser, @Body() dto: UnlockWalletDto) {
-    const data = await this.walletService.unlockWallet(user.id, dto, `CUSTOMER:${user.id}`);
-    return {
-      success: true,
-      message: this.messages.get('wallets.unlockedSuccess'),
-      data,
-    };
-  }
-
-  @Get(':uuid')
-  @UseGuards(AuthGuard)
-  async getWalletByUuid(@Param('uuid') uuid: string) {
-    const data = await this.walletService.getWalletByUuid(uuid);
     return {
       success: true,
       data,

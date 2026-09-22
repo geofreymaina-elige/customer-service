@@ -25,7 +25,7 @@ export class DeviceGatekeeperService {
     deviceData: DeviceMetadataDto,
     ipAddress: string = '127.0.0.1'
   ): Promise<{
-    deviceId: string;
+    sessionId: string;
     deviceHash: string;
     isNewDevice: boolean;
   }> {
@@ -67,7 +67,7 @@ export class DeviceGatekeeperService {
         );
 
         return {
-          deviceId: activeDevice.uuid,
+          sessionId: activeDevice.uuid,
           deviceHash,
           isNewDevice: false,
         };
@@ -127,12 +127,12 @@ export class DeviceGatekeeperService {
 
     await this.events.publish('customer.device_registered', 'CustomerDevice', String(customerId), {
       customerId,
-      deviceUuid: newDevice.uuid,
+      sessionId: newDevice.uuid,
       deviceModel: deviceData.deviceModel,
     });
 
     return {
-      deviceId: newDevice.uuid,
+      sessionId: newDevice.uuid,
       deviceHash,
       isNewDevice: true,
     };
@@ -141,10 +141,10 @@ export class DeviceGatekeeperService {
   /**
    * Revoke a specific device session
    */
-  async revokeDevice(customerId: number, deviceUuid: string) {
+  async revokeDevice(customerId: number, sessionId: string) {
     const device = await this.db.queryOne(
       `SELECT id, uuid, status FROM customer_devices WHERE customer_id = $1 AND uuid::text = $2`,
-      [customerId, deviceUuid]
+      [customerId, sessionId]
     );
 
     if (!device) {
@@ -160,12 +160,12 @@ export class DeviceGatekeeperService {
     await this.db.query(
       `INSERT INTO customer_activity_logs (customer_id, event_type, actor_type, actor_id, details)
        VALUES ($1, 'DEVICE_REVOKED', 'CUSTOMER', $2, $3::jsonb)`,
-      [customerId, String(customerId), JSON.stringify({ deviceUuid })]
+      [customerId, String(customerId), JSON.stringify({ sessionId })]
     );
 
     await this.events.publish('customer.device_revoked', 'CustomerDevice', String(customerId), {
       customerId,
-      deviceUuid,
+      sessionId,
     });
 
     return {

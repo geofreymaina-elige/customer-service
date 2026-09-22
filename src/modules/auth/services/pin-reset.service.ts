@@ -30,7 +30,7 @@ export class PinResetService {
    * Step 1: Initiate PIN reset with ASTPP Account ID & ID Number check
    */
   async initiateReset(dto: InitiatePinResetDto): Promise<{
-    sessionToken: string;
+    resetId: string;
     maskedPhone: string;
     expiresInMinutes: number;
   }> {
@@ -63,15 +63,15 @@ export class PinResetService {
       [customer.id]
     );
 
-    // Generate opaque session token
-    const sessionToken = crypto.randomBytes(32).toString('hex');
-    const sessionTokenHash = crypto.createHash('sha256').update(sessionToken).digest('hex');
+    // Generate opaque session token (now called resetId)
+    const resetId = crypto.randomBytes(32).toString('hex');
+    const resetIdHash = crypto.createHash('sha256').update(resetId).digest('hex');
 
     // Create session (state: id_verified, expires in 30 minutes)
     await this.db.query(
       `INSERT INTO customer_pin_reset_sessions (customer_id, session_token_hash, state, resend_count, expires_at, created_at, updated_at)
        VALUES ($1, $2, 'id_verified', 0, NOW() + INTERVAL '30 minutes', NOW(), NOW())`,
-      [customer.id, sessionTokenHash]
+      [customer.id, resetIdHash]
     );
 
     // Generate 6-digit OTP
@@ -88,7 +88,7 @@ export class PinResetService {
     // Update session state to otp_sent
     await this.db.query(
       `UPDATE customer_pin_reset_sessions SET state = 'otp_sent', updated_at = NOW() WHERE session_token_hash = $1`,
-      [sessionTokenHash]
+      [resetIdHash]
     );
 
     // Mask phone number (show last 4 digits)
@@ -96,7 +96,7 @@ export class PinResetService {
     const maskedPhone = phone.length > 4 ? `****${phone.slice(-4)}` : '****';
 
     return {
-      sessionToken,
+      resetId,
       maskedPhone,
       expiresInMinutes: 5,
     };
@@ -105,8 +105,8 @@ export class PinResetService {
   /**
    * Step 2: Verify SMS OTP
    */
-  async verifyOtp(dto: VerifyResetOtpDto): Promise<{ canResetPin: boolean; sessionToken: string }> {
-    const sessionHash = crypto.createHash('sha256').update(dto.sessionToken).digest('hex');
+  async verifyOtp(dto: VerifyResetOtpDto): Promise<{ canResetPin: boolean; resetId: string }> {
+    const sessionHash = crypto.createHash('sha256').update(dto.resetId).digest('hex');
 
     const session = await this.db.queryOne(
       `SELECT id, customer_id, state, expires_at, invalidated_at
@@ -160,7 +160,7 @@ export class PinResetService {
 
     return {
       canResetPin: true,
-      sessionToken: dto.sessionToken,
+      resetId: dto.resetId,
     };
   }
 
@@ -172,7 +172,7 @@ export class PinResetService {
       throw new BadRequestException(this.messages.get('auth.pin.pinsMustMatch'));
     }
 
-    const sessionHash = crypto.createHash('sha256').update(dto.sessionToken).digest('hex');
+    const sessionHash = crypto.createHash('sha256').update(dto.resetId).digest('hex');
 
     const session = await this.db.queryOne(
       `SELECT id, customer_id, state, expires_at, invalidated_at

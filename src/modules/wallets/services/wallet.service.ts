@@ -73,6 +73,7 @@ export class WalletService {
   /**
    * Get wallet onboarding readiness status by ASTPP ID (no auth required)
    * Resolves astppId → internal customer id, then delegates to getWalletOnboardingStatus
+   * and adds nextStep field for v2 API
    */
   async getWalletOnboardingStatusByAstppId(astppId: string) {
     const customer = await this.db.queryOne(
@@ -82,7 +83,39 @@ export class WalletService {
     if (!customer) {
       throw new NotFoundException(this.messages.get('common.notFound'));
     }
-    return this.getWalletOnboardingStatus(customer.id);
+    const status = await this.getWalletOnboardingStatus(customer.id);
+    
+    // Add nextStep field for v2 API
+    // Check device registration status
+    const device = await this.db.queryOne(
+      `SELECT id FROM customer_devices WHERE customer_id = $1 AND status = 'active'`,
+      [customer.id]
+    );
+    const deviceRegistered = !!device;
+    
+    // Check PIN status
+    const pin = await this.db.queryOne(
+      `SELECT id FROM customer_pins WHERE customer_id = $1`,
+      [customer.id]
+    );
+    const pinSet = !!pin;
+    
+    // Derive nextStep
+    let nextStep: 'register_device' | 'verify_otp' | 'set_pin' | 'none';
+    if (!deviceRegistered) {
+      nextStep = 'register_device';
+    } else if (status.applicationStatus === 'pending') {
+      nextStep = 'verify_otp';
+    } else if (status.hasWallet && !pinSet) {
+      nextStep = 'set_pin';
+    } else {
+      nextStep = 'none';
+    }
+    
+    return {
+      ...status,
+      nextStep,
+    };
   }
 
   /**

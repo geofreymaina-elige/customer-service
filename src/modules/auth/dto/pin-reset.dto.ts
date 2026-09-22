@@ -13,7 +13,7 @@ export class InitiatePinResetDto {
 export class VerifyResetOtpDto {
   @IsNotEmpty()
   @IsString()
-  sessionToken: string;
+  resetId: string;
 
   @IsNotEmpty()
   @IsString()
@@ -24,13 +24,13 @@ export class VerifyResetOtpDto {
 export class ResendResetOtpDto {
   @IsNotEmpty()
   @IsString()
-  sessionToken: string;
+  resetId: string;
 }
 
 export class CompletePinResetDto {
   @IsNotEmpty()
   @IsString()
-  sessionToken: string;
+  resetId: string;
 
   @IsNotEmpty()
   @IsString()

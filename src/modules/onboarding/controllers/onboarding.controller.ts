@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Req, HttpCode, HttpStatus, UseGuards, UnauthorizedException } from '@nestjs/common';
+import { Controller, Post, Body, Req, HttpCode, HttpStatus, UseGuards, UnauthorizedException, Delete } from '@nestjs/common';
 import { Request } from 'express';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
@@ -6,25 +6,36 @@ import * as path from 'path';
 import { ConfigService } from '@nestjs/config';
 import { OnboardingService } from '../services/onboarding.service';
 import { SasaPayWaasService } from '../services/sasapay-waas.service';
+import { PinAuthService } from '../../auth/services/pin-auth.service';
+import { DeviceLogoutService } from '../../devices/services/device-logout.service';
+import { DeviceGatekeeperService } from '../../devices/services/device-gatekeeper.service';
 import {
   OnboardUserDeviceDto,
   PersonalOnboardingDto,
   PersonalOnboardingConfirmDto,
   SasaPayOnboardingCallbackDto,
 } from '../dto/onboarding.dto';
+import { VerifyPinDto } from '../../auth/dto/pin-auth.dto';
+import { InitiateDeviceLogoutDto, VerifyDeviceLogoutDto } from '../../devices/dto/device.dto';
 import { MessageService } from '../../../core/messages/message.service';
 import { AstppTokenGuard } from '../../../core/auth/astpp-token.guard';
+import { PinAstppTokenGuard } from '../../../core/auth/pin-astpp-token.guard';
+import { AuthGuard } from '../../../core/auth/auth.guard';
 import { DatabaseService } from '../../../core/database/database.service';
 import { JobService } from '../../../core/jobs/job.service';
+import { CurrentUser, AuthenticatedUser } from '../../../core/auth/current-user.decorator';
 import { Logger } from '@nestjs/common';
 
-@Controller('api/v1/onboarding')
+@Controller('')
 export class OnboardingController {
   private readonly logger = new Logger(OnboardingController.name);
 
   constructor(
     private readonly onboardingService: OnboardingService,
     private readonly sasapayWaas: SasaPayWaasService,
+    private readonly pinAuthService: PinAuthService,
+    private readonly deviceLogoutService: DeviceLogoutService,
+    private readonly deviceGatekeeper: DeviceGatekeeperService,
     private readonly messages: MessageService,
     private readonly db: DatabaseService,
     private readonly jobService: JobService,
@@ -32,9 +43,9 @@ export class OnboardingController {
   ) {}
 
   /**
-   * Device and Customer Onboarding (matching client expectations)
+   * Register new device + start wallet (was POST api/v1/onboarding/user-device)
    */
-  @Post('user-device')
+  @Post('api/v2/auth/sessions/device')
   @UseGuards(AstppTokenGuard)
   @HttpCode(HttpStatus.OK)
   async onboardUserDevice(@Body() dto: OnboardUserDeviceDto, @Req() req: Request) {
@@ -52,53 +63,86 @@ export class OnboardingController {
     };
   }
 
-  private maskPhoneNumber(phoneNumber: string): string {
-    if (!phoneNumber || phoneNumber.length <= 6) return 'your registered phone number';
-
-    return `${phoneNumber.slice(0, 3)}${'*'.repeat(phoneNumber.length - 6)}${phoneNumber.slice(-3)}`;
-  }
-
   /**
-   * SasaPay WaaS Step 1: Initial Personal Onboarding
+   * Sign in returning phone (PIN only) - moved from PinAuthController
    */
-  @Post('personal')
-  @HttpCode(HttpStatus.ACCEPTED)
-  async initiatePersonalOnboarding(@Body() dto: PersonalOnboardingDto) {
-    const result = await this.sasapayWaas.initiatePersonalOnboarding(dto);
+  @Post('api/v2/auth/sessions/pin')
+  @UseGuards(PinAstppTokenGuard)
+  @HttpCode(HttpStatus.OK)
+  async verifyPin(@Body() dto: VerifyPinDto, @Req() req: Request) {
+    const ip = (req.headers['x-forwarded-for'] as string)?.split(',').shift()?.trim() || req.ip || '127.0.0.1';
+    const userAgent = req.headers['user-agent'] || '';
+
+    const result = await this.pinAuthService.verifyPin(dto, ip, userAgent);
+
     return {
-      success: result.status,
-      message: result.message,
-      data: {
-        requestId: result.requestId,
-      },
+      success: true,
+      message: this.messages.get('auth.pin.verifySuccess'),
+      data: result,
     };
   }
 
   /**
-   * SasaPay WaaS Step 2: Personal Onboarding Confirmation with OTP.
-   *
-   * Job-Based Flow (Prevents Race Conditions):
-   * 1. Validate customer and check for existing wallet
-   * 2. Enqueue 'sasapay_otp_confirmation' job with OTP and customer details
-   * 3. Worker claims job using SELECT FOR UPDATE SKIP LOCKED (single worker guarantee)
-   * 4. Worker calls SasaPay API and creates wallet
-   * 5. If AWAITING_KYC_UPLOAD, enqueue 'sasapay_waas_kyc_upload' job
-   *
-   * Benefits:
-   * - SELECT FOR UPDATE SKIP LOCKED prevents duplicate processing
-   * - Automatic retry on failure (max_attempts in jobs table)
-   * - Full audit trail in jobs table
-   * - Works with multiple app instances/workers
+   * Sign in new phone (recovery, start OTP) - moved from DeviceController
    */
-  private async writeAuditLog(customerId: number, eventType: string, details: Record<string, unknown>): Promise<void> {
-    await this.db.query(
-      `INSERT INTO customer_activity_logs (customer_id, event_type, actor_type, actor_id, details, created_at)
-       VALUES ($1, $2, 'SYSTEM', 'ONBOARDING_CONTROLLER', $3::jsonb, NOW())`,
-      [customerId, eventType, details],
-    );
+  @Post('api/v2/auth/sessions/recovery')
+  @HttpCode(HttpStatus.OK)
+  async initiateLogout(@Body() dto: InitiateDeviceLogoutDto) {
+    const data = await this.deviceLogoutService.initiateLogout(dto);
+    return {
+      success: true,
+      message: this.messages.get('devices.logoutInitiated'),
+      data,
+    };
   }
 
-  @Post('personal/confirm')
+  /**
+   * Recovery OTP verify + new device register - moved from DeviceController
+   */
+  @Post('api/v2/auth/sessions/recovery-otp')
+  @HttpCode(HttpStatus.OK)
+  async verifyLogout(@Body() dto: VerifyDeviceLogoutDto, @Req() req: Request) {
+    const ip = (req.headers['x-forwarded-for'] as string)?.split(',').shift()?.trim() || req.ip || '127.0.0.1';
+    const result = await this.deviceLogoutService.verifyOtpAndLogout(dto, ip);
+
+    return {
+      success: true,
+      message: this.messages.get('devices.logoutVerified'),
+      data: result,
+    };
+  }
+
+  /**
+   * Sign out current session
+   */
+  @Delete('api/v2/auth/sessions/current')
+  @UseGuards(AuthGuard)
+  async revokeCurrentSession(@CurrentUser() user: AuthenticatedUser) {
+    // Get current device UUID from database
+    const currentDeviceUuid = await this.getCurrentDeviceUuid(user.id);
+    
+    if (currentDeviceUuid) {
+      await this.deviceGatekeeper.revokeDevice(user.id, currentDeviceUuid);
+    }
+
+    return {
+      success: true,
+      message: 'Current session revoked successfully',
+    };
+  }
+
+  private async getCurrentDeviceUuid(customerId: number): Promise<string | null> {
+    const device = await this.db.queryOne(
+      `SELECT uuid FROM customer_devices WHERE customer_id = $1 AND status = 'active'`,
+      [customerId]
+    );
+    return device?.uuid || null;
+  }
+
+  /**
+   * Confirm wallet OTP (was POST api/v1/onboarding/personal/confirm)
+   */
+  @Post('api/v2/auth/wallet-verifications')
   @HttpCode(HttpStatus.ACCEPTED)
   async confirmPersonalOnboarding(@Body() dto: PersonalOnboardingConfirmDto) {
     // --- 1. Look up customer and validate ---
@@ -180,44 +224,9 @@ export class OnboardingController {
   }
 
   /**
-   * Log SasaPay callback payload to separate file
+   * SasaPay webhook callback (was POST api/v1/onboarding/callback/sasapay)
    */
-  private logSasaPayCallback(payload: Record<string, unknown>, req: Request): void {
-    try {
-      const logsDir = path.join(process.cwd(), 'logs');
-      if (!fs.existsSync(logsDir)) {
-        fs.mkdirSync(logsDir, { recursive: true });
-      }
-
-      const logFilePath = path.join(logsDir, 'sasapay-callbacks.log');
-      const timestamp = new Date().toISOString();
-      const sourceIp = this.normalizeIp(req.socket.remoteAddress || req.ip);
-      const headers = {
-        'x-sasapay-signature': req.header('X-SasaPay-Signature'),
-        'content-type': req.header('Content-Type'),
-        'user-agent': req.header('User-Agent'),
-      };
-
-      const logEntry = {
-        timestamp,
-        sourceIp,
-        headers,
-        payload,
-      };
-
-      const logLine = JSON.stringify(logEntry, null, 2) + '\n' + '-'.repeat(80) + '\n';
-      fs.appendFileSync(logFilePath, logLine, 'utf8');
-
-      this.logger.log(`[SASAPAY CALLBACK] Full payload logged to ${logFilePath}`);
-    } catch (error) {
-      this.logger.error(`[SASAPAY CALLBACK] Failed to write callback log: ${error.message}`);
-    }
-  }
-
-  /**
-   * SasaPay WaaS Webhook Callback
-   */
-  @Post('callback/sasapay')
+  @Post('webhooks/v1/sasapay')
   @HttpCode(HttpStatus.OK)
   async handleSasaPayCallback(
     @Body() dto: SasaPayOnboardingCallbackDto,
@@ -272,6 +281,52 @@ export class OnboardingController {
       processed: true,
       message: 'Callback received and processed',
     };
+  }
+
+  private maskPhoneNumber(phoneNumber: string): string {
+    if (!phoneNumber || phoneNumber.length <= 6) return 'your registered phone number';
+
+    return `${phoneNumber.slice(0, 3)}${'*'.repeat(phoneNumber.length - 6)}${phoneNumber.slice(-3)}`;
+  }
+
+  private async writeAuditLog(customerId: number, eventType: string, details: Record<string, unknown>): Promise<void> {
+    await this.db.query(
+      `INSERT INTO customer_activity_logs (customer_id, event_type, actor_type, actor_id, details, created_at)
+       VALUES ($1, $2, 'SYSTEM', 'ONBOARDING_CONTROLLER', $3::jsonb, NOW())`,
+      [customerId, eventType, details],
+    );
+  }
+
+  private logSasaPayCallback(payload: Record<string, unknown>, req: Request): void {
+    try {
+      const logsDir = path.join(process.cwd(), 'logs');
+      if (!fs.existsSync(logsDir)) {
+        fs.mkdirSync(logsDir, { recursive: true });
+      }
+
+      const logFilePath = path.join(logsDir, 'sasapay-callbacks.log');
+      const timestamp = new Date().toISOString();
+      const sourceIp = this.normalizeIp(req.socket.remoteAddress || req.ip);
+      const headers = {
+        'x-sasapay-signature': req.header('X-SasaPay-Signature'),
+        'content-type': req.header('Content-Type'),
+        'user-agent': req.header('User-Agent'),
+      };
+
+      const logEntry = {
+        timestamp,
+        sourceIp,
+        headers,
+        payload,
+      };
+
+      const logLine = JSON.stringify(logEntry, null, 2) + '\n' + '-'.repeat(80) + '\n';
+      fs.appendFileSync(logFilePath, logLine, 'utf8');
+
+      this.logger.log(`[SASAPAY CALLBACK] Full payload logged to ${logFilePath}`);
+    } catch (error) {
+      this.logger.error(`[SASAPAY CALLBACK] Failed to write callback log: ${error.message}`);
+    }
   }
 
   private verifySasaPayCallback(req: Request, dto: SasaPayOnboardingCallbackDto): void {
