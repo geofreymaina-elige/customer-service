@@ -7,7 +7,7 @@ export interface NotificationPayload {
   channels: ('sms' | 'push' | 'websocket' | 'email')[];
   title: string;
   body: string;
-  priority: 'high' | 'medium' | 'low';
+  priority: 'urgent' | 'high' | 'medium' | 'low';
   correlationId: string;
   sourceService: string;
   type: string;
@@ -103,7 +103,7 @@ export class KafkaNotificationService {
       channels: ['sms'],
       title: titles[purpose],
       body: messages[purpose],
-      priority: 'high',
+      priority: 'urgent',
       correlationId,
       sourceService: 'customer_service',
       type: 'otp',
