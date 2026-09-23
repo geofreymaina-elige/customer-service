@@ -32,7 +32,13 @@
                             ],
                             "request": {
                                 "method": "GET",
-                                "header": [],
+                                "header": [
+                                    {
+                                        "key": "X-Astpp-Token",
+                                        "value": "{{astppToken}}",
+                                        "description": "Required ASTPP encrypted token for this account"
+                                    }
+                                ],
                                 "url": {
                                     "raw": "{{baseUrl}}/api/v2/wallets/onboarding-status?astppId={{astppId}}",
                                     "host": [
@@ -48,26 +54,6 @@
                                         {
                                             "key": "astppId",
                                             "value": "{{astppId}}"
-                                        }
-                                    ]
-                                },
-                                "auth": {
-                                    "type": "apikey",
-                                    "apikey": [
-                                        {
-                                            "key": "key",
-                                            "value": "X-Astpp-Token",
-                                            "type": "string"
-                                        },
-                                        {
-                                            "key": "value",
-                                            "value": "{{astppToken}}",
-                                            "type": "string"
-                                        },
-                                        {
-                                            "key": "in",
-                                            "value": "header",
-                                            "type": "string"
                                         }
                                     ]
                                 },
@@ -895,6 +881,11 @@
                                         "key": "Idempotency-Key",
                                         "value": "{{$guid}}",
                                         "type": "text"
+                                    },
+                                    {
+                                        "key": "X-Astpp-Token",
+                                        "value": "{{astppToken}}",
+                                        "description": "Required ASTPP encrypted token for this account"
                                     }
                                 ],
                                 "url": {
@@ -907,26 +898,6 @@
                                         "v2",
                                         "auth",
                                         "sessions"
-                                    ]
-                                },
-                                "auth": {
-                                    "type": "apikey",
-                                    "apikey": [
-                                        {
-                                            "key": "key",
-                                            "value": "X-Astpp-Token",
-                                            "type": "string"
-                                        },
-                                        {
-                                            "key": "value",
-                                            "value": "{{astppToken}}",
-                                            "type": "string"
-                                        },
-                                        {
-                                            "key": "in",
-                                            "value": "header",
-                                            "type": "string"
-                                        }
                                     ]
                                 },
                                 "description": "The one sign-in endpoint. What it needs depends on the customer and the phone:\n\n| Situation | Send | Result |\n|---|---|---|\n| Brand-new device -- no device/wallet registered yet (this request) | `astpp_id` + `device` | `201` tokens, plus `walletStatus` and `pinSet` so the app knows what to do next |\n| Phone already verified for this customer | `pin` + `device` | `201` tokens |\n| New phone, reinstall or cleared data | `pin` + `idNumber` + `device` | `202` OTP challenge, then `POST /api/v2/auth/sessions/{sessionId}/otp-verifications` |\n\nThis branch is what used to be two separate calls (`POST /wallets` to register the device and create the wallet, then `POST /auth/sessions` to sign in). They are merged here because the device/customer has no idea a wallet is being created for them behind the scenes -- it's purely a backend/PSP (SasaPay) concern, so it belongs with sign-in, not with a `wallets` resource the app doesn't otherwise touch until the wallet exists.\n\n`astpp_id` **is** required on this branch specifically (it wasn't on the old first-sign-in call) because nothing has been validated for this device yet. On every other branch it's still not needed, since the device was already registered here.\n\nWhat happens on success: the device row is created, a background job sends the customer's profile to SasaPay to create the wallet, and the customer is signed in immediately -- `201` with an access token, refresh token and `sessionId`, **even though the wallet itself is still `pending_otp`**. The app can go straight to the wallet home screen shell; `walletStatus` and `pinSet` in the response tell it what to overlay:\n- `walletStatus: \"pending_otp\"` -> prompt for the SMS code SasaPay just sent, then call `POST /api/v2/auth/wallet-verifications?astppId={astppId}`.\n- `pinSet: false` -> the customer can use the app, but balance and transaction endpoints stay locked until `POST /customers/me/pin` is called, because those require a PIN-scoped (transaction) token, not just `app:access`.\n\nIdempotent: send the same `Idempotency-Key` on a retry after a timeout so the device/wallet aren't created twice; a retry with a device that's already registered still returns `201` with a fresh session.\n\n**If the SMS code expires (or all attempts are used) before it's confirmed:** the wallet is still not created on SasaPay's side, so the customer isn't fully onboarded. Call this same endpoint again with the same `Idempotency-Key` pattern to start a new PSP job and get a new code. *Open question, not yet confirmed with backend: whether `device` needs to be resent on that retry, or whether `astpp_id` alone is enough once the device row already exists -- flagging this rather than guessing.*\n\nA `202` (other branches) creates a session in a *pending* state. Its id is the id you later see in `/customers/me/sessions`.\n\nIf `device_identifier` already belongs to a different device on this account (model/OS changed without going through a proper re-registration), the answer is `409 DEVICE_MISMATCH` with an `errors[]` entry naming the mismatched field and both the `expected` (currently registered) and `actual` (submitted) values -- e.g. `device.device_model`.",
@@ -1527,6 +1498,11 @@
                                         "key": "Content-Type",
                                         "value": "application/json",
                                         "type": "text"
+                                    },
+                                    {
+                                        "key": "X-Astpp-Token",
+                                        "value": "{{astppToken}}",
+                                        "description": "Required ASTPP encrypted token for this account"
                                     }
                                 ],
                                 "url": {
@@ -1544,26 +1520,6 @@
                                         {
                                             "key": "astppId",
                                             "value": "{{astppId}}"
-                                        }
-                                    ]
-                                },
-                                "auth": {
-                                    "type": "apikey",
-                                    "apikey": [
-                                        {
-                                            "key": "key",
-                                            "value": "X-Astpp-Token",
-                                            "type": "string"
-                                        },
-                                        {
-                                            "key": "value",
-                                            "value": "{{astppToken}}",
-                                            "type": "string"
-                                        },
-                                        {
-                                            "key": "in",
-                                            "value": "header",
-                                            "type": "string"
                                         }
                                     ]
                                 },
@@ -2235,6 +2191,11 @@
                                         "key": "Content-Type",
                                         "value": "application/json",
                                         "type": "text"
+                                    },
+                                    {
+                                        "key": "X-Astpp-Token",
+                                        "value": "{{astppToken}}",
+                                        "description": "Required ASTPP encrypted token for this account"
                                     }
                                 ],
                                 "url": {
@@ -2247,26 +2208,6 @@
                                         "v2",
                                         "auth",
                                         "sessions"
-                                    ]
-                                },
-                                "auth": {
-                                    "type": "apikey",
-                                    "apikey": [
-                                        {
-                                            "key": "key",
-                                            "value": "X-Astpp-Token",
-                                            "type": "string"
-                                        },
-                                        {
-                                            "key": "value",
-                                            "value": "{{astppToken}}",
-                                            "type": "string"
-                                        },
-                                        {
-                                            "key": "in",
-                                            "value": "header",
-                                            "type": "string"
-                                        }
                                     ]
                                 },
                                 "description": "The one sign-in endpoint. What it needs depends on the customer and the phone:\n\n| Situation | Send | Result |\n|---|---|---|\n| Customer has no PIN yet (first install) | `device` only | `201` tokens |\n| Phone already verified for this customer | `pin` + `device` | `201` tokens |\n| New phone, reinstall or cleared data | `pin` + `idNumber` + `device` | `202` OTP challenge, then `POST /api/v2/auth/sessions/{sessionId}/otp-verifications` |\n\nThe server decides whether a phone is \"verified\" (a verified session exists for the same `device_identifier`\nin the last 90 days). If the phone is new and `idNumber` is missing the answer is `422 ID_NUMBER_REQUIRED`,\nreturned **before** the PIN is checked, so it never reveals whether the PIN was right. `astpp_id` is not\nneeded here - it was already validated once, when the device was registered.\n\nA `202` creates a session in a *pending* state. Its id is the id you later see in `/customers/me/sessions`.",
@@ -2819,6 +2760,11 @@
                                         "key": "Content-Type",
                                         "value": "application/json",
                                         "type": "text"
+                                    },
+                                    {
+                                        "key": "X-Astpp-Token",
+                                        "value": "{{astppToken}}",
+                                        "description": "Required ASTPP encrypted token for this account"
                                     }
                                 ],
                                 "url": {
@@ -2831,26 +2777,6 @@
                                         "v2",
                                         "auth",
                                         "sessions"
-                                    ]
-                                },
-                                "auth": {
-                                    "type": "apikey",
-                                    "apikey": [
-                                        {
-                                            "key": "key",
-                                            "value": "X-Astpp-Token",
-                                            "type": "string"
-                                        },
-                                        {
-                                            "key": "value",
-                                            "value": "{{astppToken}}",
-                                            "type": "string"
-                                        },
-                                        {
-                                            "key": "in",
-                                            "value": "header",
-                                            "type": "string"
-                                        }
                                     ]
                                 },
                                 "description": "The one sign-in endpoint. What it needs depends on the customer and the phone:\n\n| Situation | Send | Result |\n|---|---|---|\n| Customer has no PIN yet (first install) | `device` only | `201` tokens |\n| Phone already verified for this customer | `pin` + `device` | `201` tokens |\n| New phone, reinstall or cleared data | `pin` + `idNumber` + `device` | `202` OTP challenge, then `POST /api/v2/auth/sessions/{sessionId}/otp-verifications` |\n\nThe server decides whether a phone is \"verified\" (a verified session exists for the same `device_identifier`\nin the last 90 days). If the phone is new and `idNumber` is missing the answer is `422 ID_NUMBER_REQUIRED`,\nreturned **before** the PIN is checked, so it never reveals whether the PIN was right. `astpp_id` is not\nneeded here - it was already validated once, when the device was registered.\n\nA `202` creates a session in a *pending* state. Its id is the id you later see in `/customers/me/sessions`.",
@@ -3399,6 +3325,11 @@
                                         "key": "Content-Type",
                                         "value": "application/json",
                                         "type": "text"
+                                    },
+                                    {
+                                        "key": "X-Astpp-Token",
+                                        "value": "{{astppToken}}",
+                                        "description": "Required ASTPP encrypted token for this account"
                                     }
                                 ],
                                 "url": {
@@ -3416,26 +3347,6 @@
                                         {
                                             "key": "sessionId",
                                             "value": "{{pendingSessionId}}"
-                                        }
-                                    ]
-                                },
-                                "auth": {
-                                    "type": "apikey",
-                                    "apikey": [
-                                        {
-                                            "key": "key",
-                                            "value": "X-Astpp-Token",
-                                            "type": "string"
-                                        },
-                                        {
-                                            "key": "value",
-                                            "value": "{{astppToken}}",
-                                            "type": "string"
-                                        },
-                                        {
-                                            "key": "in",
-                                            "value": "header",
-                                            "type": "string"
                                         }
                                     ]
                                 },
@@ -6324,6 +6235,11 @@
                                         "key": "Content-Type",
                                         "value": "application/json",
                                         "type": "text"
+                                    },
+                                    {
+                                        "key": "X-Astpp-Token",
+                                        "value": "{{astppToken}}",
+                                        "description": "Required ASTPP encrypted token for this account"
                                     }
                                 ],
                                 "url": {
@@ -6335,26 +6251,6 @@
                                         "api",
                                         "v2",
                                         "pin-resets"
-                                    ]
-                                },
-                                "auth": {
-                                    "type": "apikey",
-                                    "apikey": [
-                                        {
-                                            "key": "key",
-                                            "value": "X-Astpp-Token",
-                                            "type": "string"
-                                        },
-                                        {
-                                            "key": "value",
-                                            "value": "{{astppToken}}",
-                                            "type": "string"
-                                        },
-                                        {
-                                            "key": "in",
-                                            "value": "header",
-                                            "type": "string"
-                                        }
                                     ]
                                 },
                                 "description": "For a customer who forgot the PIN (no session needed). Always answers `202`, whether or not the ID number\nmatched, so it cannot be used to discover who is a customer. If it matched, a code is sent by SMS.",
@@ -6661,6 +6557,11 @@
                                         "key": "Content-Type",
                                         "value": "application/json",
                                         "type": "text"
+                                    },
+                                    {
+                                        "key": "X-Astpp-Token",
+                                        "value": "{{astppToken}}",
+                                        "description": "Required ASTPP encrypted token for this account"
                                     }
                                 ],
                                 "url": {
@@ -6678,26 +6579,6 @@
                                         {
                                             "key": "resetId",
                                             "value": "{{resetId}}"
-                                        }
-                                    ]
-                                },
-                                "auth": {
-                                    "type": "apikey",
-                                    "apikey": [
-                                        {
-                                            "key": "key",
-                                            "value": "X-Astpp-Token",
-                                            "type": "string"
-                                        },
-                                        {
-                                            "key": "value",
-                                            "value": "{{astppToken}}",
-                                            "type": "string"
-                                        },
-                                        {
-                                            "key": "in",
-                                            "value": "header",
-                                            "type": "string"
                                         }
                                     ]
                                 },
@@ -7255,6 +7136,11 @@
                                         "key": "Content-Type",
                                         "value": "application/json",
                                         "type": "text"
+                                    },
+                                    {
+                                        "key": "X-Astpp-Token",
+                                        "value": "{{astppToken}}",
+                                        "description": "Required ASTPP encrypted token for this account"
                                     }
                                 ],
                                 "url": {
@@ -7272,26 +7158,6 @@
                                         {
                                             "key": "resetId",
                                             "value": "{{resetId}}"
-                                        }
-                                    ]
-                                },
-                                "auth": {
-                                    "type": "apikey",
-                                    "apikey": [
-                                        {
-                                            "key": "key",
-                                            "value": "X-Astpp-Token",
-                                            "type": "string"
-                                        },
-                                        {
-                                            "key": "value",
-                                            "value": "{{astppToken}}",
-                                            "type": "string"
-                                        },
-                                        {
-                                            "key": "in",
-                                            "value": "header",
-                                            "type": "string"
                                         }
                                     ]
                                 },
