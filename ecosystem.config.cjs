@@ -3,8 +3,8 @@ module.exports = {
     {
       name: 'customer-management-service',
       script: 'dist/src/main.js',
-      instances: 'max', // Horizontal scaling across all CPU cores
-      exec_mode: 'cluster',
+      instances: 1,
+      exec_mode: 'fork', // Single instance mode
       watch: false,
       max_memory_restart: '1G',
       env: {
