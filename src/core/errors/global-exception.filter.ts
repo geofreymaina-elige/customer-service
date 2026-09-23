@@ -5,7 +5,7 @@ import {
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
-import { Response } from 'express';
+import { Response, Request } from 'express';
 import { MessageService } from '../messages/message.service';
 
 @Catch()
@@ -15,11 +15,27 @@ export class GlobalExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
+    const request = ctx.getRequest<Request>();
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
-    let message = this.messages.get('common.internalError');
+    let message = 'An unexpected server error occurred. Please try again later.';
     let code = 'INTERNAL_SERVER_ERROR';
     let errors: string[] = [];
+
+    // Extract request details for logging
+    const requestDetails = {
+      method: request.method,
+      path: request.path,
+      url: request.url,
+      query: request.query,
+      headers: {
+        'x-astpp-token': request.headers['x-astpp-token'] ? '[REDACTED]' : undefined,
+        'content-type': request.headers['content-type'],
+        'user-agent': request.headers['user-agent']
+      },
+      body: this.sanitizeBody(request.body),
+      astppId: this.extractAstppId(request)
+    };
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();
@@ -30,11 +46,19 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       } else if (typeof res === 'object' && res !== null) {
         // Handle validation errors from class-validator
         if (Array.isArray(res.message)) {
-          message = this.messages.get('common.validationError');
+          try {
+            message = this.messages.get('common.validationError');
+          } catch (e) {
+            message = 'Validation failed on the submitted data.';
+          }
           errors = res.errors || res.message;
           code = 'VALIDATION_ERROR';
         } else if (res.code === 'VALIDATION_ERROR') {
-          message = this.messages.get('common.validationError');
+          try {
+            message = this.messages.get('common.validationError');
+          } catch (e) {
+            message = 'Validation failed on the submitted data.';
+          }
           errors = res.errors || [];
           code = 'VALIDATION_ERROR';
         } else {
@@ -59,6 +83,21 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       message = exception.message || message;
     }
 
+    // Log error details for debugging (after processing)
+    console.error('[ERROR TRACE]', {
+      timestamp: new Date().toISOString(),
+      request: requestDetails,
+      exception: exception instanceof Error ? {
+        name: exception.name,
+        message: exception.message,
+        stack: exception.stack
+      } : exception,
+      httpStatus: status,
+      code,
+      errors,
+      userMessage: message
+    });
+
     response.status(status).json({
       success: false,
       code,
@@ -66,5 +105,23 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       errors: errors.length > 0 ? errors : undefined,
       timestamp: new Date().toISOString(),
     });
+  }
+
+  private sanitizeBody(body: any): any {
+    if (!body) return undefined;
+    const sanitized = { ...body };
+    // Remove sensitive fields from body
+    if (sanitized.pin) sanitized.pin = '[REDACTED]';
+    if (sanitized.password) sanitized.password = '[REDACTED]';
+    if (sanitized.otp) sanitized.otp = '[REDACTED]';
+    return sanitized;
+  }
+
+  private extractAstppId(request: Request): string | undefined {
+    const body = request.body as any;
+    const query = request.query as any;
+    const params = request.params as any;
+    
+    return params.astppId || query.astppId || body.astppId || body.astpp_id;
   }
 }

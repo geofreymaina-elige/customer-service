@@ -3,11 +3,11 @@ import { IsNotEmpty, IsString, Matches } from 'class-validator';
 export class InitiatePinResetDto {
   @IsNotEmpty()
   @IsString()
-  astppId: string;
+  astpp_id: string;
 
   @IsNotEmpty()
   @IsString()
-  idNumber: string;
+  id_number: string;
 }
 
 export class VerifyResetOtpDto {

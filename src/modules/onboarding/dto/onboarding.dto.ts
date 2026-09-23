@@ -81,6 +81,12 @@ export class PersonalOnboardingConfirmDto {
   otp: string;
 }
 
+export class ConfirmWalletOtpDto {
+  @IsNotEmpty()
+  @IsString()
+  otp: string;
+}
+
 export class SasaPayOnboardingCallbackDto {
   @IsOptional()
   @IsString()

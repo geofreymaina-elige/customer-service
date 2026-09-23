@@ -48,8 +48,8 @@ export function validateAndDecryptToken(
   const cleanToken = token?.trim();
   if (!cleanToken) {
     throw new BadRequestException({
-      status: false,
-      error: 'Invalid key',
+      message: 'Authentication token is required',
+      errors: ['Missing X-Astpp-Token header']
     });
   }
 
@@ -96,8 +96,8 @@ export function validateAndDecryptToken(
       `[AstppTokenUtil] Validation failed. Expected id: '${targetIdStr}', decrypted: '${tokenId ?? 'FAILED'}'`,
     );
     throw new BadRequestException({
-      status: false,
-      error: 'Invalid key',
+      message: 'Authentication failed',
+      errors: ['Invalid ASTPP token or account ID mismatch']
     });
   }
 

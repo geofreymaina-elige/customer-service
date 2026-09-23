@@ -1,9 +1,32 @@
-import { IsNotEmpty, IsString, Matches, IsOptional } from 'class-validator';
+import { IsNotEmpty, IsString, Matches, IsOptional, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
+
+class DeviceDto {
+  @IsNotEmpty()
+  @IsString()
+  device_identifier: string;
+
+  @IsNotEmpty()
+  @IsString()
+  device_model: string;
+
+  @IsNotEmpty()
+  @IsString()
+  mobile_type: string;
+
+  @IsOptional()
+  @IsString()
+  device_os?: string;
+
+  @IsOptional()
+  @IsString()
+  app_version?: string;
+}
 
 export class SetPinDto {
   @IsNotEmpty()
   @IsString()
-  astppId: string; // Customer ASTPP ID
+  astpp_id: string; // Customer ASTPP ID
 
   @IsNotEmpty()
   @IsString()
@@ -19,7 +42,7 @@ export class SetPinDto {
 export class VerifyPinDto {
   @IsNotEmpty()
   @IsString()
-  astppId: string;
+  astpp_id: string;
 
   @IsNotEmpty()
   @IsString()
@@ -28,15 +51,15 @@ export class VerifyPinDto {
 
   @IsOptional()
   @IsString()
-  deviceIdentifier?: string;
+  device_identifier?: string;
 
   @IsOptional()
   @IsString()
-  deviceModel?: string;
+  device_model?: string;
 
   @IsOptional()
   @IsString()
-  mobileType?: string;
+  mobile_type?: string;
 }
 
 export class ChangePinDto {
@@ -54,4 +77,16 @@ export class ChangePinDto {
   @IsString()
   @Matches(/^\d{4}$/, { message: 'Confirm new PIN must be exactly 4 digits' })
   confirmNewPin: string;
+}
+
+export class ExchangePinForTransactionTokenDto {
+  @IsNotEmpty()
+  @IsString()
+  @Matches(/^\d{4}$/, { message: 'PIN must be exactly 4 digits' })
+  pin: string;
+
+  @IsNotEmpty()
+  @ValidateNested()
+  @Type(() => DeviceDto)
+  device: DeviceDto;
 }

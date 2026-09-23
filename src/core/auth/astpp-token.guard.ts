@@ -1,9 +1,11 @@
 import {
+  BadRequestException,
   CanActivate,
   ExecutionContext,
   Injectable,
 } from '@nestjs/common';
 import { Request } from 'express';
+import { MessageService } from '../messages/message.service';
 import { validateAndDecryptToken } from './astpp-token.util';
 
 /**
@@ -20,6 +22,8 @@ import { validateAndDecryptToken } from './astpp-token.util';
  */
 @Injectable()
 export class AstppTokenGuard implements CanActivate {
+  constructor(private readonly messages: MessageService) {}
+
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<Request>();
 
@@ -32,7 +36,14 @@ export class AstppTokenGuard implements CanActivate {
     const token = request.headers['x-astpp-token'] as string | undefined;
 
     // validateAndDecryptToken throws BadRequestException on mismatch
-    validateAndDecryptToken(astppId ?? '', token);
+    try {
+      validateAndDecryptToken(astppId ?? '', token);
+    } catch (error) {
+      throw new BadRequestException({
+        message: this.messages.get('auth.invalidCredentials'),
+        errors: ['Invalid or missing ASTPP token']
+      });
+    }
 
     return true;
   }

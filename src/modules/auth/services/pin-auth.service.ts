@@ -26,16 +26,24 @@ export class PinAuthService {
   /**
    * Set initial 4-digit PIN for a customer
    */
-  async setPin(dto: SetPinDto): Promise<{ success: boolean; message: string }> {
+  async setPin(dto: SetPinDto, customerId?: number): Promise<{ success: boolean; message: string }> {
     if (dto.pin !== dto.confirmPin) {
       throw new BadRequestException(this.messages.get('auth.pin.pinsMustMatch'));
     }
 
-    // Find customer by ASTPP ID
-    const customer = await this.db.queryOne(
-      `SELECT id, uuid, deleted_at, status FROM customers WHERE astpp_id::text = $1`,
-      [dto.astppId]
-    );
+    // Find customer by ASTPP ID or authenticated user ID
+    let customer;
+    if (customerId) {
+      customer = await this.db.queryOne(
+        `SELECT id, uuid, deleted_at, status FROM customers WHERE id = $1`,
+        [customerId]
+      );
+    } else {
+      customer = await this.db.queryOne(
+        `SELECT id, uuid, deleted_at, status FROM customers WHERE astpp_id::text = $1`,
+        [dto.astpp_id]
+      );
+    }
 
     if (!customer) {
       throw new NotFoundException(this.messages.get('common.notFound'));
@@ -161,7 +169,7 @@ export class PinAuthService {
       `SELECT id, uuid, voip_number, first_name, last_name, email, phone_number, status, timezone, deleted_at
        FROM customers
        WHERE astpp_id::text = $1`,
-      [dto.astppId]
+      [dto.astpp_id]
     );
 
     if (!customer) {
@@ -181,7 +189,7 @@ export class PinAuthService {
     );
 
     if (!pinRecord) {
-      throw new BadRequestException(this.messages.get('auth.pin.required'));
+      throw new BadRequestException(this.messages.get('auth.pin.notSet'));
     }
 
     // 1. Check Permanent Lockout
@@ -248,11 +256,11 @@ export class PinAuthService {
 
     await this.recordAttempt(customer.id, true, null, ip, userAgent);
 
-    if (!dto.deviceIdentifier || !dto.deviceModel || !dto.mobileType) {
+    if (!dto.device_identifier || !dto.device_model || !dto.mobile_type) {
       throw new BadRequestException('Device metadata is required to issue a transaction token.');
     }
 
-    const deviceHash = this.jwtService.hashDevice(dto.deviceIdentifier, dto.deviceModel, dto.mobileType);
+    const deviceHash = this.jwtService.hashDevice(dto.device_identifier, dto.device_model, dto.mobile_type);
     const activeDevice = await this.db.queryOne(
       `SELECT id FROM customer_devices WHERE customer_id = $1 AND device_uuid_hash = $2 AND status = 'active'`,
       [customer.id, deviceHash],

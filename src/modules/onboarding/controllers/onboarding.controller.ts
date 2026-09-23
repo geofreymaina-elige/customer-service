@@ -13,9 +13,10 @@ import {
   OnboardUserDeviceDto,
   PersonalOnboardingDto,
   PersonalOnboardingConfirmDto,
+  ConfirmWalletOtpDto,
   SasaPayOnboardingCallbackDto,
 } from '../dto/onboarding.dto';
-import { VerifyPinDto } from '../../auth/dto/pin-auth.dto';
+import { VerifyPinDto, ExchangePinForTransactionTokenDto } from '../../auth/dto/pin-auth.dto';
 import { InitiateDeviceLogoutDto, VerifyDeviceLogoutDto } from '../../devices/dto/device.dto';
 import { MessageService } from '../../../core/messages/message.service';
 import { AstppTokenGuard } from '../../../core/auth/astpp-token.guard';
@@ -64,16 +65,40 @@ export class OnboardingController {
   }
 
   /**
-   * Sign in returning phone (PIN only) - moved from PinAuthController
+   * Exchange PIN for a transaction token (with registered phone)
+   * Uses Bearer token authentication from an existing session
    */
-  @Post('api/v2/auth/sessions/pin')
-  @UseGuards(PinAstppTokenGuard)
+  @Post('api/v2/auth/transaction-tokens')
+  @UseGuards(AuthGuard)
   @HttpCode(HttpStatus.OK)
-  async verifyPin(@Body() dto: VerifyPinDto, @Req() req: Request) {
+  async exchangePinForTransactionToken(
+    @CurrentUser() user: AuthenticatedUser, 
+    @Body() dto: ExchangePinForTransactionTokenDto, 
+    @Req() req: Request
+  ) {
     const ip = (req.headers['x-forwarded-for'] as string)?.split(',').shift()?.trim() || req.ip || '127.0.0.1';
     const userAgent = req.headers['user-agent'] || '';
 
-    const result = await this.pinAuthService.verifyPin(dto, ip, userAgent);
+    // Fetch the customer's ASTPP ID
+    const customer = await this.db.queryOne<{ astpp_id: string }>(
+      `SELECT astpp_id FROM customers WHERE id = $1`,
+      [user.id]
+    );
+
+    if (!customer?.astpp_id) {
+      throw new UnauthorizedException('Customer ASTPP ID not found.');
+    }
+
+    // Create a VerifyPinDto with the user's ASTPP ID
+    const verifyDto: VerifyPinDto = {
+      astpp_id: String(customer.astpp_id),
+      pin: dto.pin,
+      device_identifier: dto.device.device_identifier,
+      device_model: dto.device.device_model,
+      mobile_type: dto.device.mobile_type,
+    };
+
+    const result = await this.pinAuthService.verifyPin(verifyDto, ip, userAgent);
 
     return {
       success: true,
@@ -113,52 +138,57 @@ export class OnboardingController {
   }
 
   /**
-   * Sign out current session
+   * Sign out all devices (revokes all active sessions for this customer)
    */
   @Delete('api/v2/auth/sessions/current')
   @UseGuards(AuthGuard)
-  async revokeCurrentSession(@CurrentUser() user: AuthenticatedUser) {
-    // Get current device UUID from database
-    const currentDeviceUuid = await this.getCurrentDeviceUuid(user.id);
-    
-    if (currentDeviceUuid) {
-      await this.deviceGatekeeper.revokeDevice(user.id, currentDeviceUuid);
-    }
+  async revokeAllSessions(@CurrentUser() user: AuthenticatedUser) {
+    // Revoke ALL active devices for this customer
+    const result = await this.db.query(
+      `UPDATE customer_devices 
+       SET status = 'revoked', revoked_at = NOW(), updated_at = NOW() 
+       WHERE customer_id = $1 AND status = 'active'
+       RETURNING id`,
+      [user.id]
+    );
+
+    const revokedCount = result.rowCount || 0;
+
+    // Log the revocation
+    await this.db.query(
+      `INSERT INTO customer_activity_logs (customer_id, event_type, actor_type, actor_id, details)
+       VALUES ($1, 'ALL_DEVICES_REVOKED', 'CUSTOMER', $2, $3::jsonb)`,
+      [user.id, String(user.id), JSON.stringify({ revokedCount, reason: 'Manual sign out' })]
+    );
 
     return {
       success: true,
-      message: 'Current session revoked successfully',
+      message: `All sessions revoked successfully (${revokedCount} device${revokedCount !== 1 ? 's' : ''})`,
     };
-  }
-
-  private async getCurrentDeviceUuid(customerId: number): Promise<string | null> {
-    const device = await this.db.queryOne(
-      `SELECT uuid FROM customer_devices WHERE customer_id = $1 AND status = 'active'`,
-      [customerId]
-    );
-    return device?.uuid || null;
   }
 
   /**
    * Confirm wallet OTP (was POST api/v1/onboarding/personal/confirm)
+   * Now uses Bearer token authentication
    */
   @Post('api/v2/auth/wallet-verifications')
+  @UseGuards(AuthGuard)
   @HttpCode(HttpStatus.ACCEPTED)
-  async confirmPersonalOnboarding(@Body() dto: PersonalOnboardingConfirmDto) {
+  async confirmPersonalOnboarding(@CurrentUser() user: AuthenticatedUser, @Body() dto: ConfirmWalletOtpDto) {
     // --- 1. Look up customer and validate ---
     const appRow = await this.db.queryOne(
       `SELECT ca.id AS pg_app_id, ca.sasapay_request_id, ca.sasapay_account_number, ca.astpp_id, c.id AS customer_id
        FROM customer_applications ca
        JOIN customers c ON c.id = ca.customer_id
-       WHERE c.astpp_id = $1
+       WHERE c.id = $1
        LIMIT 1`,
-      [dto.astppId],
+      [user.id],
     );
 
     if (!appRow?.sasapay_request_id) {
       if (appRow?.customer_id) {
         await this.writeAuditLog(appRow.customer_id, 'SASAPAY_PERSONAL_ONBOARDING_MISSING_REQUEST', {
-          astppId: dto.astppId,
+          customerId: user.id,
           reason: 'No pending onboarding found for this customer. Please initiate onboarding first.',
         });
       }
@@ -179,7 +209,7 @@ export class OnboardingController {
       );
 
       await this.writeAuditLog(customerId, 'SASAPAY_OTP_DUPLICATE_ATTEMPT', {
-        astppId: dto.astppId,
+        customerId: user.id,
         existingAccountNumber: appRow.sasapay_account_number,
         reason: 'OTP confirmation already processed for this customer.',
       });
@@ -204,7 +234,7 @@ export class OnboardingController {
     });
 
     await this.writeAuditLog(customerId, 'SASAPAY_OTP_JOB_QUEUED', {
-      astppId: dto.astppId,
+      customerId: user.id,
       requestId,
       jobUuid,
       jobType: 'sasapay_otp_confirmation',

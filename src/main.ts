@@ -26,8 +26,10 @@ async function bootstrap() {
         const errorMessages = errors.map(error => 
           Object.values(error.constraints || {}).join(', ')
         );
-        const error = new HttpException(errorMessages, HttpStatus.BAD_REQUEST);
-        (error as any).errors = errorMessages;
+        const error = new HttpException({
+          message: errorMessages,
+          errors: errorMessages
+        }, HttpStatus.BAD_REQUEST);
         return error;
       }
     }),

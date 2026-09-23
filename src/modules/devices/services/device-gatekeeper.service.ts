@@ -17,8 +17,8 @@ export class DeviceGatekeeperService {
 
   /**
    * Register or verify device for a customer, strictly enforcing single active device rule.
-   * If customer has PIN set and a different device is active -> throws 409 Conflict.
-   * If customer has no PIN set -> marks old device inactive and registers new device.
+   * ALWAYS revokes all other devices when a new device logs in successfully.
+   * Only one device can be active at a time per customer.
    */
   async registerOrVerifyDevice(
     customerId: number,
@@ -34,13 +34,6 @@ export class DeviceGatekeeperService {
       deviceData.deviceModel,
       deviceData.mobileType
     );
-
-    // Check if customer has PIN set
-    const pinRecord = await this.db.queryOne(
-      `SELECT id FROM customer_pins WHERE customer_id = $1`,
-      [customerId]
-    );
-    const hasPinSet = !!pinRecord;
 
     // Check for currently active device
     const activeDevice = await this.db.queryOne(
@@ -73,15 +66,19 @@ export class DeviceGatekeeperService {
         };
       }
 
-      // Case 2: Different device AND PIN is set -> 409 Conflict (Must do explicit device logout)
-      if (hasPinSet) {
-        throw new DeviceConflictException(this.messages.get('devices.sessionConflict'));
-      }
-
-      // Case 3: Different device AND PIN not set -> Invalidate old device and activate new device
+      // Case 2: Different device -> Automatically revoke all other devices
       await this.db.query(
-        `UPDATE customer_devices SET status = 'inactive', updated_at = NOW() WHERE customer_id = $1 AND status = 'active'`,
+        `UPDATE customer_devices 
+         SET status = 'revoked', revoked_at = NOW(), updated_at = NOW() 
+         WHERE customer_id = $1 AND status = 'active'`,
         [customerId]
+      );
+
+      // Log the automatic revocation
+      await this.db.query(
+        `INSERT INTO customer_activity_logs (customer_id, event_type, actor_type, actor_id, details)
+         VALUES ($1, 'DEVICE_AUTO_REVOKED', 'SYSTEM', 'DEVICE_GATEKEEPER', $2::jsonb)`,
+        [customerId, JSON.stringify({ reason: 'New device login', previousDeviceHash: activeDevice.device_uuid_hash })]
       );
     }
 

@@ -7,11 +7,15 @@ import {
 import * as crypto from 'node:crypto';
 import { Request } from 'express';
 import { DatabaseService } from '../database/database.service';
+import { MessageService } from '../messages/message.service';
 import { validateAndDecryptToken } from './astpp-token.util';
 
 @Injectable()
 export class PinAstppTokenGuard implements CanActivate {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(
+    private readonly db: DatabaseService,
+    private readonly messages: MessageService
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request>();
@@ -26,7 +30,7 @@ export class PinAstppTokenGuard implements CanActivate {
   }
 
   private async resolveAstppId(body: Record<string, unknown>): Promise<string> {
-    const directId = body.astppId ?? body.astpp_id;
+    const directId = body.astpp_id ?? body.astppId;
     if (typeof directId === 'string' && directId.trim()) {
       return directId.trim();
     }
@@ -66,8 +70,8 @@ export class PinAstppTokenGuard implements CanActivate {
     }
 
     throw new BadRequestException({
-      status: false,
-      error: 'Invalid key',
+      message: this.messages.get('auth.invalidCredentials'),
+      errors: ['Invalid or missing ASTPP ID or session token']
     });
   }
 }

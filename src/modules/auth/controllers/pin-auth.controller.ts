@@ -15,10 +15,10 @@ export class PinAuthController {
   ) {}
 
   @Post('api/v2/customers/me/pin')
-  @UseGuards(PinAstppTokenGuard)
+  @UseGuards(AuthGuard, PinAstppTokenGuard)
   @HttpCode(HttpStatus.OK)
-  async setPin(@Body() dto: SetPinDto) {
-    return this.pinAuthService.setPin(dto);
+  async setPin(@CurrentUser() user: AuthenticatedUser, @Body() dto: SetPinDto) {
+    return this.pinAuthService.setPin(dto, user.id);
   }
 
   @Put('api/v2/customers/me/pin')
@@ -28,19 +28,5 @@ export class PinAuthController {
     return this.pinAuthService.changePin(user.id, dto);
   }
 
-  @Post('api/v2/auth/transaction-tokens')
-  @UseGuards(PinAstppTokenGuard)
-  @HttpCode(HttpStatus.OK)
-  async exchangePinForTransactionToken(@Body() dto: VerifyPinDto, @Req() req: Request) {
-    const ip = (req.headers['x-forwarded-for'] as string)?.split(',').shift()?.trim() || req.ip || '127.0.0.1';
-    const userAgent = req.headers['user-agent'] || '';
 
-    const result = await this.pinAuthService.verifyPin(dto, ip, userAgent);
-
-    return {
-      success: true,
-      message: this.messages.get('auth.pin.verifySuccess'),
-      data: result,
-    };
-  }
 }

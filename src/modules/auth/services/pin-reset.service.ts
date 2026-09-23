@@ -46,14 +46,14 @@ export class PinResetService {
          ca.created_at DESC NULLS LAST,
          CASE cad.application_type WHEN 'wallet_kyc' THEN 1 WHEN 'primary_kyc' THEN 2 ELSE 3 END ASC
        LIMIT 1`,
-      [dto.astppId]
+      [dto.astpp_id]
     );
 
     if (!customer) {
       throw new NotFoundException(this.messages.get('common.notFound'));
     }
 
-    if (!customer.document_number || customer.document_number.trim().toUpperCase() !== dto.idNumber.trim().toUpperCase()) {
+    if (!customer.document_number || customer.document_number.trim().toUpperCase() !== dto.id_number.trim().toUpperCase()) {
       throw new UnauthorizedException('Identity document number does not match registered profile.');
     }
 
