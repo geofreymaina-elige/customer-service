@@ -7,6 +7,7 @@ import { CacheModule } from './core/cache/cache.module';
 import { TelemetryModule } from './core/telemetry/telemetry.module';
 import { JobsModule } from './core/jobs/jobs.module';
 import { EventsModule } from './core/events/events.module';
+import { NotificationsModule } from './core/notifications/notifications.module';
 import { AstppMysqlModule } from './core/astpp-mysql/astpp-mysql.module';
 import { AstppModule } from './modules/astpp/astpp.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -31,6 +32,7 @@ import { WorkersModule } from './workers/workers.module';
     TelemetryModule,
     JobsModule,
     EventsModule,
+    NotificationsModule, // Kafka notifications
     AstppMysqlModule,
     AstppModule,
     AuthModule,

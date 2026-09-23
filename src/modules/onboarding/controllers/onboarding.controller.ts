@@ -23,6 +23,7 @@ import { AstppTokenGuard } from '../../../core/auth/astpp-token.guard';
 import { PinAstppTokenGuard } from '../../../core/auth/pin-astpp-token.guard';
 import { AuthGuard } from '../../../core/auth/auth.guard';
 import { SecureJwtService } from '../../../core/auth/jwt.service';
+import { KafkaNotificationService } from '../../../core/notifications/kafka-notification.service';
 import { DatabaseService } from '../../../core/database/database.service';
 import { JobService } from '../../../core/jobs/job.service';
 import { CurrentUser, AuthenticatedUser } from '../../../core/auth/current-user.decorator';
@@ -43,6 +44,7 @@ export class OnboardingController {
     private readonly jobService: JobService,
     private readonly config: ConfigService,
     private readonly jwtService: SecureJwtService,
+    private readonly notifications: KafkaNotificationService,
   ) {}
 
   /**
@@ -334,6 +336,24 @@ export class OnboardingController {
          AND sasapay_account_number IS NOT NULL`,
       [callbackAccountStatus, kycStatus, dto.description || 'SasaPay onboarding rejected', application.id],
     );
+
+    // Get customer details for notification
+    const customer = await this.db.queryOne(
+      `SELECT id, phone_number, email FROM customers WHERE id = $1`,
+      [application.customer_id]
+    );
+
+    // Send notification via Kafka (push + websocket)
+    if (customer) {
+      await this.notifications.sendWalletOnboardingNotification(
+        String(customer.id),
+        kycStatus as 'approved' | 'rejected',
+        callbackAccountNumber,
+        dto.description || undefined,
+        customer.phone_number,
+        customer.email
+      );
+    }
 
     this.logger.log(
       `[SASAPAY CALLBACK] Processed ${callbackAccountStatus} for customer ${application.customer_id}`,

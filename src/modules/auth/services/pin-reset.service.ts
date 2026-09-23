@@ -10,6 +10,7 @@ import * as bcrypt from 'bcrypt';
 import { DatabaseService } from '../../../core/database/database.service';
 import { SecureJwtService } from '../../../core/auth/jwt.service';
 import { MessageService } from '../../../core/messages/message.service';
+import { KafkaNotificationService } from '../../../core/notifications/kafka-notification.service';
 import {
   InitiatePinResetDto,
   VerifyResetOtpDto,
@@ -24,6 +25,7 @@ export class PinResetService {
     private readonly db: DatabaseService,
     private readonly jwtService: SecureJwtService,
     private readonly messages: MessageService,
+    private readonly notifications: KafkaNotificationService,
   ) { }
 
   /**
@@ -94,6 +96,15 @@ export class PinResetService {
     // Mask phone number (show last 4 digits)
     const phone = customer.phone_number || '';
     const maskedPhone = phone.length > 4 ? `****${phone.slice(-4)}` : '****';
+
+    // Send OTP via SMS through Kafka
+    await this.notifications.sendOtpSms(
+      customer.phone_number,
+      otpCode,
+      'pin_reset',
+      `pin_reset_${customer.uuid}_${Date.now()}`,
+      String(customer.id)
+    );
 
     return {
       resetId,
