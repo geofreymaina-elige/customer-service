@@ -11,7 +11,8 @@ import { validateAndDecryptToken } from './astpp-token.util';
  *
  * It resolves the ASTPP account ID from:
  *   1. req.params.astppId   (GET routes like /wallets/:astppId/onboarding-status)
- *   2. req.body.astpp_id    (POST routes like /onboarding/user-device)
+ *   2. req.query.astppId    (GET routes like /wallets/onboarding-status?astppId=123)
+ *   3. req.body.astpp_id    (POST routes like /onboarding/user-device)
  *
  * The token is expected in the HTTP header: X-Astpp-Token
  *
@@ -22,9 +23,10 @@ export class AstppTokenGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<Request>();
 
-    // Resolve astpp id — prefer URL param, fall back to body
+    // Resolve astpp id — prefer URL param, then query, then body
     const astppId: string | undefined =
       (request.params?.astppId as string | undefined) ||
+      (request.query?.astppId as string | undefined) ||
       (request.body?.astpp_id as string | undefined);
 
     const token = request.headers['x-astpp-token'] as string | undefined;

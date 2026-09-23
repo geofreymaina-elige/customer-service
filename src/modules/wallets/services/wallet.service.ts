@@ -77,13 +77,13 @@ export class WalletService {
    */
   async getWalletOnboardingStatusByAstppId(astppId: string) {
     const customer = await this.db.queryOne(
-      `SELECT id FROM customers WHERE astpp_id = $1::bigint`,
+      `SELECT id, phone_number FROM customers WHERE astpp_id = $1::bigint`,
       [astppId]
     );
     if (!customer) {
       throw new NotFoundException(this.messages.get('common.notFound'));
     }
-    const status = await this.getWalletOnboardingStatus(customer.id);
+    const status = await this.getWalletOnboardingStatus(customer.id, customer.phone_number);
     
     // Add nextStep field for v2 API
     // Check device registration status
@@ -122,7 +122,7 @@ export class WalletService {
    * Get wallet onboarding readiness status (fast - no joins)
    * Returns wallet status, application progress, and KYC requirements
    */
-  async getWalletOnboardingStatus(customerId: number) {
+  async getWalletOnboardingStatus(customerId: number, phoneNumber?: string) {
     // Single query to fetch wallet data
     const wallet = await this.db.queryOne(
       `SELECT id, uuid, account_number, currency, status, tier_level, created_at
@@ -195,7 +195,9 @@ export class WalletService {
       message = this.messages.get('wallets.onboarding.readyToStart');
       nextAction = 'start_onboarding';
     } else if (applicationStatus === 'pending') {
-      message = this.messages.get('wallets.onboarding.awaitingOtp');
+      message = this.messages.get('wallets.onboarding.awaitingOtp', {
+        phoneNumber: phoneNumber ? this.maskPhoneNumber(phoneNumber) : 'your registered phone number'
+      });
       nextAction = 'verify_otp';
     } else if (applicationStatus === 'requires_kyc_upload') {
       message = this.messages.get('wallets.onboarding.processingKyc');
@@ -427,5 +429,11 @@ export class WalletService {
       `UPDATE customer_pins SET failed_attempts = 0, locked_until = NULL, last_verified_at = NOW() WHERE id = $1`,
       [pinRecord.id]
     );
+  }
+
+  private maskPhoneNumber(phoneNumber: string): string {
+    if (!phoneNumber || phoneNumber.length <= 6) return 'your registered phone number';
+
+    return `${phoneNumber.slice(0, 3)}${'*'.repeat(phoneNumber.length - 6)}${phoneNumber.slice(-3)}`;
   }
 }

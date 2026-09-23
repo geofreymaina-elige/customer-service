@@ -28,9 +28,20 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       if (typeof res === 'string') {
         message = res;
       } else if (typeof res === 'object' && res !== null) {
-        message = res.message || message;
-        code = res.code || (status === 400 ? 'VALIDATION_ERROR' : 'HTTP_ERROR');
-        errors = Array.isArray(res.message) ? res.message : res.errors || [];
+        // Handle validation errors from class-validator
+        if (Array.isArray(res.message)) {
+          message = this.messages.get('common.validationError');
+          errors = res.errors || res.message;
+          code = 'VALIDATION_ERROR';
+        } else if (res.code === 'VALIDATION_ERROR') {
+          message = this.messages.get('common.validationError');
+          errors = res.errors || [];
+          code = 'VALIDATION_ERROR';
+        } else {
+          message = res.message || message;
+          code = res.code || (status === 400 ? 'VALIDATION_ERROR' : 'HTTP_ERROR');
+          errors = res.errors || [];
+        }
       }
     } else if (exception instanceof Error) {
       const providerError = exception as Error & {

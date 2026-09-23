@@ -1,11 +1,9 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, HttpException, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
 import { MessageService } from './core/messages/message.service';
 import { GlobalExceptionFilter } from './core/errors/global-exception.filter';
-import { IdempotencyInterceptor } from './core/idempotency/idempotency.interceptor';
-import { DatabaseService } from './core/database/database.service';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -14,7 +12,6 @@ async function bootstrap() {
 
   const configService = app.get(ConfigService);
   const messageService = app.get(MessageService);
-  const dbService = app.get(DatabaseService);
 
   // Enable shutdown hooks
   app.enableShutdownHooks();
@@ -25,14 +22,19 @@ async function bootstrap() {
       whitelist: true,
       transform: true,
       forbidNonWhitelisted: false,
+      exceptionFactory: (errors) => {
+        const errorMessages = errors.map(error => 
+          Object.values(error.constraints || {}).join(', ')
+        );
+        const error = new HttpException(errorMessages, HttpStatus.BAD_REQUEST);
+        (error as any).errors = errorMessages;
+        return error;
+      }
     }),
   );
 
   // Global Exception Filter with centralized messages
   app.useGlobalFilters(new GlobalExceptionFilter(messageService));
-
-  // Global Idempotency Interceptor
-  app.useGlobalInterceptors(new IdempotencyInterceptor(dbService));
 
   const port = configService.get<number>('port') || 5006;
   await app.listen(port, '0.0.0.0');

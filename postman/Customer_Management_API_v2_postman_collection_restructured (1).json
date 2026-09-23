@@ -878,18 +878,13 @@
                                         "type": "text"
                                     },
                                     {
-                                        "key": "Idempotency-Key",
-                                        "value": "{{$guid}}",
-                                        "type": "text"
-                                    },
-                                    {
                                         "key": "X-Astpp-Token",
                                         "value": "{{astppToken}}",
                                         "description": "Required ASTPP encrypted token for this account"
                                     }
                                 ],
                                 "url": {
-                                    "raw": "{{baseUrl}}/api/v2/auth/sessions",
+                                    "raw": "{{baseUrl}}/api/v2/auth/sessions/device",
                                     "host": [
                                         "{{baseUrl}}"
                                     ],
@@ -897,13 +892,14 @@
                                         "api",
                                         "v2",
                                         "auth",
-                                        "sessions"
+                                        "sessions",
+                                        "device"
                                     ]
                                 },
                                 "description": "The one sign-in endpoint. What it needs depends on the customer and the phone:\n\n| Situation | Send | Result |\n|---|---|---|\n| Brand-new device -- no device/wallet registered yet (this request) | `astpp_id` + `device` | `201` tokens, plus `walletStatus` and `pinSet` so the app knows what to do next |\n| Phone already verified for this customer | `pin` + `device` | `201` tokens |\n| New phone, reinstall or cleared data | `pin` + `idNumber` + `device` | `202` OTP challenge, then `POST /api/v2/auth/sessions/{sessionId}/otp-verifications` |\n\nThis branch is what used to be two separate calls (`POST /wallets` to register the device and create the wallet, then `POST /auth/sessions` to sign in). They are merged here because the device/customer has no idea a wallet is being created for them behind the scenes -- it's purely a backend/PSP (SasaPay) concern, so it belongs with sign-in, not with a `wallets` resource the app doesn't otherwise touch until the wallet exists.\n\n`astpp_id` **is** required on this branch specifically (it wasn't on the old first-sign-in call) because nothing has been validated for this device yet. On every other branch it's still not needed, since the device was already registered here.\n\nWhat happens on success: the device row is created, a background job sends the customer's profile to SasaPay to create the wallet, and the customer is signed in immediately -- `201` with an access token, refresh token and `sessionId`, **even though the wallet itself is still `pending_otp`**. The app can go straight to the wallet home screen shell; `walletStatus` and `pinSet` in the response tell it what to overlay:\n- `walletStatus: \"pending_otp\"` -> prompt for the SMS code SasaPay just sent, then call `POST /api/v2/auth/wallet-verifications?astppId={astppId}`.\n- `pinSet: false` -> the customer can use the app, but balance and transaction endpoints stay locked until `POST /customers/me/pin` is called, because those require a PIN-scoped (transaction) token, not just `app:access`.\n\nIdempotent: send the same `Idempotency-Key` on a retry after a timeout so the device/wallet aren't created twice; a retry with a device that's already registered still returns `201` with a fresh session.\n\n**If the SMS code expires (or all attempts are used) before it's confirmed:** the wallet is still not created on SasaPay's side, so the customer isn't fully onboarded. Call this same endpoint again with the same `Idempotency-Key` pattern to start a new PSP job and get a new code. *Open question, not yet confirmed with backend: whether `device` needs to be resent on that retry, or whether `astpp_id` alone is enough once the device row already exists -- flagging this rather than guessing.*\n\nA `202` (other branches) creates a session in a *pending* state. Its id is the id you later see in `/customers/me/sessions`.\n\nIf `device_identifier` already belongs to a different device on this account (model/OS changed without going through a proper re-registration), the answer is `409 DEVICE_MISMATCH` with an `errors[]` entry naming the mismatched field and both the `expected` (currently registered) and `actual` (submitted) values -- e.g. `device.device_model`.",
                                 "body": {
                                     "mode": "raw",
-                                    "raw": "{\n  \"astpp_id\": \"{{astppId}}\",\n  \"device\": {\n    \"device_identifier\": \"{{deviceIdentifier}}\",\n    \"mobile_type\": \"android\",\n    \"device_model\": \"Samsung Galaxy S23\",\n    \"device_os\": \"Android 14\",\n    \"app_version\": \"2.4.1\"\n  }\n}",
+                                    "raw": "{\n  \"astpp_id\": \"{{astppId}}\",\n  \"device_identifier\": \"{{deviceIdentifier}}\",\n  \"mobile_type\": \"android\",\n  \"device_model\": \"Samsung Galaxy S23\",\n  \"device_os\": \"Android 14\",\n  \"app_version\": \"2.4.1\"\n}",
                                     "options": {
                                         "raw": {
                                             "language": "json"
@@ -920,11 +916,6 @@
                                             {
                                                 "key": "Content-Type",
                                                 "value": "application/json",
-                                                "type": "text"
-                                            },
-                                            {
-                                                "key": "Idempotency-Key",
-                                                "value": "{{$guid}}",
                                                 "type": "text"
                                             }
                                         ],
@@ -943,7 +934,7 @@
                                         "description": "The one sign-in endpoint. What it needs depends on the customer and the phone:\n\n| Situation | Send | Result |\n|---|---|---|\n| Brand-new device -- no device/wallet registered yet (this request) | `astpp_id` + `device` | `201` tokens, plus `walletStatus` and `pinSet` so the app knows what to do next |\n| Phone already verified for this customer | `pin` + `device` | `201` tokens |\n| New phone, reinstall or cleared data | `pin` + `idNumber` + `device` | `202` OTP challenge, then `POST /api/v2/auth/sessions/{sessionId}/otp-verifications` |\n\nThis branch is what used to be two separate calls (`POST /wallets` to register the device and create the wallet, then `POST /auth/sessions` to sign in). They are merged here because the device/customer has no idea a wallet is being created for them behind the scenes -- it's purely a backend/PSP (SasaPay) concern, so it belongs with sign-in, not with a `wallets` resource the app doesn't otherwise touch until the wallet exists.\n\n`astpp_id` **is** required on this branch specifically (it wasn't on the old first-sign-in call) because nothing has been validated for this device yet. On every other branch it's still not needed, since the device was already registered here.\n\nWhat happens on success: the device row is created, a background job sends the customer's profile to SasaPay to create the wallet, and the customer is signed in immediately -- `201` with an access token, refresh token and `sessionId`, **even though the wallet itself is still `pending_otp`**. The app can go straight to the wallet home screen shell; `walletStatus` and `pinSet` in the response tell it what to overlay:\n- `walletStatus: \"pending_otp\"` -> prompt for the SMS code SasaPay just sent, then call `POST /api/v2/auth/wallet-verifications?astppId={astppId}`.\n- `pinSet: false` -> the customer can use the app, but balance and transaction endpoints stay locked until `POST /customers/me/pin` is called, because those require a PIN-scoped (transaction) token, not just `app:access`.\n\nIdempotent: send the same `Idempotency-Key` on a retry after a timeout so the device/wallet aren't created twice; a retry with a device that's already registered still returns `201` with a fresh session.\n\n**If the SMS code expires (or all attempts are used) before it's confirmed:** the wallet is still not created on SasaPay's side, so the customer isn't fully onboarded. Call this same endpoint again with the same `Idempotency-Key` pattern to start a new PSP job and get a new code. *Open question, not yet confirmed with backend: whether `device` needs to be resent on that retry, or whether `astpp_id` alone is enough once the device row already exists -- flagging this rather than guessing.*\n\nA `202` (other branches) creates a session in a *pending* state. Its id is the id you later see in `/customers/me/sessions`.\n\nIf `device_identifier` already belongs to a different device on this account (model/OS changed without going through a proper re-registration), the answer is `409 DEVICE_MISMATCH` with an `errors[]` entry naming the mismatched field and both the `expected` (currently registered) and `actual` (submitted) values -- e.g. `device.device_model`.",
                                         "body": {
                                             "mode": "raw",
-                                            "raw": "{\n  \"astpp_id\": \"{{astppId}}\",\n  \"device\": {\n    \"device_identifier\": \"{{deviceIdentifier}}\",\n    \"mobile_type\": \"android\",\n    \"device_model\": \"Samsung Galaxy S23\",\n    \"device_os\": \"Android 14\",\n    \"app_version\": \"2.4.1\"\n  }\n}",
+                                            "raw": "{\n  \"astpp_id\": \"{{astppId}}\",\n  \"device_identifier\": \"{{deviceIdentifier}}\",\n  \"mobile_type\": \"android\",\n  \"device_model\": \"Samsung Galaxy S23\",\n  \"device_os\": \"Android 14\",\n  \"app_version\": \"2.4.1\"\n}",
                                             "options": {
                                                 "raw": {
                                                     "language": "json"
@@ -964,18 +955,13 @@
                                     "body": "{\n  \"success\": true,\n  \"message\": \"Session created. Device registered and wallet creation started -- an SMS code is on its way.\",\n  \"data\": {\n    \"accessToken\": \"eyJhbGciOiJSUzI1NiJ9.eyJzY29wZSI6WyJhcHA6YWNjZXNzIl19.c2lnbmF0dXJl\",\n    \"tokenType\": \"Bearer\",\n    \"expiresIn\": 900,\n    \"scope\": \"app:access\",\n    \"refreshToken\": \"5d2a9c1e-3b7f-4e08-8c6a-91f4d2b7a3e5.Qm9ndXNTZWNyZXRWYWx1ZUV4YW1wbGU\",\n    \"refreshExpiresAt\": \"2026-10-21T10:15:00Z\",\n    \"sessionId\": \"5d2a9c1e-3b7f-4e08-8c6a-91f4d2b7a3e5\",\n    \"walletStatus\": \"pending_otp\",\n    \"pinSet\": false\n  }\n}"
                                 },
                                 {
-                                    "name": "201 Retry with same Idempotency-Key (device/wallet already existed)",
+                                    "name": "201 Device and wallet already existed",
                                     "originalRequest": {
                                         "method": "POST",
                                         "header": [
                                             {
                                                 "key": "Content-Type",
                                                 "value": "application/json",
-                                                "type": "text"
-                                            },
-                                            {
-                                                "key": "Idempotency-Key",
-                                                "value": "{{$guid}}",
                                                 "type": "text"
                                             }
                                         ],
@@ -994,7 +980,7 @@
                                         "description": "The one sign-in endpoint. What it needs depends on the customer and the phone:\n\n| Situation | Send | Result |\n|---|---|---|\n| Brand-new device -- no device/wallet registered yet (this request) | `astpp_id` + `device` | `201` tokens, plus `walletStatus` and `pinSet` so the app knows what to do next |\n| Phone already verified for this customer | `pin` + `device` | `201` tokens |\n| New phone, reinstall or cleared data | `pin` + `idNumber` + `device` | `202` OTP challenge, then `POST /api/v2/auth/sessions/{sessionId}/otp-verifications` |\n\nThis branch is what used to be two separate calls (`POST /wallets` to register the device and create the wallet, then `POST /auth/sessions` to sign in). They are merged here because the device/customer has no idea a wallet is being created for them behind the scenes -- it's purely a backend/PSP (SasaPay) concern, so it belongs with sign-in, not with a `wallets` resource the app doesn't otherwise touch until the wallet exists.\n\n`astpp_id` **is** required on this branch specifically (it wasn't on the old first-sign-in call) because nothing has been validated for this device yet. On every other branch it's still not needed, since the device was already registered here.\n\nWhat happens on success: the device row is created, a background job sends the customer's profile to SasaPay to create the wallet, and the customer is signed in immediately -- `201` with an access token, refresh token and `sessionId`, **even though the wallet itself is still `pending_otp`**. The app can go straight to the wallet home screen shell; `walletStatus` and `pinSet` in the response tell it what to overlay:\n- `walletStatus: \"pending_otp\"` -> prompt for the SMS code SasaPay just sent, then call `POST /api/v2/auth/wallet-verifications?astppId={astppId}`.\n- `pinSet: false` -> the customer can use the app, but balance and transaction endpoints stay locked until `POST /customers/me/pin` is called, because those require a PIN-scoped (transaction) token, not just `app:access`.\n\nIdempotent: send the same `Idempotency-Key` on a retry after a timeout so the device/wallet aren't created twice; a retry with a device that's already registered still returns `201` with a fresh session.\n\n**If the SMS code expires (or all attempts are used) before it's confirmed:** the wallet is still not created on SasaPay's side, so the customer isn't fully onboarded. Call this same endpoint again with the same `Idempotency-Key` pattern to start a new PSP job and get a new code. *Open question, not yet confirmed with backend: whether `device` needs to be resent on that retry, or whether `astpp_id` alone is enough once the device row already exists -- flagging this rather than guessing.*\n\nA `202` (other branches) creates a session in a *pending* state. Its id is the id you later see in `/customers/me/sessions`.\n\nIf `device_identifier` already belongs to a different device on this account (model/OS changed without going through a proper re-registration), the answer is `409 DEVICE_MISMATCH` with an `errors[]` entry naming the mismatched field and both the `expected` (currently registered) and `actual` (submitted) values -- e.g. `device.device_model`.",
                                         "body": {
                                             "mode": "raw",
-                                            "raw": "{\n  \"astpp_id\": \"{{astppId}}\",\n  \"device\": {\n    \"device_identifier\": \"{{deviceIdentifier}}\",\n    \"mobile_type\": \"android\",\n    \"device_model\": \"Samsung Galaxy S23\",\n    \"device_os\": \"Android 14\",\n    \"app_version\": \"2.4.1\"\n  }\n}",
+                                            "raw": "{\n  \"astpp_id\": \"{{astppId}}\",\n  \"device_identifier\": \"{{deviceIdentifier}}\",\n  \"mobile_type\": \"android\",\n  \"device_model\": \"Samsung Galaxy S23\",\n  \"device_os\": \"Android 14\",\n  \"app_version\": \"2.4.1\"\n}",
                                             "options": {
                                                 "raw": {
                                                     "language": "json"
@@ -1023,11 +1009,6 @@
                                                 "key": "Content-Type",
                                                 "value": "application/json",
                                                 "type": "text"
-                                            },
-                                            {
-                                                "key": "Idempotency-Key",
-                                                "value": "{{$guid}}",
-                                                "type": "text"
                                             }
                                         ],
                                         "url": {
@@ -1045,7 +1026,7 @@
                                         "description": "The one sign-in endpoint. What it needs depends on the customer and the phone:\n\n| Situation | Send | Result |\n|---|---|---|\n| Brand-new device -- no device/wallet registered yet (this request) | `astpp_id` + `device` | `201` tokens, plus `walletStatus` and `pinSet` so the app knows what to do next |\n| Phone already verified for this customer | `pin` + `device` | `201` tokens |\n| New phone, reinstall or cleared data | `pin` + `idNumber` + `device` | `202` OTP challenge, then `POST /api/v2/auth/sessions/{sessionId}/otp-verifications` |\n\nThis branch is what used to be two separate calls (`POST /wallets` to register the device and create the wallet, then `POST /auth/sessions` to sign in). They are merged here because the device/customer has no idea a wallet is being created for them behind the scenes -- it's purely a backend/PSP (SasaPay) concern, so it belongs with sign-in, not with a `wallets` resource the app doesn't otherwise touch until the wallet exists.\n\n`astpp_id` **is** required on this branch specifically (it wasn't on the old first-sign-in call) because nothing has been validated for this device yet. On every other branch it's still not needed, since the device was already registered here.\n\nWhat happens on success: the device row is created, a background job sends the customer's profile to SasaPay to create the wallet, and the customer is signed in immediately -- `201` with an access token, refresh token and `sessionId`, **even though the wallet itself is still `pending_otp`**. The app can go straight to the wallet home screen shell; `walletStatus` and `pinSet` in the response tell it what to overlay:\n- `walletStatus: \"pending_otp\"` -> prompt for the SMS code SasaPay just sent, then call `POST /api/v2/auth/wallet-verifications?astppId={astppId}`.\n- `pinSet: false` -> the customer can use the app, but balance and transaction endpoints stay locked until `POST /customers/me/pin` is called, because those require a PIN-scoped (transaction) token, not just `app:access`.\n\nIdempotent: send the same `Idempotency-Key` on a retry after a timeout so the device/wallet aren't created twice; a retry with a device that's already registered still returns `201` with a fresh session.\n\n**If the SMS code expires (or all attempts are used) before it's confirmed:** the wallet is still not created on SasaPay's side, so the customer isn't fully onboarded. Call this same endpoint again with the same `Idempotency-Key` pattern to start a new PSP job and get a new code. *Open question, not yet confirmed with backend: whether `device` needs to be resent on that retry, or whether `astpp_id` alone is enough once the device row already exists -- flagging this rather than guessing.*\n\nA `202` (other branches) creates a session in a *pending* state. Its id is the id you later see in `/customers/me/sessions`.\n\nIf `device_identifier` already belongs to a different device on this account (model/OS changed without going through a proper re-registration), the answer is `409 DEVICE_MISMATCH` with an `errors[]` entry naming the mismatched field and both the `expected` (currently registered) and `actual` (submitted) values -- e.g. `device.device_model`.",
                                         "body": {
                                             "mode": "raw",
-                                            "raw": "{\n  \"astpp_id\": \"{{astppId}}\",\n  \"device\": {\n    \"device_identifier\": \"{{deviceIdentifier}}\",\n    \"mobile_type\": \"android\",\n    \"device_model\": \"Samsung Galaxy S23\",\n    \"device_os\": \"Android 14\",\n    \"app_version\": \"2.4.1\"\n  }\n}",
+                                            "raw": "{\n  \"astpp_id\": \"{{astppId}}\",\n  \"device_identifier\": \"{{deviceIdentifier}}\",\n  \"mobile_type\": \"android\",\n  \"device_model\": \"Samsung Galaxy S23\",\n  \"device_os\": \"Android 14\",\n  \"app_version\": \"2.4.1\"\n}",
                                             "options": {
                                                 "raw": {
                                                     "language": "json"
@@ -1074,11 +1055,6 @@
                                                 "key": "Content-Type",
                                                 "value": "application/json",
                                                 "type": "text"
-                                            },
-                                            {
-                                                "key": "Idempotency-Key",
-                                                "value": "{{$guid}}",
-                                                "type": "text"
                                             }
                                         ],
                                         "url": {
@@ -1096,7 +1072,7 @@
                                         "description": "The one sign-in endpoint. What it needs depends on the customer and the phone:\n\n| Situation | Send | Result |\n|---|---|---|\n| Brand-new device -- no device/wallet registered yet (this request) | `astpp_id` + `device` | `201` tokens, plus `walletStatus` and `pinSet` so the app knows what to do next |\n| Phone already verified for this customer | `pin` + `device` | `201` tokens |\n| New phone, reinstall or cleared data | `pin` + `idNumber` + `device` | `202` OTP challenge, then `POST /api/v2/auth/sessions/{sessionId}/otp-verifications` |\n\nThis branch is what used to be two separate calls (`POST /wallets` to register the device and create the wallet, then `POST /auth/sessions` to sign in). They are merged here because the device/customer has no idea a wallet is being created for them behind the scenes -- it's purely a backend/PSP (SasaPay) concern, so it belongs with sign-in, not with a `wallets` resource the app doesn't otherwise touch until the wallet exists.\n\n`astpp_id` **is** required on this branch specifically (it wasn't on the old first-sign-in call) because nothing has been validated for this device yet. On every other branch it's still not needed, since the device was already registered here.\n\nWhat happens on success: the device row is created, a background job sends the customer's profile to SasaPay to create the wallet, and the customer is signed in immediately -- `201` with an access token, refresh token and `sessionId`, **even though the wallet itself is still `pending_otp`**. The app can go straight to the wallet home screen shell; `walletStatus` and `pinSet` in the response tell it what to overlay:\n- `walletStatus: \"pending_otp\"` -> prompt for the SMS code SasaPay just sent, then call `POST /api/v2/auth/wallet-verifications?astppId={astppId}`.\n- `pinSet: false` -> the customer can use the app, but balance and transaction endpoints stay locked until `POST /customers/me/pin` is called, because those require a PIN-scoped (transaction) token, not just `app:access`.\n\nIdempotent: send the same `Idempotency-Key` on a retry after a timeout so the device/wallet aren't created twice; a retry with a device that's already registered still returns `201` with a fresh session.\n\n**If the SMS code expires (or all attempts are used) before it's confirmed:** the wallet is still not created on SasaPay's side, so the customer isn't fully onboarded. Call this same endpoint again with the same `Idempotency-Key` pattern to start a new PSP job and get a new code. *Open question, not yet confirmed with backend: whether `device` needs to be resent on that retry, or whether `astpp_id` alone is enough once the device row already exists -- flagging this rather than guessing.*\n\nA `202` (other branches) creates a session in a *pending* state. Its id is the id you later see in `/customers/me/sessions`.\n\nIf `device_identifier` already belongs to a different device on this account (model/OS changed without going through a proper re-registration), the answer is `409 DEVICE_MISMATCH` with an `errors[]` entry naming the mismatched field and both the `expected` (currently registered) and `actual` (submitted) values -- e.g. `device.device_model`.",
                                         "body": {
                                             "mode": "raw",
-                                            "raw": "{\n  \"astpp_id\": \"{{astppId}}\",\n  \"device\": {\n    \"device_identifier\": \"{{deviceIdentifier}}\",\n    \"mobile_type\": \"android\",\n    \"device_model\": \"Samsung Galaxy S23\",\n    \"device_os\": \"Android 14\",\n    \"app_version\": \"2.4.1\"\n  }\n}",
+                                            "raw": "{\n  \"astpp_id\": \"{{astppId}}\",\n  \"device_identifier\": \"{{deviceIdentifier}}\",\n  \"mobile_type\": \"android\",\n  \"device_model\": \"Samsung Galaxy S23\",\n  \"device_os\": \"Android 14\",\n  \"app_version\": \"2.4.1\"\n}",
                                             "options": {
                                                 "raw": {
                                                     "language": "json"
@@ -1125,11 +1101,6 @@
                                                 "key": "Content-Type",
                                                 "value": "application/json",
                                                 "type": "text"
-                                            },
-                                            {
-                                                "key": "Idempotency-Key",
-                                                "value": "{{$guid}}",
-                                                "type": "text"
                                             }
                                         ],
                                         "url": {
@@ -1147,7 +1118,7 @@
                                         "description": "The one sign-in endpoint. What it needs depends on the customer and the phone:\n\n| Situation | Send | Result |\n|---|---|---|\n| Brand-new device -- no device/wallet registered yet (this request) | `astpp_id` + `device` | `201` tokens, plus `walletStatus` and `pinSet` so the app knows what to do next |\n| Phone already verified for this customer | `pin` + `device` | `201` tokens |\n| New phone, reinstall or cleared data | `pin` + `idNumber` + `device` | `202` OTP challenge, then `POST /api/v2/auth/sessions/{sessionId}/otp-verifications` |\n\nThis branch is what used to be two separate calls (`POST /wallets` to register the device and create the wallet, then `POST /auth/sessions` to sign in). They are merged here because the device/customer has no idea a wallet is being created for them behind the scenes -- it's purely a backend/PSP (SasaPay) concern, so it belongs with sign-in, not with a `wallets` resource the app doesn't otherwise touch until the wallet exists.\n\n`astpp_id` **is** required on this branch specifically (it wasn't on the old first-sign-in call) because nothing has been validated for this device yet. On every other branch it's still not needed, since the device was already registered here.\n\nWhat happens on success: the device row is created, a background job sends the customer's profile to SasaPay to create the wallet, and the customer is signed in immediately -- `201` with an access token, refresh token and `sessionId`, **even though the wallet itself is still `pending_otp`**. The app can go straight to the wallet home screen shell; `walletStatus` and `pinSet` in the response tell it what to overlay:\n- `walletStatus: \"pending_otp\"` -> prompt for the SMS code SasaPay just sent, then call `POST /api/v2/auth/wallet-verifications?astppId={astppId}`.\n- `pinSet: false` -> the customer can use the app, but balance and transaction endpoints stay locked until `POST /customers/me/pin` is called, because those require a PIN-scoped (transaction) token, not just `app:access`.\n\nIdempotent: send the same `Idempotency-Key` on a retry after a timeout so the device/wallet aren't created twice; a retry with a device that's already registered still returns `201` with a fresh session.\n\n**If the SMS code expires (or all attempts are used) before it's confirmed:** the wallet is still not created on SasaPay's side, so the customer isn't fully onboarded. Call this same endpoint again with the same `Idempotency-Key` pattern to start a new PSP job and get a new code. *Open question, not yet confirmed with backend: whether `device` needs to be resent on that retry, or whether `astpp_id` alone is enough once the device row already exists -- flagging this rather than guessing.*\n\nA `202` (other branches) creates a session in a *pending* state. Its id is the id you later see in `/customers/me/sessions`.\n\nIf `device_identifier` already belongs to a different device on this account (model/OS changed without going through a proper re-registration), the answer is `409 DEVICE_MISMATCH` with an `errors[]` entry naming the mismatched field and both the `expected` (currently registered) and `actual` (submitted) values -- e.g. `device.device_model`.",
                                         "body": {
                                             "mode": "raw",
-                                            "raw": "{\n  \"astpp_id\": \"{{astppId}}\",\n  \"device\": {\n    \"device_identifier\": \"{{deviceIdentifier}}\",\n    \"mobile_type\": \"android\",\n    \"device_model\": \"Samsung Galaxy S23\",\n    \"device_os\": \"Android 14\",\n    \"app_version\": \"2.4.1\"\n  }\n}",
+                                            "raw": "{\n  \"astpp_id\": \"{{astppId}}\",\n  \"device_identifier\": \"{{deviceIdentifier}}\",\n  \"mobile_type\": \"android\",\n  \"device_model\": \"Samsung Galaxy S23\",\n  \"device_os\": \"Android 14\",\n  \"app_version\": \"2.4.1\"\n}",
                                             "options": {
                                                 "raw": {
                                                     "language": "json"
@@ -1176,11 +1147,6 @@
                                                 "key": "Content-Type",
                                                 "value": "application/json",
                                                 "type": "text"
-                                            },
-                                            {
-                                                "key": "Idempotency-Key",
-                                                "value": "{{$guid}}",
-                                                "type": "text"
                                             }
                                         ],
                                         "url": {
@@ -1198,7 +1164,7 @@
                                         "description": "The one sign-in endpoint. What it needs depends on the customer and the phone:\n\n| Situation | Send | Result |\n|---|---|---|\n| Brand-new device -- no device/wallet registered yet (this request) | `astpp_id` + `device` | `201` tokens, plus `walletStatus` and `pinSet` so the app knows what to do next |\n| Phone already verified for this customer | `pin` + `device` | `201` tokens |\n| New phone, reinstall or cleared data | `pin` + `idNumber` + `device` | `202` OTP challenge, then `POST /api/v2/auth/sessions/{sessionId}/otp-verifications` |\n\nThis branch is what used to be two separate calls (`POST /wallets` to register the device and create the wallet, then `POST /auth/sessions` to sign in). They are merged here because the device/customer has no idea a wallet is being created for them behind the scenes -- it's purely a backend/PSP (SasaPay) concern, so it belongs with sign-in, not with a `wallets` resource the app doesn't otherwise touch until the wallet exists.\n\n`astpp_id` **is** required on this branch specifically (it wasn't on the old first-sign-in call) because nothing has been validated for this device yet. On every other branch it's still not needed, since the device was already registered here.\n\nWhat happens on success: the device row is created, a background job sends the customer's profile to SasaPay to create the wallet, and the customer is signed in immediately -- `201` with an access token, refresh token and `sessionId`, **even though the wallet itself is still `pending_otp`**. The app can go straight to the wallet home screen shell; `walletStatus` and `pinSet` in the response tell it what to overlay:\n- `walletStatus: \"pending_otp\"` -> prompt for the SMS code SasaPay just sent, then call `POST /api/v2/auth/wallet-verifications?astppId={astppId}`.\n- `pinSet: false` -> the customer can use the app, but balance and transaction endpoints stay locked until `POST /customers/me/pin` is called, because those require a PIN-scoped (transaction) token, not just `app:access`.\n\nIdempotent: send the same `Idempotency-Key` on a retry after a timeout so the device/wallet aren't created twice; a retry with a device that's already registered still returns `201` with a fresh session.\n\n**If the SMS code expires (or all attempts are used) before it's confirmed:** the wallet is still not created on SasaPay's side, so the customer isn't fully onboarded. Call this same endpoint again with the same `Idempotency-Key` pattern to start a new PSP job and get a new code. *Open question, not yet confirmed with backend: whether `device` needs to be resent on that retry, or whether `astpp_id` alone is enough once the device row already exists -- flagging this rather than guessing.*\n\nA `202` (other branches) creates a session in a *pending* state. Its id is the id you later see in `/customers/me/sessions`.\n\nIf `device_identifier` already belongs to a different device on this account (model/OS changed without going through a proper re-registration), the answer is `409 DEVICE_MISMATCH` with an `errors[]` entry naming the mismatched field and both the `expected` (currently registered) and `actual` (submitted) values -- e.g. `device.device_model`.",
                                         "body": {
                                             "mode": "raw",
-                                            "raw": "{\n  \"astpp_id\": \"{{astppId}}\",\n  \"device\": {\n    \"device_identifier\": \"{{deviceIdentifier}}\",\n    \"mobile_type\": \"android\",\n    \"device_model\": \"Samsung Galaxy S23\",\n    \"device_os\": \"Android 14\",\n    \"app_version\": \"2.4.1\"\n  }\n}",
+                                            "raw": "{\n  \"astpp_id\": \"{{astppId}}\",\n  \"device_identifier\": \"{{deviceIdentifier}}\",\n  \"mobile_type\": \"android\",\n  \"device_model\": \"Samsung Galaxy S23\",\n  \"device_os\": \"Android 14\",\n  \"app_version\": \"2.4.1\"\n}",
                                             "options": {
                                                 "raw": {
                                                     "language": "json"
@@ -1227,11 +1193,6 @@
                                                 "key": "Content-Type",
                                                 "value": "application/json",
                                                 "type": "text"
-                                            },
-                                            {
-                                                "key": "Idempotency-Key",
-                                                "value": "{{$guid}}",
-                                                "type": "text"
                                             }
                                         ],
                                         "url": {
@@ -1249,7 +1210,7 @@
                                         "description": "The one sign-in endpoint. What it needs depends on the customer and the phone:\n\n| Situation | Send | Result |\n|---|---|---|\n| Brand-new device -- no device/wallet registered yet (this request) | `astpp_id` + `device` | `201` tokens, plus `walletStatus` and `pinSet` so the app knows what to do next |\n| Phone already verified for this customer | `pin` + `device` | `201` tokens |\n| New phone, reinstall or cleared data | `pin` + `idNumber` + `device` | `202` OTP challenge, then `POST /api/v2/auth/sessions/{sessionId}/otp-verifications` |\n\nThis branch is what used to be two separate calls (`POST /wallets` to register the device and create the wallet, then `POST /auth/sessions` to sign in). They are merged here because the device/customer has no idea a wallet is being created for them behind the scenes -- it's purely a backend/PSP (SasaPay) concern, so it belongs with sign-in, not with a `wallets` resource the app doesn't otherwise touch until the wallet exists.\n\n`astpp_id` **is** required on this branch specifically (it wasn't on the old first-sign-in call) because nothing has been validated for this device yet. On every other branch it's still not needed, since the device was already registered here.\n\nWhat happens on success: the device row is created, a background job sends the customer's profile to SasaPay to create the wallet, and the customer is signed in immediately -- `201` with an access token, refresh token and `sessionId`, **even though the wallet itself is still `pending_otp`**. The app can go straight to the wallet home screen shell; `walletStatus` and `pinSet` in the response tell it what to overlay:\n- `walletStatus: \"pending_otp\"` -> prompt for the SMS code SasaPay just sent, then call `POST /api/v2/auth/wallet-verifications?astppId={astppId}`.\n- `pinSet: false` -> the customer can use the app, but balance and transaction endpoints stay locked until `POST /customers/me/pin` is called, because those require a PIN-scoped (transaction) token, not just `app:access`.\n\nIdempotent: send the same `Idempotency-Key` on a retry after a timeout so the device/wallet aren't created twice; a retry with a device that's already registered still returns `201` with a fresh session.\n\n**If the SMS code expires (or all attempts are used) before it's confirmed:** the wallet is still not created on SasaPay's side, so the customer isn't fully onboarded. Call this same endpoint again with the same `Idempotency-Key` pattern to start a new PSP job and get a new code. *Open question, not yet confirmed with backend: whether `device` needs to be resent on that retry, or whether `astpp_id` alone is enough once the device row already exists -- flagging this rather than guessing.*\n\nA `202` (other branches) creates a session in a *pending* state. Its id is the id you later see in `/customers/me/sessions`.\n\nIf `device_identifier` already belongs to a different device on this account (model/OS changed without going through a proper re-registration), the answer is `409 DEVICE_MISMATCH` with an `errors[]` entry naming the mismatched field and both the `expected` (currently registered) and `actual` (submitted) values -- e.g. `device.device_model`.",
                                         "body": {
                                             "mode": "raw",
-                                            "raw": "{\n  \"astpp_id\": \"{{astppId}}\",\n  \"device\": {\n    \"device_identifier\": \"{{deviceIdentifier}}\",\n    \"mobile_type\": \"android\",\n    \"device_model\": \"Samsung Galaxy S23\",\n    \"device_os\": \"Android 14\",\n    \"app_version\": \"2.4.1\"\n  }\n}",
+                                            "raw": "{\n  \"astpp_id\": \"{{astppId}}\",\n  \"device_identifier\": \"{{deviceIdentifier}}\",\n  \"mobile_type\": \"android\",\n  \"device_model\": \"Samsung Galaxy S23\",\n  \"device_os\": \"Android 14\",\n  \"app_version\": \"2.4.1\"\n}",
                                             "options": {
                                                 "raw": {
                                                     "language": "json"
@@ -1278,11 +1239,6 @@
                                                 "key": "Content-Type",
                                                 "value": "application/json",
                                                 "type": "text"
-                                            },
-                                            {
-                                                "key": "Idempotency-Key",
-                                                "value": "{{$guid}}",
-                                                "type": "text"
                                             }
                                         ],
                                         "url": {
@@ -1300,7 +1256,7 @@
                                         "description": "The one sign-in endpoint. What it needs depends on the customer and the phone:\n\n| Situation | Send | Result |\n|---|---|---|\n| Brand-new device -- no device/wallet registered yet (this request) | `astpp_id` + `device` | `201` tokens, plus `walletStatus` and `pinSet` so the app knows what to do next |\n| Phone already verified for this customer | `pin` + `device` | `201` tokens |\n| New phone, reinstall or cleared data | `pin` + `idNumber` + `device` | `202` OTP challenge, then `POST /api/v2/auth/sessions/{sessionId}/otp-verifications` |\n\nThis branch is what used to be two separate calls (`POST /wallets` to register the device and create the wallet, then `POST /auth/sessions` to sign in). They are merged here because the device/customer has no idea a wallet is being created for them behind the scenes -- it's purely a backend/PSP (SasaPay) concern, so it belongs with sign-in, not with a `wallets` resource the app doesn't otherwise touch until the wallet exists.\n\n`astpp_id` **is** required on this branch specifically (it wasn't on the old first-sign-in call) because nothing has been validated for this device yet. On every other branch it's still not needed, since the device was already registered here.\n\nWhat happens on success: the device row is created, a background job sends the customer's profile to SasaPay to create the wallet, and the customer is signed in immediately -- `201` with an access token, refresh token and `sessionId`, **even though the wallet itself is still `pending_otp`**. The app can go straight to the wallet home screen shell; `walletStatus` and `pinSet` in the response tell it what to overlay:\n- `walletStatus: \"pending_otp\"` -> prompt for the SMS code SasaPay just sent, then call `POST /api/v2/auth/wallet-verifications?astppId={astppId}`.\n- `pinSet: false` -> the customer can use the app, but balance and transaction endpoints stay locked until `POST /customers/me/pin` is called, because those require a PIN-scoped (transaction) token, not just `app:access`.\n\nIdempotent: send the same `Idempotency-Key` on a retry after a timeout so the device/wallet aren't created twice; a retry with a device that's already registered still returns `201` with a fresh session.\n\n**If the SMS code expires (or all attempts are used) before it's confirmed:** the wallet is still not created on SasaPay's side, so the customer isn't fully onboarded. Call this same endpoint again with the same `Idempotency-Key` pattern to start a new PSP job and get a new code. *Open question, not yet confirmed with backend: whether `device` needs to be resent on that retry, or whether `astpp_id` alone is enough once the device row already exists -- flagging this rather than guessing.*\n\nA `202` (other branches) creates a session in a *pending* state. Its id is the id you later see in `/customers/me/sessions`.\n\nIf `device_identifier` already belongs to a different device on this account (model/OS changed without going through a proper re-registration), the answer is `409 DEVICE_MISMATCH` with an `errors[]` entry naming the mismatched field and both the `expected` (currently registered) and `actual` (submitted) values -- e.g. `device.device_model`.",
                                         "body": {
                                             "mode": "raw",
-                                            "raw": "{\n  \"astpp_id\": \"{{astppId}}\",\n  \"device\": {\n    \"device_identifier\": \"{{deviceIdentifier}}\",\n    \"mobile_type\": \"android\",\n    \"device_model\": \"Samsung Galaxy S23\",\n    \"device_os\": \"Android 14\",\n    \"app_version\": \"2.4.1\"\n  }\n}",
+                                            "raw": "{\n  \"astpp_id\": \"{{astppId}}\",\n  \"device_identifier\": \"{{deviceIdentifier}}\",\n  \"mobile_type\": \"android\",\n  \"device_model\": \"Samsung Galaxy S23\",\n  \"device_os\": \"Android 14\",\n  \"app_version\": \"2.4.1\"\n}",
                                             "options": {
                                                 "raw": {
                                                     "language": "json"
@@ -1329,11 +1285,6 @@
                                                 "key": "Content-Type",
                                                 "value": "application/json",
                                                 "type": "text"
-                                            },
-                                            {
-                                                "key": "Idempotency-Key",
-                                                "value": "{{$guid}}",
-                                                "type": "text"
                                             }
                                         ],
                                         "url": {
@@ -1351,7 +1302,7 @@
                                         "description": "The one sign-in endpoint. What it needs depends on the customer and the phone:\n\n| Situation | Send | Result |\n|---|---|---|\n| Brand-new device -- no device/wallet registered yet (this request) | `astpp_id` + `device` | `201` tokens, plus `walletStatus` and `pinSet` so the app knows what to do next |\n| Phone already verified for this customer | `pin` + `device` | `201` tokens |\n| New phone, reinstall or cleared data | `pin` + `idNumber` + `device` | `202` OTP challenge, then `POST /api/v2/auth/sessions/{sessionId}/otp-verifications` |\n\nThis branch is what used to be two separate calls (`POST /wallets` to register the device and create the wallet, then `POST /auth/sessions` to sign in). They are merged here because the device/customer has no idea a wallet is being created for them behind the scenes -- it's purely a backend/PSP (SasaPay) concern, so it belongs with sign-in, not with a `wallets` resource the app doesn't otherwise touch until the wallet exists.\n\n`astpp_id` **is** required on this branch specifically (it wasn't on the old first-sign-in call) because nothing has been validated for this device yet. On every other branch it's still not needed, since the device was already registered here.\n\nWhat happens on success: the device row is created, a background job sends the customer's profile to SasaPay to create the wallet, and the customer is signed in immediately -- `201` with an access token, refresh token and `sessionId`, **even though the wallet itself is still `pending_otp`**. The app can go straight to the wallet home screen shell; `walletStatus` and `pinSet` in the response tell it what to overlay:\n- `walletStatus: \"pending_otp\"` -> prompt for the SMS code SasaPay just sent, then call `POST /api/v2/auth/wallet-verifications?astppId={astppId}`.\n- `pinSet: false` -> the customer can use the app, but balance and transaction endpoints stay locked until `POST /customers/me/pin` is called, because those require a PIN-scoped (transaction) token, not just `app:access`.\n\nIdempotent: send the same `Idempotency-Key` on a retry after a timeout so the device/wallet aren't created twice; a retry with a device that's already registered still returns `201` with a fresh session.\n\n**If the SMS code expires (or all attempts are used) before it's confirmed:** the wallet is still not created on SasaPay's side, so the customer isn't fully onboarded. Call this same endpoint again with the same `Idempotency-Key` pattern to start a new PSP job and get a new code. *Open question, not yet confirmed with backend: whether `device` needs to be resent on that retry, or whether `astpp_id` alone is enough once the device row already exists -- flagging this rather than guessing.*\n\nA `202` (other branches) creates a session in a *pending* state. Its id is the id you later see in `/customers/me/sessions`.\n\nIf `device_identifier` already belongs to a different device on this account (model/OS changed without going through a proper re-registration), the answer is `409 DEVICE_MISMATCH` with an `errors[]` entry naming the mismatched field and both the `expected` (currently registered) and `actual` (submitted) values -- e.g. `device.device_model`.",
                                         "body": {
                                             "mode": "raw",
-                                            "raw": "{\n  \"astpp_id\": \"{{astppId}}\",\n  \"device\": {\n    \"device_identifier\": \"{{deviceIdentifier}}\",\n    \"mobile_type\": \"android\",\n    \"device_model\": \"Samsung Galaxy S23\",\n    \"device_os\": \"Android 14\",\n    \"app_version\": \"2.4.1\"\n  }\n}",
+                                            "raw": "{\n  \"astpp_id\": \"{{astppId}}\",\n  \"device_identifier\": \"{{deviceIdentifier}}\",\n  \"mobile_type\": \"android\",\n  \"device_model\": \"Samsung Galaxy S23\",\n  \"device_os\": \"Android 14\",\n  \"app_version\": \"2.4.1\"\n}",
                                             "options": {
                                                 "raw": {
                                                     "language": "json"
@@ -1380,11 +1331,6 @@
                                                 "key": "Content-Type",
                                                 "value": "application/json",
                                                 "type": "text"
-                                            },
-                                            {
-                                                "key": "Idempotency-Key",
-                                                "value": "{{$guid}}",
-                                                "type": "text"
                                             }
                                         ],
                                         "url": {
@@ -1402,7 +1348,7 @@
                                         "description": "The one sign-in endpoint. What it needs depends on the customer and the phone:\n\n| Situation | Send | Result |\n|---|---|---|\n| Brand-new device -- no device/wallet registered yet (this request) | `astpp_id` + `device` | `201` tokens, plus `walletStatus` and `pinSet` so the app knows what to do next |\n| Phone already verified for this customer | `pin` + `device` | `201` tokens |\n| New phone, reinstall or cleared data | `pin` + `idNumber` + `device` | `202` OTP challenge, then `POST /api/v2/auth/sessions/{sessionId}/otp-verifications` |\n\nThis branch is what used to be two separate calls (`POST /wallets` to register the device and create the wallet, then `POST /auth/sessions` to sign in). They are merged here because the device/customer has no idea a wallet is being created for them behind the scenes -- it's purely a backend/PSP (SasaPay) concern, so it belongs with sign-in, not with a `wallets` resource the app doesn't otherwise touch until the wallet exists.\n\n`astpp_id` **is** required on this branch specifically (it wasn't on the old first-sign-in call) because nothing has been validated for this device yet. On every other branch it's still not needed, since the device was already registered here.\n\nWhat happens on success: the device row is created, a background job sends the customer's profile to SasaPay to create the wallet, and the customer is signed in immediately -- `201` with an access token, refresh token and `sessionId`, **even though the wallet itself is still `pending_otp`**. The app can go straight to the wallet home screen shell; `walletStatus` and `pinSet` in the response tell it what to overlay:\n- `walletStatus: \"pending_otp\"` -> prompt for the SMS code SasaPay just sent, then call `POST /api/v2/auth/wallet-verifications?astppId={astppId}`.\n- `pinSet: false` -> the customer can use the app, but balance and transaction endpoints stay locked until `POST /customers/me/pin` is called, because those require a PIN-scoped (transaction) token, not just `app:access`.\n\nIdempotent: send the same `Idempotency-Key` on a retry after a timeout so the device/wallet aren't created twice; a retry with a device that's already registered still returns `201` with a fresh session.\n\n**If the SMS code expires (or all attempts are used) before it's confirmed:** the wallet is still not created on SasaPay's side, so the customer isn't fully onboarded. Call this same endpoint again with the same `Idempotency-Key` pattern to start a new PSP job and get a new code. *Open question, not yet confirmed with backend: whether `device` needs to be resent on that retry, or whether `astpp_id` alone is enough once the device row already exists -- flagging this rather than guessing.*\n\nA `202` (other branches) creates a session in a *pending* state. Its id is the id you later see in `/customers/me/sessions`.\n\nIf `device_identifier` already belongs to a different device on this account (model/OS changed without going through a proper re-registration), the answer is `409 DEVICE_MISMATCH` with an `errors[]` entry naming the mismatched field and both the `expected` (currently registered) and `actual` (submitted) values -- e.g. `device.device_model`.",
                                         "body": {
                                             "mode": "raw",
-                                            "raw": "{\n  \"astpp_id\": \"{{astppId}}\",\n  \"device\": {\n    \"device_identifier\": \"{{deviceIdentifier}}\",\n    \"mobile_type\": \"android\",\n    \"device_model\": \"Samsung Galaxy S23\",\n    \"device_os\": \"Android 14\",\n    \"app_version\": \"2.4.1\"\n  }\n}",
+                                            "raw": "{\n  \"astpp_id\": \"{{astppId}}\",\n  \"device_identifier\": \"{{deviceIdentifier}}\",\n  \"mobile_type\": \"android\",\n  \"device_model\": \"Samsung Galaxy S23\",\n  \"device_os\": \"Android 14\",\n  \"app_version\": \"2.4.1\"\n}",
                                             "options": {
                                                 "raw": {
                                                     "language": "json"
@@ -1431,11 +1377,6 @@
                                                 "key": "Content-Type",
                                                 "value": "application/json",
                                                 "type": "text"
-                                            },
-                                            {
-                                                "key": "Idempotency-Key",
-                                                "value": "{{$guid}}",
-                                                "type": "text"
                                             }
                                         ],
                                         "url": {
@@ -1453,7 +1394,7 @@
                                         "description": "The one sign-in endpoint. What it needs depends on the customer and the phone:\n\n| Situation | Send | Result |\n|---|---|---|\n| Brand-new device -- no device/wallet registered yet (this request) | `astpp_id` + `device` | `201` tokens, plus `walletStatus` and `pinSet` so the app knows what to do next |\n| Phone already verified for this customer | `pin` + `device` | `201` tokens |\n| New phone, reinstall or cleared data | `pin` + `idNumber` + `device` | `202` OTP challenge, then `POST /api/v2/auth/sessions/{sessionId}/otp-verifications` |\n\nThis branch is what used to be two separate calls (`POST /wallets` to register the device and create the wallet, then `POST /auth/sessions` to sign in). They are merged here because the device/customer has no idea a wallet is being created for them behind the scenes -- it's purely a backend/PSP (SasaPay) concern, so it belongs with sign-in, not with a `wallets` resource the app doesn't otherwise touch until the wallet exists.\n\n`astpp_id` **is** required on this branch specifically (it wasn't on the old first-sign-in call) because nothing has been validated for this device yet. On every other branch it's still not needed, since the device was already registered here.\n\nWhat happens on success: the device row is created, a background job sends the customer's profile to SasaPay to create the wallet, and the customer is signed in immediately -- `201` with an access token, refresh token and `sessionId`, **even though the wallet itself is still `pending_otp`**. The app can go straight to the wallet home screen shell; `walletStatus` and `pinSet` in the response tell it what to overlay:\n- `walletStatus: \"pending_otp\"` -> prompt for the SMS code SasaPay just sent, then call `POST /api/v2/auth/wallet-verifications?astppId={astppId}`.\n- `pinSet: false` -> the customer can use the app, but balance and transaction endpoints stay locked until `POST /customers/me/pin` is called, because those require a PIN-scoped (transaction) token, not just `app:access`.\n\nIdempotent: send the same `Idempotency-Key` on a retry after a timeout so the device/wallet aren't created twice; a retry with a device that's already registered still returns `201` with a fresh session.\n\n**If the SMS code expires (or all attempts are used) before it's confirmed:** the wallet is still not created on SasaPay's side, so the customer isn't fully onboarded. Call this same endpoint again with the same `Idempotency-Key` pattern to start a new PSP job and get a new code. *Open question, not yet confirmed with backend: whether `device` needs to be resent on that retry, or whether `astpp_id` alone is enough once the device row already exists -- flagging this rather than guessing.*\n\nA `202` (other branches) creates a session in a *pending* state. Its id is the id you later see in `/customers/me/sessions`.\n\nIf `device_identifier` already belongs to a different device on this account (model/OS changed without going through a proper re-registration), the answer is `409 DEVICE_MISMATCH` with an `errors[]` entry naming the mismatched field and both the `expected` (currently registered) and `actual` (submitted) values -- e.g. `device.device_model`.",
                                         "body": {
                                             "mode": "raw",
-                                            "raw": "{\n  \"astpp_id\": \"{{astppId}}\",\n  \"device\": {\n    \"device_identifier\": \"{{deviceIdentifier}}\",\n    \"mobile_type\": \"android\",\n    \"device_model\": \"Samsung Galaxy S23\",\n    \"device_os\": \"Android 14\",\n    \"app_version\": \"2.4.1\"\n  }\n}",
+                                            "raw": "{\n  \"astpp_id\": \"{{astppId}}\",\n  \"device_identifier\": \"{{deviceIdentifier}}\",\n  \"mobile_type\": \"android\",\n  \"device_model\": \"Samsung Galaxy S23\",\n  \"device_os\": \"Android 14\",\n  \"app_version\": \"2.4.1\"\n}",
                                             "options": {
                                                 "raw": {
                                                     "language": "json"
@@ -2199,7 +2140,7 @@
                                     }
                                 ],
                                 "url": {
-                                    "raw": "{{baseUrl}}/api/v2/auth/sessions",
+                                    "raw": "{{baseUrl}}/api/v2/auth/sessions/pin",
                                     "host": [
                                         "{{baseUrl}}"
                                     ],
@@ -2207,7 +2148,8 @@
                                         "api",
                                         "v2",
                                         "auth",
-                                        "sessions"
+                                        "sessions",
+                                        "pin"
                                     ]
                                 },
                                 "description": "The one sign-in endpoint. What it needs depends on the customer and the phone:\n\n| Situation | Send | Result |\n|---|---|---|\n| Customer has no PIN yet (first install) | `device` only | `201` tokens |\n| Phone already verified for this customer | `pin` + `device` | `201` tokens |\n| New phone, reinstall or cleared data | `pin` + `idNumber` + `device` | `202` OTP challenge, then `POST /api/v2/auth/sessions/{sessionId}/otp-verifications` |\n\nThe server decides whether a phone is \"verified\" (a verified session exists for the same `device_identifier`\nin the last 90 days). If the phone is new and `idNumber` is missing the answer is `422 ID_NUMBER_REQUIRED`,\nreturned **before** the PIN is checked, so it never reveals whether the PIN was right. `astpp_id` is not\nneeded here - it was already validated once, when the device was registered.\n\nA `202` creates a session in a *pending* state. Its id is the id you later see in `/customers/me/sessions`.",
@@ -2768,7 +2710,7 @@
                                     }
                                 ],
                                 "url": {
-                                    "raw": "{{baseUrl}}/api/v2/auth/sessions",
+                                    "raw": "{{baseUrl}}/api/v2/auth/sessions/recovery",
                                     "host": [
                                         "{{baseUrl}}"
                                     ],
@@ -2776,7 +2718,8 @@
                                         "api",
                                         "v2",
                                         "auth",
-                                        "sessions"
+                                        "sessions",
+                                        "recovery"
                                     ]
                                 },
                                 "description": "The one sign-in endpoint. What it needs depends on the customer and the phone:\n\n| Situation | Send | Result |\n|---|---|---|\n| Customer has no PIN yet (first install) | `device` only | `201` tokens |\n| Phone already verified for this customer | `pin` + `device` | `201` tokens |\n| New phone, reinstall or cleared data | `pin` + `idNumber` + `device` | `202` OTP challenge, then `POST /api/v2/auth/sessions/{sessionId}/otp-verifications` |\n\nThe server decides whether a phone is \"verified\" (a verified session exists for the same `device_identifier`\nin the last 90 days). If the phone is new and `idNumber` is missing the answer is `422 ID_NUMBER_REQUIRED`,\nreturned **before** the PIN is checked, so it never reveals whether the PIN was right. `astpp_id` is not\nneeded here - it was already validated once, when the device was registered.\n\nA `202` creates a session in a *pending* state. Its id is the id you later see in `/customers/me/sessions`.",
@@ -3333,7 +3276,7 @@
                                     }
                                 ],
                                 "url": {
-                                    "raw": "{{baseUrl}}/api/v2/auth/otp-verifications?sessionId={{pendingSessionId}}",
+                                    "raw": "{{baseUrl}}/api/v2/auth/sessions/recovery-otp",
                                     "host": [
                                         "{{baseUrl}}"
                                     ],
@@ -3341,13 +3284,8 @@
                                         "api",
                                         "v2",
                                         "auth",
-                                        "otp-verifications"
-                                    ],
-                                    "query": [
-                                        {
-                                            "key": "sessionId",
-                                            "value": "{{pendingSessionId}}"
-                                        }
+                                        "sessions",
+                                        "recovery-otp"
                                     ]
                                 },
                                 "description": "Completes a pending sign-in from a new phone. `sessionId` is the one returned by the `202`.",
@@ -10688,11 +10626,6 @@
                                                 "key": "Content-Type",
                                                 "value": "application/json",
                                                 "type": "text"
-                                            },
-                                            {
-                                                "key": "Idempotency-Key",
-                                                "value": "{{$guid}}",
-                                                "type": "text"
                                             }
                                         ],
                                         "url": {
@@ -10737,11 +10670,6 @@
                                             {
                                                 "key": "Content-Type",
                                                 "value": "application/json",
-                                                "type": "text"
-                                            },
-                                            {
-                                                "key": "Idempotency-Key",
-                                                "value": "{{$guid}}",
                                                 "type": "text"
                                             }
                                         ],
@@ -10788,11 +10716,6 @@
                                                 "key": "Content-Type",
                                                 "value": "application/json",
                                                 "type": "text"
-                                            },
-                                            {
-                                                "key": "Idempotency-Key",
-                                                "value": "{{$guid}}",
-                                                "type": "text"
                                             }
                                         ],
                                         "url": {
@@ -10837,11 +10760,6 @@
                                             {
                                                 "key": "Content-Type",
                                                 "value": "application/json",
-                                                "type": "text"
-                                            },
-                                            {
-                                                "key": "Idempotency-Key",
-                                                "value": "{{$guid}}",
                                                 "type": "text"
                                             }
                                         ],
@@ -10888,11 +10806,6 @@
                                                 "key": "Content-Type",
                                                 "value": "application/json",
                                                 "type": "text"
-                                            },
-                                            {
-                                                "key": "Idempotency-Key",
-                                                "value": "{{$guid}}",
-                                                "type": "text"
                                             }
                                         ],
                                         "url": {
@@ -10938,11 +10851,6 @@
                                                 "key": "Content-Type",
                                                 "value": "application/json",
                                                 "type": "text"
-                                            },
-                                            {
-                                                "key": "Idempotency-Key",
-                                                "value": "{{$guid}}",
-                                                "type": "text"
                                             }
                                         ],
                                         "url": {
@@ -10987,11 +10895,6 @@
                                             {
                                                 "key": "Content-Type",
                                                 "value": "application/json",
-                                                "type": "text"
-                                            },
-                                            {
-                                                "key": "Idempotency-Key",
-                                                "value": "{{$guid}}",
                                                 "type": "text"
                                             }
                                         ],
@@ -11103,11 +11006,6 @@
                                                 "key": "Content-Type",
                                                 "value": "application/json",
                                                 "type": "text"
-                                            },
-                                            {
-                                                "key": "Idempotency-Key",
-                                                "value": "{{$guid}}",
-                                                "type": "text"
                                             }
                                         ],
                                         "url": {
@@ -11152,11 +11050,6 @@
                                             {
                                                 "key": "Content-Type",
                                                 "value": "application/json",
-                                                "type": "text"
-                                            },
-                                            {
-                                                "key": "Idempotency-Key",
-                                                "value": "{{$guid}}",
                                                 "type": "text"
                                             }
                                         ],
@@ -11203,11 +11096,6 @@
                                                 "key": "Content-Type",
                                                 "value": "application/json",
                                                 "type": "text"
-                                            },
-                                            {
-                                                "key": "Idempotency-Key",
-                                                "value": "{{$guid}}",
-                                                "type": "text"
                                             }
                                         ],
                                         "url": {
@@ -11252,11 +11140,6 @@
                                             {
                                                 "key": "Content-Type",
                                                 "value": "application/json",
-                                                "type": "text"
-                                            },
-                                            {
-                                                "key": "Idempotency-Key",
-                                                "value": "{{$guid}}",
                                                 "type": "text"
                                             }
                                         ],
@@ -11303,11 +11186,6 @@
                                                 "key": "Content-Type",
                                                 "value": "application/json",
                                                 "type": "text"
-                                            },
-                                            {
-                                                "key": "Idempotency-Key",
-                                                "value": "{{$guid}}",
-                                                "type": "text"
                                             }
                                         ],
                                         "url": {
@@ -11353,11 +11231,6 @@
                                                 "key": "Content-Type",
                                                 "value": "application/json",
                                                 "type": "text"
-                                            },
-                                            {
-                                                "key": "Idempotency-Key",
-                                                "value": "{{$guid}}",
-                                                "type": "text"
                                             }
                                         ],
                                         "url": {
@@ -11402,11 +11275,6 @@
                                             {
                                                 "key": "Content-Type",
                                                 "value": "application/json",
-                                                "type": "text"
-                                            },
-                                            {
-                                                "key": "Idempotency-Key",
-                                                "value": "{{$guid}}",
                                                 "type": "text"
                                             }
                                         ],

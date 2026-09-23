@@ -56,7 +56,7 @@ export class OnboardingController {
       success: true,
       message: result.otpPending
         ? this.messages.get('wallets.onboarding.awaitingOtp', {
-            phoneNumber: this.maskPhoneNumber(result.user.phoneNumber),
+            phoneNumber: result.user.phoneNumber ? this.maskPhoneNumber(result.user.phoneNumber) : 'your registered phone number',
           })
         : this.messages.get('onboarding.welcome'),
       data: result,

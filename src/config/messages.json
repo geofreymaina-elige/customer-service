@@ -32,7 +32,8 @@
     "logoutVerified": "Successfully logged out from previous device. New device activated.",
     "noActiveDevice": "No active device found for this account.",
     "deviceRevoked": "Device session revoked successfully.",
-    "heartbeatSuccess": "Device heartbeat recorded."
+    "heartbeatSuccess": "Device heartbeat recorded.",
+    "validationError": "Device information is invalid or incomplete. Please provide valid device details."
   },
   "onboarding": {
     "welcome": "Welcome! Your customer profile and account have been created.",
