@@ -22,6 +22,7 @@ import { MessageService } from '../../../core/messages/message.service';
 import { AstppTokenGuard } from '../../../core/auth/astpp-token.guard';
 import { PinAstppTokenGuard } from '../../../core/auth/pin-astpp-token.guard';
 import { AuthGuard } from '../../../core/auth/auth.guard';
+import { SecureJwtService } from '../../../core/auth/jwt.service';
 import { DatabaseService } from '../../../core/database/database.service';
 import { JobService } from '../../../core/jobs/job.service';
 import { CurrentUser, AuthenticatedUser } from '../../../core/auth/current-user.decorator';
@@ -41,6 +42,7 @@ export class OnboardingController {
     private readonly db: DatabaseService,
     private readonly jobService: JobService,
     private readonly config: ConfigService,
+    private readonly jwtService: SecureJwtService,
   ) {}
 
   /**
@@ -139,31 +141,61 @@ export class OnboardingController {
 
   /**
    * Sign out all devices (revokes all active sessions for this customer)
+   * Idempotent - succeeds even if session is already revoked
    */
   @Delete('api/v2/auth/sessions/current')
-  @UseGuards(AuthGuard)
-  async revokeAllSessions(@CurrentUser() user: AuthenticatedUser) {
-    // Revoke ALL active devices for this customer
+  @HttpCode(HttpStatus.OK)
+  async revokeAllSessions(@Req() req: Request) {
+    // Manually extract and verify token (without requiring active device)
+    const authHeader = req.headers['authorization'];
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return {
+        success: true,
+        message: 'No active sessions to revoke',
+      };
+    }
+
+    const token = authHeader.substring(7);
+    
+    let customerId: number;
+    try {
+      // Verify token but don't check device status
+      const payload = this.jwtService.verifyToken(token);
+      customerId = payload.customerId;
+    } catch (error) {
+      // Token is invalid or expired - that's fine, nothing to revoke
+      return {
+        success: true,
+        message: 'No active sessions to revoke',
+      };
+    }
+
+    // Revoke ALL active devices for this customer (idempotent)
     const result = await this.db.query(
       `UPDATE customer_devices 
        SET status = 'revoked', revoked_at = NOW(), updated_at = NOW() 
        WHERE customer_id = $1 AND status = 'active'
        RETURNING id`,
-      [user.id]
+      [customerId]
     );
 
     const revokedCount = result.rowCount || 0;
 
-    // Log the revocation
-    await this.db.query(
-      `INSERT INTO customer_activity_logs (customer_id, event_type, actor_type, actor_id, details)
-       VALUES ($1, 'ALL_DEVICES_REVOKED', 'CUSTOMER', $2, $3::jsonb)`,
-      [user.id, String(user.id), JSON.stringify({ revokedCount, reason: 'Manual sign out' })]
-    );
+    // Log the revocation only if we actually revoked something
+    if (revokedCount > 0) {
+      await this.db.query(
+        `INSERT INTO customer_activity_logs (customer_id, event_type, actor_type, actor_id, details)
+         VALUES ($1, 'ALL_DEVICES_REVOKED', 'CUSTOMER', $2, $3::jsonb)`,
+        [customerId, String(customerId), JSON.stringify({ revokedCount, reason: 'Manual sign out' })]
+      );
+    }
 
     return {
       success: true,
-      message: `All sessions revoked successfully (${revokedCount} device${revokedCount !== 1 ? 's' : ''})`,
+      message: revokedCount > 0 
+        ? `All sessions revoked successfully (${revokedCount} device${revokedCount !== 1 ? 's' : ''})` 
+        : 'No active sessions to revoke',
     };
   }
 
