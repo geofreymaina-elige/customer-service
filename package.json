@@ -22,7 +22,7 @@
     "pm2:logs": "pm2 logs",
     "pm2:logs:api": "pm2 logs customer-management-service",
     "pm2:logs:cdc": "pm2 logs customer-cdc-consumer",
-    "reload": "npm run build && pm2 reload ecosystem.config.cjs",
+    "reload": "npm run build && pm2 reload customer-management-service",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix"
   },
   "dependencies": {
