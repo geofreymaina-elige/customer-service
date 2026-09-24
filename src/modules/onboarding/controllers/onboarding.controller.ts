@@ -342,14 +342,14 @@ export class OnboardingController {
 
     // Get customer details for notification
     const customer = await this.db.queryOne(
-      `SELECT id, phone_number, email FROM customers WHERE id = $1`,
+      `SELECT id, astpp_id, phone_number, email FROM customers WHERE id = $1`,
       [application.customer_id]
     );
 
     // Send notification via Kafka (push + websocket)
     if (customer) {
       await this.notifications.sendWalletOnboardingNotification(
-        String(customer.id),
+        String(customer.astpp_id),
         kycStatus as 'approved' | 'rejected',
         callbackAccountNumber,
         dto.description || undefined,

@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Kafka, Producer } from 'kafkajs';
 
 export interface NotificationPayload {
-  userId?: string;
+  astpp_id?: string;
   channels: ('sms' | 'push' | 'websocket' | 'email')[];
   title: string;
   body: string;
@@ -84,7 +84,7 @@ export class KafkaNotificationService {
     otp: string,
     purpose: 'device_recovery' | 'pin_reset' | 'wallet_verification',
     correlationId: string,
-    customerId?: string
+    astppId: string
   ): Promise<void> {
     const messages = {
       device_recovery: `Your Ambia Pay device recovery code is ${otp}. Valid for 10 minutes. Do not share this code.`,
@@ -99,7 +99,7 @@ export class KafkaNotificationService {
     };
 
     await this.sendNotification({
-      userId: customerId || '0',
+      astpp_id: astppId,
       channels: ['sms'],
       title: titles[purpose],
       body: messages[purpose],
@@ -125,7 +125,7 @@ export class KafkaNotificationService {
    * Send SasaPay wallet onboarding notifications (push + websocket)
    */
   async sendWalletOnboardingNotification(
-    customerId: string,
+    astppId: string,
     status: 'approved' | 'rejected' | 'pending',
     accountNumber?: string,
     reason?: string,
@@ -145,12 +145,12 @@ export class KafkaNotificationService {
     };
 
     await this.sendNotification({
-      userId: customerId,
+      astpp_id: astppId,
       channels: ['websocket', 'push'],
       title: titles[status],
       body: messages[status],
       priority: 'high',
-      correlationId: `wallet_onboarding_${customerId}_${Date.now()}`,
+      correlationId: `wallet_onboarding_${astppId}_${Date.now()}`,
       sourceService: 'customer_service',
       type: 'wallet_onboarding',
       notifyTopic: true,
@@ -173,18 +173,18 @@ export class KafkaNotificationService {
    * Send device registered notification
    */
   async sendDeviceRegisteredNotification(
-    customerId: string,
+    astppId: string,
     deviceModel: string,
     phoneNumber?: string,
     emailAddress?: string
   ): Promise<void> {
     await this.sendNotification({
-      userId: customerId,
+      astpp_id: astppId,
       channels: ['websocket', 'push'],
       title: 'New Device Registered',
       body: `Your account has been accessed from a new device: ${deviceModel}`,
       priority: 'high',
-      correlationId: `device_registered_${customerId}_${Date.now()}`,
+      correlationId: `device_registered_${astppId}_${Date.now()}`,
       sourceService: 'customer_service',
       type: 'security',
       notifyTopic: true,
@@ -205,17 +205,17 @@ export class KafkaNotificationService {
    * Send PIN set notification
    */
   async sendPinSetNotification(
-    customerId: string,
+    astppId: string,
     phoneNumber?: string,
     emailAddress?: string
   ): Promise<void> {
     await this.sendNotification({
-      userId: customerId,
+      astpp_id: astppId,
       channels: ['websocket', 'push'],
       title: 'PIN Created',
       body: 'Your wallet PIN has been successfully set. You can now access all wallet features.',
       priority: 'high',
-      correlationId: `pin_set_${customerId}_${Date.now()}`,
+      correlationId: `pin_set_${astppId}_${Date.now()}`,
       sourceService: 'customer_service',
       type: 'security',
       notifyTopic: true,
@@ -234,17 +234,17 @@ export class KafkaNotificationService {
    * Send PIN changed notification
    */
   async sendPinChangedNotification(
-    customerId: string,
+    astppId: string,
     phoneNumber?: string,
     emailAddress?: string
   ): Promise<void> {
     await this.sendNotification({
-      userId: customerId,
+      astpp_id: astppId,
       channels: ['websocket', 'push'],
       title: 'PIN Changed',
       body: 'Your wallet PIN has been successfully changed.',
       priority: 'high',
-      correlationId: `pin_changed_${customerId}_${Date.now()}`,
+      correlationId: `pin_changed_${astppId}_${Date.now()}`,
       sourceService: 'customer_service',
       type: 'security',
       notifyTopic: true,
@@ -263,18 +263,18 @@ export class KafkaNotificationService {
    * Send device revoked notification
    */
   async sendDeviceRevokedNotification(
-    customerId: string,
+    astppId: string,
     reason: string,
     phoneNumber?: string,
     emailAddress?: string
   ): Promise<void> {
     await this.sendNotification({
-      userId: customerId,
+      astpp_id: astppId,
       channels: ['websocket', 'push'],
       title: 'Device Session Ended',
       body: `Your device session has been ended. ${reason}`,
       priority: 'high',
-      correlationId: `device_revoked_${customerId}_${Date.now()}`,
+      correlationId: `device_revoked_${astppId}_${Date.now()}`,
       sourceService: 'customer_service',
       type: 'security',
       notifyTopic: true,

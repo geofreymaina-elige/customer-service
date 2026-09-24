@@ -27,23 +27,15 @@ export class PinAuthService {
    * Set initial 4-digit PIN for a customer
    */
   async setPin(dto: SetPinDto, customerId?: number): Promise<{ success: boolean; message: string }> {
-    if (dto.pin !== dto.confirmPin) {
+    if (dto.pin !== dto.confirm_pin) {
       throw new BadRequestException(this.messages.get('auth.pin.pinsMustMatch'));
     }
 
-    // Find customer by ASTPP ID or authenticated user ID
-    let customer;
-    if (customerId) {
-      customer = await this.db.queryOne(
-        `SELECT id, uuid, deleted_at, status FROM customers WHERE id = $1`,
-        [customerId]
-      );
-    } else {
-      customer = await this.db.queryOne(
-        `SELECT id, uuid, deleted_at, status FROM customers WHERE astpp_id::text = $1`,
-        [dto.astpp_id]
-      );
-    }
+    // Find customer by authenticated user ID (no astpp_id needed)
+    const customer = await this.db.queryOne(
+      `SELECT id, uuid, deleted_at, status FROM customers WHERE id = $1`,
+      [customerId]
+    );
 
     if (!customer) {
       throw new NotFoundException(this.messages.get('common.notFound'));
@@ -91,11 +83,11 @@ export class PinAuthService {
    * Authenticated PIN change (requires old PIN)
    */
   async changePin(customerId: number, dto: ChangePinDto): Promise<{ success: boolean; message: string }> {
-    if (dto.newPin !== dto.confirmNewPin) {
+    if (dto.new_pin !== dto.confirm_new_pin) {
       throw new BadRequestException(this.messages.get('auth.pin.pinsMustMatch'));
     }
 
-    if (dto.newPin === dto.oldPin) {
+    if (dto.new_pin === dto.current_pin) {
       throw new BadRequestException(this.messages.get('auth.pin.newPinCannotBeSame'));
     }
 
@@ -122,7 +114,7 @@ export class PinAuthService {
     }
 
     // Verify old PIN
-    const isOldPinValid = await bcrypt.compare(dto.oldPin, pinRecord.pin_hash);
+    const isOldPinValid = await bcrypt.compare(dto.current_pin, pinRecord.pin_hash);
     if (!isOldPinValid) {
       const newAttempts = pinRecord.failed_attempts + 1;
       await this.db.query(
@@ -133,7 +125,7 @@ export class PinAuthService {
     }
 
     // Hash new PIN
-    const hashedNewPin = await bcrypt.hash(dto.newPin, 10);
+    const hashedNewPin = await bcrypt.hash(dto.new_pin, 10);
 
     await this.db.query(
       `UPDATE customer_pins

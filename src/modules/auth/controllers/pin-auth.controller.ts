@@ -15,7 +15,7 @@ export class PinAuthController {
   ) {}
 
   @Post('api/v2/customers/me/pin')
-  @UseGuards(AuthGuard, PinAstppTokenGuard)
+  @UseGuards(AuthGuard)
   @HttpCode(HttpStatus.OK)
   async setPin(@CurrentUser() user: AuthenticatedUser, @Body() dto: SetPinDto) {
     return this.pinAuthService.setPin(dto, user.id);

@@ -35,7 +35,7 @@ export class DeviceLogoutService {
   }> {
     // 1. Find customer and identity details (prioritize wallet_kyc over primary_kyc)
     const customer = await this.db.queryOne(
-      `SELECT c.id, c.uuid, c.phone_number, c.deleted_at, c.status, cad.identity_document_number AS document_number
+      `SELECT c.id, c.uuid, c.astpp_id, c.phone_number, c.deleted_at, c.status, cad.identity_document_number AS document_number
        FROM customers c
        LEFT JOIN customer_applications ca ON ca.customer_id = c.id
        LEFT JOIN customer_applicant_details cad ON cad.customer_application_id = ca.id
@@ -120,7 +120,7 @@ export class DeviceLogoutService {
       otpCode,
       'device_recovery',
       `device_recovery_${customer.uuid}_${Date.now()}`,
-      String(customer.id)
+      String(customer.astpp_id)
     );
 
     return {

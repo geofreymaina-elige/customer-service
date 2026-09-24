@@ -26,17 +26,13 @@ class DeviceDto {
 export class SetPinDto {
   @IsNotEmpty()
   @IsString()
-  astpp_id: string; // Customer ASTPP ID
-
-  @IsNotEmpty()
-  @IsString()
   @Matches(/^\d{4}$/, { message: 'PIN must be exactly 4 digits' })
   pin: string;
 
   @IsNotEmpty()
   @IsString()
   @Matches(/^\d{4}$/, { message: 'Confirm PIN must be exactly 4 digits' })
-  confirmPin: string;
+  confirm_pin: string;
 }
 
 export class VerifyPinDto {
@@ -66,17 +62,17 @@ export class ChangePinDto {
   @IsNotEmpty({ message: 'Current PIN is required.' })
   @IsString()
   @Matches(/^\d{4}$/, { message: 'Current PIN must be exactly 4 digits' })
-  oldPin: string;
+  current_pin: string;
 
   @IsNotEmpty({ message: 'New PIN is required.' })
   @IsString()
   @Matches(/^\d{4}$/, { message: 'New PIN must be exactly 4 digits' })
-  newPin: string;
+  new_pin: string;
 
   @IsNotEmpty({ message: 'Confirm new PIN is required.' })
   @IsString()
   @Matches(/^\d{4}$/, { message: 'Confirm new PIN must be exactly 4 digits' })
-  confirmNewPin: string;
+  confirm_new_pin: string;
 }
 
 export class ExchangePinForTransactionTokenDto {
