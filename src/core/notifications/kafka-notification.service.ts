@@ -24,7 +24,7 @@ export interface NotificationPayload {
 export class KafkaNotificationService {
   private readonly logger = new Logger(KafkaNotificationService.name);
   private producer: Producer;
-  private readonly topic = 'customer_management_notifications';
+  private readonly topic = 'customer_service.notifications';
   private isConnected = false;
 
   constructor(private readonly config: ConfigService) {
