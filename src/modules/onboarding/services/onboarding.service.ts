@@ -136,13 +136,13 @@ export class OnboardingService {
     const deviceResult = await this.deviceGatekeeper.registerOrVerifyDevice(
       customer.id,
       {
-        deviceIdentifier: dto.device_identifier,
-        deviceModel: dto.device_model,
-        deviceOs: dto.device_os,
-        mobileType: dto.mobile_type,
-        appVersion: dto.app_version,
-        callkitToken: dto.callkit_token,
-        apnsToken: dto.apns_token,
+        device_identifier: dto.device_identifier,
+        device_model: dto.device_model,
+        device_os: dto.device_os,
+        mobile_type: dto.mobile_type,
+        app_version: dto.app_version,
+        callkit_token: dto.callkit_token,
+        apns_token: dto.apns_token,
       },
       ipAddress
     );

@@ -4,36 +4,36 @@ import { Type } from 'class-transformer';
 export class DeviceMetadataDto {
   @IsNotEmpty()
   @IsString()
-  deviceIdentifier: string;
+  device_identifier: string;
 
   @IsNotEmpty()
   @IsString()
-  deviceModel: string;
+  device_model: string;
 
   @IsNotEmpty()
   @IsString()
-  deviceOs: string;
+  device_os: string;
 
   @IsNotEmpty()
   @IsString()
   @IsIn(['android', 'ios'])
-  mobileType: 'android' | 'ios';
+  mobile_type: 'android' | 'ios';
 
   @IsNotEmpty()
   @IsString()
-  appVersion: string;
+  app_version: string;
 
   @IsOptional()
   @IsString()
-  callkitToken?: string;
+  callkit_token?: string;
 
   @IsOptional()
   @IsString()
-  apnsToken?: string;
+  apns_token?: string;
 
   @IsOptional()
   @IsString()
-  fcmToken?: string;
+  fcm_token?: string;
 }
 
 export class VerifyDeviceDto extends DeviceMetadataDto {
@@ -45,16 +45,21 @@ export class VerifyDeviceDto extends DeviceMetadataDto {
 export class InitiateDeviceLogoutDto {
   @IsNotEmpty()
   @IsString()
-  astppId: string;
+  astpp_id: string;
 
   @IsNotEmpty()
   @IsString()
-  idNumber: string;
+  id_number: string;
 
   @IsNotEmpty()
   @IsString()
   @Matches(/^\d{4}$/, { message: 'PIN must be exactly 4 digits' })
   pin: string;
+
+  @IsNotEmpty()
+  @ValidateNested()
+  @Type(() => DeviceMetadataDto)
+  device: DeviceMetadataDto;
 }
 
 export class VerifyDeviceLogoutDto {

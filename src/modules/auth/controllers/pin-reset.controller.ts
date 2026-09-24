@@ -6,10 +6,10 @@ import {
   CompletePinResetDto,
 } from '../dto/pin-reset.dto';
 import { MessageService } from '../../../core/messages/message.service';
-import { PinAstppTokenGuard } from '../../../core/auth/pin-astpp-token.guard';
+import { AstppTokenGuard } from '../../../core/auth/astpp-token.guard';
 
 @Controller('')
-@UseGuards(PinAstppTokenGuard)
+@UseGuards(AstppTokenGuard)
 export class PinResetController {
   constructor(
     private readonly pinResetService: PinResetService,

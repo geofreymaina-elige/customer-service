@@ -30,9 +30,9 @@ export class DeviceGatekeeperService {
     isNewDevice: boolean;
   }> {
     const deviceHash = this.jwtService.hashDevice(
-      deviceData.deviceIdentifier,
-      deviceData.deviceModel,
-      deviceData.mobileType
+      deviceData.device_identifier,
+      deviceData.device_model,
+      deviceData.mobile_type
     );
 
     // Check for currently active device
@@ -51,10 +51,10 @@ export class DeviceGatekeeperService {
            WHERE id = $6`,
           [
             ipAddress,
-            deviceData.appVersion,
-            deviceData.callkitToken || null,
-            deviceData.apnsToken || null,
-            deviceData.fcmToken || null,
+            deviceData.app_version,
+            deviceData.callkit_token || null,
+            deviceData.apns_token || null,
+            deviceData.fcm_token || null,
             activeDevice.id,
           ]
         );
@@ -94,14 +94,14 @@ export class DeviceGatekeeperService {
       [
         customerId,
         deviceHash,
-        deviceData.deviceIdentifier,
-        deviceData.deviceModel,
-        deviceData.deviceOs,
-        deviceData.mobileType,
-        deviceData.appVersion,
-        deviceData.callkitToken || null,
-        deviceData.apnsToken || null,
-        deviceData.fcmToken || null,
+        deviceData.device_identifier,
+        deviceData.device_model,
+        deviceData.device_os,
+        deviceData.mobile_type,
+        deviceData.app_version,
+        deviceData.callkit_token || null,
+        deviceData.apns_token || null,
+        deviceData.fcm_token || null,
         ipAddress,
       ]
     );
@@ -114,9 +114,9 @@ export class DeviceGatekeeperService {
         customerId,
         String(customerId),
         JSON.stringify({
-          deviceModel: deviceData.deviceModel,
-          mobileType: deviceData.mobileType,
-          appVersion: deviceData.appVersion,
+          deviceModel: deviceData.device_model,
+          mobileType: deviceData.mobile_type,
+          appVersion: deviceData.app_version,
         }),
         ipAddress,
       ]
@@ -125,7 +125,7 @@ export class DeviceGatekeeperService {
     await this.events.publish('customer.device_registered', 'CustomerDevice', String(customerId), {
       customerId,
       sessionId: newDevice.uuid,
-      deviceModel: deviceData.deviceModel,
+      deviceModel: deviceData.device_model,
     });
 
     return {

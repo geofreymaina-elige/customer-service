@@ -13,7 +13,11 @@ export class InitiatePinResetDto {
 export class VerifyResetOtpDto {
   @IsNotEmpty()
   @IsString()
-  resetId: string;
+  astpp_id: string;
+
+  @IsNotEmpty()
+  @IsString()
+  reset_id: string;
 
   @IsNotEmpty()
   @IsString()
@@ -30,7 +34,11 @@ export class ResendResetOtpDto {
 export class CompletePinResetDto {
   @IsNotEmpty()
   @IsString()
-  resetId: string;
+  astpp_id: string;
+
+  @IsNotEmpty()
+  @IsString()
+  reset_id: string;
 
   @IsNotEmpty()
   @IsString()
@@ -40,5 +48,5 @@ export class CompletePinResetDto {
   @IsNotEmpty()
   @IsString()
   @Matches(/^\d{4}$/, { message: 'Confirm PIN must be exactly 4 digits' })
-  confirmPin: string;
+  confirm_pin: string;
 }

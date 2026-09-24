@@ -113,11 +113,14 @@ export class OnboardingController {
 
   /**
    * Sign in new phone (recovery, start OTP) - moved from DeviceController
+   * Requires astpp_id in body and X-Astpp-Token header
    */
   @Post('api/v2/auth/sessions/recovery')
+  @UseGuards(AstppTokenGuard)
   @HttpCode(HttpStatus.OK)
   async initiateLogout(@Body() dto: InitiateDeviceLogoutDto) {
     const data = await this.deviceLogoutService.initiateLogout(dto);
+    
     return {
       success: true,
       message: this.messages.get('devices.logoutInitiated'),
