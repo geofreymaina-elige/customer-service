@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Kafka, Producer } from 'kafkajs';
 
 export interface NotificationPayload {
-  astpp_id?: string;
+  astppId?: string;
   channels: ('sms' | 'push' | 'websocket' | 'email')[];
   title: string;
   body: string;
@@ -99,7 +99,7 @@ export class KafkaNotificationService {
     };
 
     await this.sendNotification({
-      astpp_id: astppId,
+      astppId: astppId,
       channels: ['sms'],
       title: titles[purpose],
       body: messages[purpose],
@@ -145,7 +145,7 @@ export class KafkaNotificationService {
     };
 
     await this.sendNotification({
-      astpp_id: astppId,
+      astppId: astppId,
       channels: ['websocket', 'push'],
       title: titles[status],
       body: messages[status],
@@ -179,7 +179,7 @@ export class KafkaNotificationService {
     emailAddress?: string
   ): Promise<void> {
     await this.sendNotification({
-      astpp_id: astppId,
+      astppId: astppId,
       channels: ['websocket', 'push'],
       title: 'New Device Registered',
       body: `Your account has been accessed from a new device: ${deviceModel}`,
@@ -210,7 +210,7 @@ export class KafkaNotificationService {
     emailAddress?: string
   ): Promise<void> {
     await this.sendNotification({
-      astpp_id: astppId,
+      astppId: astppId,
       channels: ['websocket', 'push'],
       title: 'PIN Created',
       body: 'Your wallet PIN has been successfully set. You can now access all wallet features.',
@@ -239,7 +239,7 @@ export class KafkaNotificationService {
     emailAddress?: string
   ): Promise<void> {
     await this.sendNotification({
-      astpp_id: astppId,
+      astppId: astppId,
       channels: ['websocket', 'push'],
       title: 'PIN Changed',
       body: 'Your wallet PIN has been successfully changed.',
@@ -269,7 +269,7 @@ export class KafkaNotificationService {
     emailAddress?: string
   ): Promise<void> {
     await this.sendNotification({
-      astpp_id: astppId,
+      astppId: astppId,
       channels: ['websocket', 'push'],
       title: 'Device Session Ended',
       body: `Your device session has been ended. ${reason}`,
