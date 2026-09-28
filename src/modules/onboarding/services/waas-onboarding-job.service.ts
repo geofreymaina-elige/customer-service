@@ -294,7 +294,7 @@ export class WaasOnboardingJobService {
       firstName: customer.first_name,
       middleName: '',
       lastName: customer.last_name,
-      countryCode: '254',
+      countryCode: '1',
       mobileNumber: customer.phone_number.replace(/^\+?254/, '0'),
       documentType: this.mapDocTypeToSasaPay(kycDetails?.identity_document_type || 'NATIONAL_ID'),
       documentNumber: kycDetails?.identity_document_number || `ID${customer.astpp_id}`,
