@@ -34,15 +34,15 @@ async function main() {
   const pgPool    = new Pool(pgConfig);
 
   try {
-    // 1. Load country code map from ASTPP: id -> iso (2-letter code)
+    // 1. Load country code map from ASTPP: id -> phonecode (2-letter code)
     const [rows] = await mysqlPool.execute(
-      `SELECT id, iso FROM countrycode WHERE iso IS NOT NULL AND iso != ''`
+      `SELECT id, phonecode FROM countrycode WHERE phonecode IS NOT NULL AND phonecode != ''`
     );
 
     const countryCodeMap = new Map();
     for (const row of rows) {
-      if (row.id && row.iso) {
-        countryCodeMap.set(Number(row.id), String(row.iso).trim());
+      if (row.id && row.phonecode) {
+        countryCodeMap.set(Number(row.id), String(row.phonecode).trim());
       }
     }
     console.log(`[backfill-country-code] Loaded ${countryCodeMap.size} country codes from ASTPP`);
@@ -67,7 +67,7 @@ async function main() {
       for (const { astpp_id, country_id } of customers) {
         const code = countryCodeMap.get(Number(country_id));
         if (!code) {
-          console.warn(`  [SKIP] astpp_id=${astpp_id}: no ISO code found for country_id=${country_id}`);
+          console.warn(`  [SKIP] astpp_id=${astpp_id}: no phonecode code found for country_id=${country_id}`);
           skipped++;
           continue;
         }

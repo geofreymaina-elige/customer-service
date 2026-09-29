@@ -47,7 +47,7 @@ export class SnapshotWorker {
   private readonly checkpointInterval = 500;
 
   /**
-   * In-memory country code lookup: ASTPP countrycode.id -> countrycode.iso
+   * In-memory country code lookup: ASTPP countrycode.id -> countrycode.phonecode
    * Loaded once at the start of each run() invocation.
    */
   private countryCodeMap = new Map<number, string>();
@@ -418,13 +418,13 @@ export class SnapshotWorker {
    */
   private async loadCountryCodeMap(): Promise<void> {
     this.countryCodeMap.clear();
-    const rows = await this.astppMysql.query<{ id: number; iso: string }>(
-      `SELECT id, iso FROM countrycode WHERE iso IS NOT NULL AND iso != ''`,
+    const rows = await this.astppMysql.query<{ id: number; phonecode: string }>(
+      `SELECT id, phonecode FROM countrycode WHERE phonecode IS NOT NULL AND phonecode != ''`,
       [],
     );
     for (const row of rows) {
-      if (row.id && row.iso) {
-        this.countryCodeMap.set(Number(row.id), String(row.iso).trim());
+      if (row.id && row.phonecode) {
+        this.countryCodeMap.set(Number(row.id), String(row.phonecode).trim());
       }
     }
     this.logger.log(`Country code map loaded: ${this.countryCodeMap.size} entries`);

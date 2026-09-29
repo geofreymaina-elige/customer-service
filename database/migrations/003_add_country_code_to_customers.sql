@@ -10,5 +10,3 @@
 ALTER TABLE customers
   ADD COLUMN IF NOT EXISTS country_code VARCHAR(10);
 
-COMMENT ON COLUMN customers.country_code IS
-  'ISO 2-letter country code resolved from ASTPP countrycode.iso using country_id';

@@ -409,11 +409,11 @@ export class WaasOnboardingJobService {
       let countryCode: string | null = null;
       if (account.country_id) {
         try {
-          const ccRow = await this.astppMysql.queryOne<{ iso: string }>(
-            `SELECT iso FROM countrycode WHERE id = ? AND iso IS NOT NULL AND iso != '' LIMIT 1`,
+          const ccRow = await this.astppMysql.queryOne<{ phonecode: string }>(
+            `SELECT phonecode FROM countrycode WHERE id = ? AND phonecode IS NOT NULL AND phonecode != '' LIMIT 1`,
             [account.country_id],
           );
-          countryCode = ccRow?.iso?.trim() || null;
+          countryCode = ccRow?.phonecode?.trim() || null;
         } catch {
           // Non-fatal: country_code will be null
         }
