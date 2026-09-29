@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS customers (
     astpp_id INTEGER UNIQUE, -- From ASTPP accounts.id
     phone_number VARCHAR(32) NOT NULL UNIQUE, -- From ASTPP accounts.number (account_number and phone_number are same)
     country_id INTEGER, -- From ASTPP accounts.country_id
+    country_code VARCHAR(10),
     currency_id INTEGER, -- From ASTPP accounts.currency_id
     account_type INTEGER, -- From ASTPP accounts.type
     

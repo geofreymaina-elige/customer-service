@@ -46,6 +46,12 @@ export class SnapshotWorker {
   private readonly batchSize = 100;
   private readonly checkpointInterval = 500;
 
+  /**
+   * In-memory country code lookup: ASTPP countrycode.id -> countrycode.iso
+   * Loaded once at the start of each run() invocation.
+   */
+  private countryCodeMap = new Map<number, string>();
+
   constructor(
     private readonly astppMysql: AstppMysqlService,
     private readonly database: DatabaseService,
@@ -58,6 +64,9 @@ export class SnapshotWorker {
     this.logger.log('========================================');
     this.logger.log('Starting Snapshot Worker');
     this.logger.log('========================================');
+
+    // Load ASTPP country code map into memory for the duration of this run
+    await this.loadCountryCodeMap();
 
     // Load checkpoint (resume if interrupted)
     let checkpoint = await this.loadCheckpoint();
@@ -228,14 +237,19 @@ export class SnapshotWorker {
       // Determine deleted_at from ASTPP deleted flag
       const deletedAt = account.deleted === 1 ? new Date() : null;
 
+      // Resolve country_code from in-memory map (loaded once at run start)
+      const countryCode = account.country_id
+        ? (this.countryCodeMap.get(Number(account.country_id)) ?? null)
+        : null;
+
       // 1. Upsert customer
       await client.query(`
         INSERT INTO customers (
           astpp_id, phone_number, voip_number, first_name, last_name, email,
-          country_id, currency_id, account_type,
+          country_id, country_code, currency_id, account_type,
           deleted_at, astpp_created_at, synced_at, created_at, updated_at
         ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW(), NOW()
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW(), NOW()
         )
         ON CONFLICT (astpp_id) DO UPDATE SET
           phone_number = EXCLUDED.phone_number,
@@ -243,6 +257,8 @@ export class SnapshotWorker {
           first_name = EXCLUDED.first_name,
           last_name = EXCLUDED.last_name,
           email = EXCLUDED.email,
+          country_id = EXCLUDED.country_id,
+          country_code = EXCLUDED.country_code,
           deleted_at = EXCLUDED.deleted_at,
           synced_at = NOW(),
           updated_at = NOW()
@@ -255,6 +271,7 @@ export class SnapshotWorker {
         account.last_name || '',
         account.email || null,
         account.country_id || null,
+        countryCode,
         account.currency_id || null,
         account.account_type || null,
         deletedAt,
@@ -392,6 +409,25 @@ export class SnapshotWorker {
     } finally {
       client.release();
     }
+  }
+
+  /**
+   * Load ASTPP countrycode table into memory: id -> iso (2-letter code).
+   * Called once per run() invocation so all per-customer inserts can resolve
+   * country_code without extra MySQL queries.
+   */
+  private async loadCountryCodeMap(): Promise<void> {
+    this.countryCodeMap.clear();
+    const rows = await this.astppMysql.query<{ id: number; iso: string }>(
+      `SELECT id, iso FROM countrycode WHERE iso IS NOT NULL AND iso != ''`,
+      [],
+    );
+    for (const row of rows) {
+      if (row.id && row.iso) {
+        this.countryCodeMap.set(Number(row.id), String(row.iso).trim());
+      }
+    }
+    this.logger.log(`Country code map loaded: ${this.countryCodeMap.size} entries`);
   }
 
   /**

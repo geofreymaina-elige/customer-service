@@ -265,7 +265,7 @@ export class WaasOnboardingJobService {
 
     // --- 1a. Ensure customer exists in PostgreSQL ---
     let customer = await this.db.queryOne(
-      `SELECT id, astpp_id, phone_number, first_name, last_name, email
+      `SELECT id, astpp_id, phone_number, first_name, last_name, email, country_code
        FROM customers WHERE id = $1`,
       [payload.customerId],
     );
@@ -289,12 +289,18 @@ export class WaasOnboardingJobService {
     );
 
     // --- 1c. Call SasaPay WaaS /personal-onboarding/ ---
+    // Use country_code stored on the customer (ISO 2-letter, e.g. 'KE'). SasaPay
+    // expects the numeric phone dialing code, but country_code here is the ISO code
+    // that we can map or pass as-is depending on the SasaPay API spec.
+    // We pass it directly; fall back to an empty string if not set.
+    const sasapayCountryCode = customer.country_code ?? '';
+
     const result = await this.sasapayWaas.initiatePersonalOnboardingAuto({
       customerId: customer.id,
       firstName: customer.first_name,
       middleName: '',
       lastName: customer.last_name,
-      countryCode: '1',
+      countryCode: sasapayCountryCode,
       mobileNumber: customer.phone_number.replace(/^\+?254/, '0'),
       documentType: this.mapDocTypeToSasaPay(kycDetails?.identity_document_type || 'NATIONAL_ID'),
       documentNumber: kycDetails?.identity_document_number || `ID${customer.astpp_id}`,
@@ -399,19 +405,35 @@ export class WaasOnboardingJobService {
       const kycStatus = this.mapKycStatus(application?.status);
       const deletedAt = account.deleted === 1 ? new Date() : null;
 
+      // Resolve country_code from ASTPP countrycode table (load map for this call)
+      let countryCode: string | null = null;
+      if (account.country_id) {
+        try {
+          const ccRow = await this.astppMysql.queryOne<{ iso: string }>(
+            `SELECT iso FROM countrycode WHERE id = ? AND iso IS NOT NULL AND iso != '' LIMIT 1`,
+            [account.country_id],
+          );
+          countryCode = ccRow?.iso?.trim() || null;
+        } catch {
+          // Non-fatal: country_code will be null
+        }
+      }
+
       // 1. Upsert customers
       await client.query(
         `INSERT INTO customers (
            astpp_id, phone_number, voip_number, first_name, last_name, email,
-           country_id, currency_id, account_type,
+           country_id, country_code, currency_id, account_type,
            deleted_at, astpp_created_at, synced_at, created_at, updated_at
-         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, NOW(), NOW(), NOW())
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, NOW(), NOW(), NOW())
          ON CONFLICT (astpp_id) DO UPDATE SET
            phone_number = EXCLUDED.phone_number,
            voip_number = EXCLUDED.voip_number,
            first_name = EXCLUDED.first_name,
            last_name = EXCLUDED.last_name,
            email = EXCLUDED.email,
+           country_id = EXCLUDED.country_id,
+           country_code = EXCLUDED.country_code,
            deleted_at = EXCLUDED.deleted_at,
            synced_at = NOW(),
            updated_at = NOW()`,
@@ -423,6 +445,7 @@ export class WaasOnboardingJobService {
           account.last_name || '',
           account.email || null,
           account.country_id || null,
+          countryCode,
           account.currency_id || null,
           account.account_type || null,
           deletedAt,
@@ -576,9 +599,9 @@ export class WaasOnboardingJobService {
       client.release();
     }
 
-    // Return the freshly-upserted customer row
+    // Return the freshly-upserted customer row (include country_code for callers)
     return this.db.queryOne(
-      `SELECT id, astpp_id, phone_number, first_name, last_name, email
+      `SELECT id, astpp_id, phone_number, first_name, last_name, email, country_code
        FROM customers WHERE id = $1`,
       [customerId],
     );

@@ -47,9 +47,10 @@ export class WalletService {
 
   async getBalance(customerId: number) {
     const wallet = await this.db.queryOne(
-      `SELECT account_number, currency, status
-       FROM customer_wallets
-       WHERE customer_id = $1`,
+      `SELECT cw.account_number, cw.currency, cw.status, c.country_code
+       FROM customer_wallets cw
+       JOIN customers c ON c.id = cw.customer_id
+       WHERE cw.customer_id = $1`,
       [customerId],
     );
 
@@ -57,7 +58,10 @@ export class WalletService {
       throw new NotFoundException(this.messages.get('wallets.notFound'));
     }
 
-    const sasaPayDetails = await this.sasaPayWaas.getCustomerDetails(String(wallet.account_number));
+    const sasaPayDetails = await this.sasaPayWaas.getCustomerDetails(
+      String(wallet.account_number),
+      wallet.country_code ?? '',
+    );
     const sasaPayWallet = sasaPayDetails?.data?.CustomerWallets?.find(
       (item) => String(item.account_number) === String(wallet.account_number),
     ) || sasaPayDetails?.data?.CustomerWallets?.[0];

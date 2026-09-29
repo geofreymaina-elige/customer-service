@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DatabaseService } from '../../core/database/database.service';
+import { AstppMysqlService } from '../../core/astpp-mysql/astpp-mysql.service';
 import { parseDateOrNull, parseTimestampOrNull } from '../../core/utils/date.util';
 import { Kafka, Consumer, EachMessagePayload } from 'kafkajs';
 
@@ -33,9 +34,16 @@ export class CdcConsumerWorker implements OnModuleInit, OnModuleDestroy {
   private consumer: Consumer;
   private isRunning = false;
 
+  /**
+   * In-memory country code lookup: ASTPP countrycode.id -> countrycode.iso
+   * Loaded once when the consumer starts.
+   */
+  private countryCodeMap = new Map<number, string>();
+
   constructor(
     private readonly configService: ConfigService,
     private readonly database: DatabaseService,
+    private readonly astppMysql: AstppMysqlService,
   ) {}
 
   async onModuleInit() {
@@ -92,6 +100,9 @@ export class CdcConsumerWorker implements OnModuleInit, OnModuleDestroy {
     this.logger.log(`Subscribed to topics: ${topics.join(', ')}`);
 
     this.isRunning = true;
+
+    // Load ASTPP country code map once before processing begins
+    await this.loadCountryCodeMap();
 
     await this.consumer.run({
       eachMessage: async (payload: EachMessagePayload) => {
@@ -212,14 +223,19 @@ export class CdcConsumerWorker implements OnModuleInit, OnModuleDestroy {
       // Determine deleted_at from ASTPP deleted flag
       const deletedAt = deleted === 1 ? new Date() : null;
 
+      // Resolve country_code from in-memory map
+      const countryCode = country_id
+        ? (this.countryCodeMap.get(Number(country_id)) ?? null)
+        : null;
+
       // Upsert customer
       await client.query(`
         INSERT INTO customers (
           astpp_id, phone_number, first_name, last_name, email,
-          country_id, currency_id, account_type,
+          country_id, country_code, currency_id, account_type,
           deleted_at, astpp_created_at, sync_version, synced_at, created_at, updated_at
         ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW(), NOW()
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW(), NOW()
         )
         ON CONFLICT (astpp_id) DO UPDATE SET
           phone_number = EXCLUDED.phone_number,
@@ -227,6 +243,7 @@ export class CdcConsumerWorker implements OnModuleInit, OnModuleDestroy {
           last_name = EXCLUDED.last_name,
           email = EXCLUDED.email,
           country_id = EXCLUDED.country_id,
+          country_code = EXCLUDED.country_code,
           currency_id = EXCLUDED.currency_id,
           account_type = EXCLUDED.account_type,
           deleted_at = EXCLUDED.deleted_at,
@@ -240,6 +257,7 @@ export class CdcConsumerWorker implements OnModuleInit, OnModuleDestroy {
         last_name || '',
         email || null,
         country_id || null,
+        countryCode,
         currency_id || null,
         account_type || null,
         deletedAt,
@@ -465,6 +483,30 @@ export class CdcConsumerWorker implements OnModuleInit, OnModuleDestroy {
       throw error;
     } finally {
       client.release();
+    }
+  }
+
+  /**
+   * Load ASTPP countrycode table into memory: id -> iso (2-letter code).
+   * Called once when the consumer starts so every incoming account event
+   * can resolve country_code without an extra MySQL round-trip.
+   */
+  private async loadCountryCodeMap(): Promise<void> {
+    try {
+      this.countryCodeMap.clear();
+      const rows = await this.astppMysql.query<{ id: number; iso: string }>(
+        `SELECT id, iso FROM countrycode WHERE iso IS NOT NULL AND iso != ''`,
+        [],
+      );
+      for (const row of rows) {
+        if (row.id && row.iso) {
+          this.countryCodeMap.set(Number(row.id), String(row.iso).trim());
+        }
+      }
+      this.logger.log(`Country code map loaded: ${this.countryCodeMap.size} entries`);
+    } catch (error) {
+      // Non-fatal: log and continue — country_code will be null until map is refreshed
+      this.logger.error(`Failed to load country code map: ${error.message}`, error.stack);
     }
   }
 

@@ -315,12 +315,12 @@ export class SasaPayWaasService {
     }));
   }
 
-  async getCustomerDetails(accountNumber: string): Promise<SasaPayCustomerDetails> {
+  async getCustomerDetails(accountNumber: string, countryCode = ''): Promise<SasaPayCustomerDetails> {
     return this.callSasaPayApi(async (token) => {
       const payload = {
         merchantCode: this.merchantCode,
         accountNumber,
-        countryCode: '254',
+        countryCode,
       };
       const url = `${this.baseUrl}/api/v2/waas/customer-details/`;
       this.logProviderRequest('POST', url, payload);
