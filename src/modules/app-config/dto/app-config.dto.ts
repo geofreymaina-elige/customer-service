@@ -19,7 +19,7 @@ export interface FeatureCard {
 
 export interface PageLayout {
   hero_section: HeroSection;
-  feature_cards_list: FeatureCard[];
+  feature_cards: FeatureCard[];
 }
 
 export interface AppConfigResponse {

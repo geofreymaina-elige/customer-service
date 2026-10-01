@@ -12,9 +12,10 @@ export class AppConfigService {
   constructor(private readonly db: DatabaseService) {}
 
   async getAppConfig(): Promise<AppConfigResponse> {
-    // Query hero section asset (first active asset)
+    // Query the first active asset with an image URL for the hero section
     const heroAsset = await this.db.queryOne(
       `SELECT 
+        id,
         asset_uuid, 
         asset_key, 
         url,
@@ -22,7 +23,8 @@ export class AppConfigService {
         alt_text, 
         updated_at
        FROM app_assets 
-       WHERE is_active = true 
+       WHERE is_active = true
+         AND NULLIF(BTRIM(url), '') IS NOT NULL
        ORDER BY id ASC 
        LIMIT 1`
     );
@@ -45,34 +47,38 @@ export class AppConfigService {
         a.updated_at
        FROM feature_cards fc
        INNER JOIN app_assets a ON a.id = fc.asset_id
-       WHERE fc.is_active = true AND a.is_active = true
-       ORDER BY fc.display_order ASC`
+       WHERE fc.is_active = true
+         AND a.is_active = true
+         AND NULLIF(BTRIM(a.url), '') IS NOT NULL
+         AND a.id <> $1
+       ORDER BY fc.display_order ASC`,
+      [heroAsset.id]
     );
 
-    // Build hero section response (use local_path as url)
+    // Return the stored full URL for the hero image
     const heroSection: HeroSection = {
       asset_uuid: heroAsset.asset_uuid,
       asset_key: heroAsset.asset_key,
       updated_at: heroAsset.updated_at.toISOString(),
-      url: heroAsset.local_path || heroAsset.url,
+      url: heroAsset.url.trim(),
       alt_text: heroAsset.alt_text || '',
     };
 
-    // Build feature cards list (use local_path as url)
+    // Return the stored full URL for each feature card image
     const featureCardsList: FeatureCard[] = featureCards.rows.map((card) => ({
       card_uuid: card.card_uuid,
       card_slug: card.card_slug,
       asset_uuid: card.asset_uuid,
       asset_key: card.asset_key,
       updated_at: card.updated_at.toISOString(),
-      url: card.local_path || card.url,
+      url: card.url.trim(),
       title: card.title,
       subtitle: card.subtitle || '',
     }));
 
     const pageLayout: PageLayout = {
       hero_section: heroSection,
-      feature_cards_list: featureCardsList,
+      feature_cards: featureCardsList,
     };
 
     return {
