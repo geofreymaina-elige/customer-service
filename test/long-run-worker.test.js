@@ -276,6 +276,60 @@ test('balance is disabled by default because its handler calls SasaPay', async (
   }
 });
 
+test('app and transaction tokens are hydrated from the auth APIs instead of being stored in env', async () => {
+  const config = buildConfig({
+    LONGRUN_BASE_URL: 'https://api.ambiapay.com',
+    LONGRUN_ALLOW_REMOTE_API: 'true',
+    LONGRUN_ALLOW_PRODUCTION_API: 'true',
+    LONGRUN_CONFIRM_ASTPP_ID: '31553',
+    LONGRUN_ASTPP_TOKEN: 'test-astpp-token',
+    LONGRUN_PIN: '4920',
+    LONGRUN_DEVICE_IDENTIFIER: 'SAM-S23-DEVICE-UUID-10492',
+    LONGRUN_DEVICE_MODEL: 'Samsung Galaxy S23',
+    LONGRUN_DEVICE_OS: 'Android 14',
+    LONGRUN_APP_VERSION: '2.4.1',
+    LONGRUN_MOBILE_TYPE: 'android',
+  }, workspaceRoot);
+  const calls = [];
+  const originalFetch = global.fetch;
+  global.fetch = async (url, init = {}) => {
+    const requestUrl = new URL(url);
+    calls.push({ pathname: requestUrl.pathname, headers: init.headers || {} });
+
+    if (requestUrl.pathname === '/api/v2/auth/sessions/device') {
+      return new Response(JSON.stringify({ success: true, data: { accessToken: 'fresh-app-access-token' } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+
+    if (requestUrl.pathname === '/api/v2/auth/transaction-tokens') {
+      assert.equal(init.headers.Authorization, 'Bearer fresh-app-access-token');
+      return new Response(JSON.stringify({ success: true, data: { token: { accessToken: 'fresh-transaction-token', expiresInSeconds: 300 } } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+
+    return new Response(JSON.stringify({ success: true, data: {} }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+
+  try {
+    const runner = new ApiRunner(config, { info() {}, warn() {}, error() {} });
+    const recovered = await runner.ensureLiveTokens(['appAccessToken', 'transactionToken']);
+    assert.equal(recovered, true);
+    assert.equal(config.variables.appAccessToken, 'fresh-app-access-token');
+    assert.equal(config.variables.transactionToken, 'fresh-transaction-token');
+    assert.ok(calls.some((call) => call.pathname === '/api/v2/auth/sessions/device'));
+    assert.ok(calls.some((call) => call.pathname === '/api/v2/auth/transaction-tokens'));
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
 test('transaction token refresh updates memory but never logs the issued token', async () => {
   const config = buildConfig({
     LONGRUN_BASE_URL: 'http://localhost:5005',

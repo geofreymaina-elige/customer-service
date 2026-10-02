@@ -2,6 +2,23 @@ const { performance } = require('node:perf_hooks');
 const { randomUUID } = require('node:crypto');
 const { buildRequest, loadMobileRequests, safeGetClass, safeRoute } = require('./postman-collection');
 
+function extractAccessToken(payload) {
+  if (!payload || typeof payload !== 'object') return undefined;
+  const data = payload.data && typeof payload.data === 'object' ? payload.data : payload;
+  if (typeof data.accessToken === 'string') return data.accessToken;
+  if (typeof data.token?.accessToken === 'string') return data.token.accessToken;
+  if (typeof data.transactionToken === 'string') return data.transactionToken;
+  if (typeof data.token === 'string') return data.token;
+  return undefined;
+}
+
+function isAuthFailure(statusCode, payload) {
+  const code = String(payload?.code || '').toUpperCase();
+  const message = String(payload?.message || '').toUpperCase();
+  const combined = `${statusCode} ${code} ${message}`;
+  return Number(statusCode) === 401 || Number(statusCode) === 403 || /INVALID.*(TOKEN|SESSION)|EXPIRED.*(TOKEN|SESSION)|SESSION.*EXPIRED|TOKEN.*EXPIRED|UNAUTHORIZED|AUTHENTICATION.*FAILED|DIFFERENT DEVICE|DEVICE.*MISMATCH|INVALID.*DEVICE|DEVICE.*REVOKED/.test(combined);
+}
+
 function responseSummary(value) {
   if (!value || typeof value !== 'object') return {};
   const data = value.data && typeof value.data === 'object' ? value.data : {};
@@ -22,8 +39,45 @@ class ApiRunner {
     this.lastRun = new Map();
     this.byName = new Map(this.requests.map((request) => [request.name, request]));
     this.tokenRefreshFailed = false;
+    this.refreshingTokens = false;
     this.nextTransactionTokenRefreshAt = Date.now() +
       Math.max(30, config.initialTransactionTokenTtlSeconds - 60) * 1000;
+  }
+
+  async ensureLiveTokens(missing = []) {
+    if (this.refreshingTokens) return false;
+    this.refreshingTokens = true;
+    try {
+      const missingSet = new Set(missing);
+      if (missingSet.has('appAccessToken') || !this.config.variables.appAccessToken) {
+        const sessionRequest = this.requests.find((item) => item.method === 'POST'
+          && (item.url.includes('/api/v2/auth/sessions/device') || item.url.includes('/api/v2/auth/sessions/recovery'))
+          && !item.url.includes('/recovery-otp')
+          && !item.url.includes('/otp-verifications'));
+        if (sessionRequest) {
+          const result = await this.execute(sessionRequest, 'session_recovery');
+          if (!result.success) {
+            this.logger.warn('session_token_recovery_failed', { requestName: sessionRequest.name, statusCode: result.statusCode });
+            return false;
+          }
+        }
+      }
+
+      if (missingSet.has('transactionToken') || !this.config.variables.transactionToken) {
+        const refreshRequest = this.requests.find((item) => safeGetClass(item) === 'token_refresh');
+        if (refreshRequest) {
+          const result = await this.execute(refreshRequest, 'transaction_token_recovery');
+          if (!result.success) {
+            this.logger.warn('transaction_token_recovery_failed', { requestName: refreshRequest.name, statusCode: result.statusCode });
+            return false;
+          }
+        }
+      }
+
+      return true;
+    } finally {
+      this.refreshingTokens = false;
+    }
   }
 
   logPlan() {
@@ -153,7 +207,23 @@ class ApiRunner {
   }
 
   async execute(request, phase) {
-    const built = buildRequest(request, this.config.baseUrl, this.config.variables);
+    let built = buildRequest(request, this.config.baseUrl, this.config.variables);
+    if (built.missing && built.missing.some((variable) => variable === 'appAccessToken' || variable === 'transactionToken')) {
+      const recovered = await this.ensureLiveTokens(built.missing);
+      if (!recovered) {
+        this.logger.info('api_request_skipped', {
+          requestName: request.name,
+          method: request.method,
+          route: safeRoute(new URL(request.url.replace(/\{\{baseUrl\}\}/g, this.config.baseUrl), this.config.baseUrl).toString()),
+          phase,
+          missingVariables: built.missing,
+          reason: 'live auth tokens were refreshed before retrying the request',
+        });
+        return { skipped: true, missing: built.missing, success: false };
+      }
+      built = buildRequest(request, this.config.baseUrl, this.config.variables);
+    }
+
     const route = safeRoute(new URL(request.url.replace(/\{\{baseUrl\}\}/g, this.config.baseUrl), this.config.baseUrl).toString());
     if (built.missing) {
       this.logger.info('api_request_skipped', {
@@ -192,6 +262,29 @@ class ApiRunner {
       } catch {
         summary = { responseType: 'non_json' };
       }
+      if (isAuthFailure(response.status, responseJson)) {
+        const invalidated = [];
+        if (request.url.includes('/api/v2/auth/transaction-tokens') || request.url.includes('/api/v2/auth/transaction')) {
+          invalidated.push('transactionToken');
+        }
+        if (built.headers.Authorization || request.url.includes('/api/v2/auth/sessions') || request.url.includes('/api/v2/auth/transaction-tokens')) {
+          invalidated.push('appAccessToken');
+        }
+        for (const key of invalidated) {
+          if (key === 'appAccessToken' || key === 'transactionToken') {
+            this.config.variables[key] = undefined;
+          }
+        }
+        this.logger.warn('auth_token_invalidated', {
+          requestName: request.name,
+          route,
+          phase,
+          statusCode: response.status,
+          responseCode: responseJson?.code,
+          responseMessage: responseJson?.message,
+          invalidatedKeys: invalidated,
+        });
+      }
       const durationMs = Math.round(performance.now() - startedAt);
       const fields = {
         requestName: request.name,
@@ -214,8 +307,8 @@ class ApiRunner {
       else this.logger.info('api_request_completed', fields);
 
       if (safeGetClass(request) === 'token_refresh') {
-        const token = responseJson?.data?.token?.accessToken;
-        const expiresInSeconds = Number(responseJson?.data?.token?.expiresInSeconds);
+        const token = extractAccessToken(responseJson);
+        const expiresInSeconds = Number(responseJson?.data?.token?.expiresInSeconds ?? responseJson?.data?.expiresInSeconds);
         if (!response.ok || summary.success === false || typeof token !== 'string' || !token) {
           this.tokenRefreshFailed = true;
           this.logger.error('transaction_token_refresh_stopped', {
@@ -229,6 +322,13 @@ class ApiRunner {
             : this.config.initialTransactionTokenTtlSeconds;
           this.nextTransactionTokenRefreshAt = Date.now() + Math.max(30, ttl - 60) * 1000;
           this.logger.info('transaction_token_refreshed', { expiresInSeconds: ttl });
+        }
+      }
+      if ((safeGetClass(request) === 'device_signin' || request.url.includes('/api/v2/auth/sessions'))
+        && responseJson && response.status >= 200 && response.status < 300) {
+        const appToken = extractAccessToken(responseJson);
+        if (typeof appToken === 'string' && appToken) {
+          this.config.variables.appAccessToken = appToken;
         }
       }
       return { statusCode: response.status, durationMs, success: response.ok && summary.success !== false, summary };
