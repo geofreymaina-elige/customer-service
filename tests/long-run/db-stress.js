@@ -61,9 +61,27 @@ class DbStressRunner {
     this.config = config;
     this.logger = logger;
     this.databaseMonitor = databaseMonitor;
+    const initializedAt = Date.now();
     this.nextRunAt = config.dbStressEnabled
-      ? Date.now() + this.randomBetween(config.dbStressIntervalMinMs, config.dbStressIntervalMaxMs)
+      ? initializedAt + this.randomBetween(config.dbStressIntervalMinMs, config.dbStressIntervalMaxMs)
       : Number.POSITIVE_INFINITY;
+    if (config.dbStressEnabled) {
+      this.logger.info('db_stress_scheduled', {
+        firstWindowAt: new Date(this.nextRunAt).toISOString(),
+        firstWindowDelayMs: this.nextRunAt - initializedAt,
+        intervalMinMs: config.dbStressIntervalMinMs,
+        intervalMaxMs: config.dbStressIntervalMaxMs,
+        windowMs: config.dbStressWindowMs,
+        parallelism: config.dbStressParallelism,
+        queryProfile: 'read_only_customer_snapshot_load',
+      });
+    } else {
+      this.logger.info('db_stress_disabled', {
+        reason: 'LONGRUN_ENABLE_DB_STRESS is not true',
+        requiredEnvironment: 'staging',
+        databaseStressPolicy: 'production targets are blocked',
+      });
+    }
   }
 
   randomBetween(minimum, maximum) {

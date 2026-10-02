@@ -19,7 +19,7 @@ test('auth failures are classified by service response details, not status alone
 });
 const { databaseIdentity, leaderChangeObserved } = require('../tests/long-run/database-monitor');
 const { parsePm2List } = require('../tests/long-run/pm2-monitor');
-const { ACCOUNT_AGGREGATE_SQL, STRESS_QUERY_TEMPLATES } = require('../tests/long-run/db-stress');
+const { ACCOUNT_AGGREGATE_SQL, DbStressRunner, STRESS_QUERY_TEMPLATES } = require('../tests/long-run/db-stress');
 
 const workspaceRoot = path.resolve(__dirname, '..');
 
@@ -557,4 +557,26 @@ test('Kong request IDs and latency headers are recorded with a correlation ID', 
 
 test('synthetic DB aggregation is filtered to ASTPP account 31553', () => {
   assert.match(ACCOUNT_AGGREGATE_SQL, /WHERE\s+astpp_id\s*=\s*\$1/i);
+});
+
+test('DB stress reports disabled state or its randomized first-window schedule', () => {
+  const records = [];
+  const logger = { info: (event, fields) => records.push({ event, fields }) };
+  const disabledConfig = buildConfig({ LONGRUN_BASE_URL: 'http://localhost:5005' }, workspaceRoot);
+  new DbStressRunner(disabledConfig, logger, {});
+  assert.equal(records[0].event, 'db_stress_disabled');
+
+  records.length = 0;
+  const enabledConfig = {
+    ...disabledConfig,
+    dbStressEnabled: true,
+    dbStressIntervalMinMs: 900000,
+    dbStressIntervalMaxMs: 2700000,
+    dbStressWindowMs: 20000,
+    dbStressParallelism: 2,
+  };
+  new DbStressRunner(enabledConfig, logger, {});
+  assert.equal(records[0].event, 'db_stress_scheduled');
+  assert.ok(records[0].fields.firstWindowDelayMs >= enabledConfig.dbStressIntervalMinMs);
+  assert.ok(records[0].fields.firstWindowDelayMs <= enabledConfig.dbStressIntervalMaxMs);
 });
