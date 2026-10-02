@@ -344,7 +344,12 @@ test('app and transaction tokens are hydrated from the auth APIs instead of bein
   const transactionToken = testBearerToken();
   global.fetch = async (url, init = {}) => {
     const requestUrl = new URL(url);
-    calls.push({ pathname: requestUrl.pathname, headers: init.headers || {} });
+    calls.push({
+      pathname: requestUrl.pathname,
+      method: init.method,
+      headers: init.headers || {},
+      body: init.body ? JSON.parse(init.body) : undefined,
+    });
 
     if (requestUrl.pathname === '/api/v2/wallets/onboarding-status') {
       return new Response(JSON.stringify({ success: true, data: { wallet: { status: 'active' } } }), {
@@ -387,8 +392,31 @@ test('app and transaction tokens are hydrated from the auth APIs instead of bein
     assert.equal(recovered, true);
     assert.equal(config.variables.appAccessToken, appAccessToken);
     assert.equal(config.variables.transactionToken, transactionToken);
-    assert.ok(calls.some((call) => call.pathname === '/api/v2/auth/sessions/device'));
-    assert.ok(calls.some((call) => call.pathname === '/api/v2/auth/transaction-tokens'));
+    const sessionCall = calls.find((call) => call.pathname === '/api/v2/auth/sessions/device');
+    assert.equal(sessionCall.method, 'POST');
+    assert.equal(sessionCall.headers['X-Astpp-Token'], 'test-astpp-token');
+    assert.deepEqual(sessionCall.body, {
+      astpp_id: '31553',
+      device_identifier: 'SAM-S23-DEVICE-UUID-10492',
+      mobile_type: 'android',
+      device_model: 'Samsung Galaxy S23',
+      device_os: 'Android 14',
+      app_version: '2.4.1',
+    });
+
+    const transactionCall = calls.find((call) => call.pathname === '/api/v2/auth/transaction-tokens');
+    assert.equal(transactionCall.method, 'POST');
+    assert.equal(transactionCall.headers.Authorization, `Bearer ${appAccessToken}`);
+    assert.deepEqual(transactionCall.body, {
+      pin: '4920',
+      device: {
+        device_identifier: 'SAM-S23-DEVICE-UUID-10492',
+        mobile_type: 'android',
+        device_model: 'Samsung Galaxy S23',
+        device_os: 'Android 14',
+        app_version: '2.4.1',
+      },
+    });
   } finally {
     global.fetch = originalFetch;
   }
