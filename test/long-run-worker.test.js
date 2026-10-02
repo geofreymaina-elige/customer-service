@@ -11,7 +11,7 @@ const { redactApplicationLine } = require('../tests/long-run/app-log-tailer');
 const { responseSummary } = require('../tests/long-run/api-runner');
 const { databaseIdentity, leaderChangeObserved } = require('../tests/long-run/database-monitor');
 const { parsePm2List } = require('../tests/long-run/pm2-monitor');
-const { ACCOUNT_AGGREGATE_SQL } = require('../tests/long-run/db-stress');
+const { ACCOUNT_AGGREGATE_SQL, STRESS_QUERY_TEMPLATES } = require('../tests/long-run/db-stress');
 
 const workspaceRoot = path.resolve(__dirname, '..');
 
@@ -189,6 +189,16 @@ test('database sampler detects leader endpoint changes but not a same-node resta
 
   assert.equal(leaderChangeObserved(previous, promoted), true);
   assert.equal(leaderChangeObserved(previous, restartedSameLeader), false);
+});
+
+test('read-only DB stress spreads across broader customer queries instead of one narrow account aggregate', () => {
+  assert.ok(Array.isArray(STRESS_QUERY_TEMPLATES));
+  assert.ok(STRESS_QUERY_TEMPLATES.length >= 3);
+  assert.ok(STRESS_QUERY_TEMPLATES.some((query) => query.name === 'customer_volume_by_status'));
+  assert.ok(STRESS_QUERY_TEMPLATES.some((query) => query.name === 'customer_volume_by_country'));
+  assert.ok(STRESS_QUERY_TEMPLATES.some((query) => query.name === 'customer_application_trends'));
+  assert.ok(STRESS_QUERY_TEMPLATES.some((query) => query.query.includes('FROM customers')));
+  assert.ok(ACCOUNT_AGGREGATE_SQL.includes('WHERE astpp_id = $1'));
 });
 
 test('PM2 snapshots include process metrics but exclude process environment secrets', () => {

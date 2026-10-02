@@ -1,4 +1,54 @@
 const { performance } = require('node:perf_hooks');
+
+const STRESS_QUERY_TEMPLATES = [
+  {
+    name: 'customer_volume_by_status',
+    query: `
+      SELECT kyc_status, count(*)::bigint AS row_count
+      FROM customer_applications
+      GROUP BY kyc_status
+      ORDER BY row_count DESC
+    `,
+    params: [],
+  },
+  {
+    name: 'customer_volume_by_country',
+    query: `
+      SELECT COALESCE(country_code, 'UNKNOWN') AS country_code,
+             count(*)::bigint AS row_count
+      FROM customers
+      WHERE deleted_at IS NULL
+      GROUP BY COALESCE(country_code, 'UNKNOWN')
+      ORDER BY row_count DESC
+      LIMIT 20
+    `,
+    params: [],
+  },
+  {
+    name: 'customer_application_trends',
+    query: `
+      SELECT date_trunc('day', created_at)::date AS day_bucket,
+             count(*)::bigint AS row_count
+      FROM customer_applications
+      GROUP BY date_trunc('day', created_at)
+      ORDER BY day_bucket DESC
+      LIMIT 30
+    `,
+    params: [],
+  },
+  {
+    name: 'customer_status_distribution',
+    query: `
+      SELECT status, count(*)::bigint AS row_count
+      FROM customers
+      WHERE deleted_at IS NULL
+      GROUP BY status
+      ORDER BY row_count DESC
+    `,
+    params: [],
+  },
+];
+
 const ACCOUNT_AGGREGATE_SQL = `
   SELECT kyc_status, count(*)::bigint AS row_count
   FROM customer_applications
@@ -29,7 +79,8 @@ class DbStressRunner {
     this.logger.warn('db_stress_window_started', {
       windowMs: this.config.dbStressWindowMs,
       parallelism: this.config.dbStressParallelism,
-      queryProfile: 'read_only_kyc_status_aggregate',
+      queryProfile: 'read_only_customer_snapshot_load',
+      queryCount: STRESS_QUERY_TEMPLATES.length,
     });
 
     const startedAt = Date.now();
@@ -51,16 +102,19 @@ class DbStressRunner {
 
     while (Date.now() - windowStartedAt < this.config.dbStressWindowMs) {
       const startedAt = performance.now();
+      const template = STRESS_QUERY_TEMPLATES[Math.floor(Math.random() * STRESS_QUERY_TEMPLATES.length)];
       let client;
       try {
         client = await pool.connect();
         await client.query('BEGIN READ ONLY');
         await client.query("SET LOCAL statement_timeout = '5000ms'");
-        const result = await client.query(ACCOUNT_AGGREGATE_SQL, [this.config.variables.astppId]);
+        const result = await client.query(template.query, template.params);
         await client.query('COMMIT');
         this.logger.info('db_stress_query_completed', {
           durationMs: Math.round(performance.now() - startedAt),
-          statusGroups: result.rows.length,
+          queryName: template.name,
+          rowCount: result.rows.length,
+          workload: 'read_only_customer_snapshot',
         });
       } catch (error) {
         if (client) {
@@ -68,15 +122,16 @@ class DbStressRunner {
         }
         this.logger.error('db_stress_query_failed', {
           durationMs: Math.round(performance.now() - startedAt),
+          queryName: template.name,
           errorCode: error.code,
           errorMessage: error.message,
         });
       } finally {
         client?.release();
       }
-      await new Promise((resolve) => setTimeout(resolve, 500 + Math.random() * 1000));
+      await new Promise((resolve) => setTimeout(resolve, 250 + Math.random() * 750));
     }
   }
 }
 
-module.exports = { ACCOUNT_AGGREGATE_SQL, DbStressRunner };
+module.exports = { ACCOUNT_AGGREGATE_SQL, STRESS_QUERY_TEMPLATES, DbStressRunner };
