@@ -13,6 +13,7 @@
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/src/main",
     "test": "npm run build && node --test test/*.test.js",
+    "soak": "node tests/long-run/run.js",
     "migrate": "ts-node database/migrate.ts",
     "snapshot": "ts-node src/workers/snapshot/run-snapshot.ts",
     "cdc:start": "ts-node src/workers/cdc/run-cdc-consumer.ts",
@@ -23,6 +24,10 @@
     "pm2:logs": "pm2 logs",
     "pm2:logs:api": "pm2 logs customer-management-service",
     "pm2:logs:cdc": "pm2 logs customer-cdc-consumer",
+    "pm2:soak": "pm2 start tests/long-run/ecosystem.config.cjs",
+    "pm2:soak:stop": "pm2 stop customer-soak-node-1 customer-soak-node-2",
+    "pm2:soak:restart": "pm2 restart customer-soak-node-1 customer-soak-node-2",
+    "pm2:soak:logs": "pm2 logs customer-soak-node-1 customer-soak-node-2",
     "reload": "npm run build && pm2 reload customer-management-service",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix"
   },
