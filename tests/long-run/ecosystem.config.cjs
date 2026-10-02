@@ -20,7 +20,6 @@ module.exports = {
       max_memory_restart: '512M',
       env: {
         LONGRUN_NODE_NAME: 'node-1',
-        LONGRUN_TARGET_ENVIRONMENT: 'local',
         LONGRUN_PM2_PROCESS_NAMES: 'customer-management-service,customer-cdc-consumer',
       },
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
@@ -40,7 +39,6 @@ module.exports = {
       max_memory_restart: '512M',
       env: {
         LONGRUN_NODE_NAME: 'node-2',
-        LONGRUN_TARGET_ENVIRONMENT: 'local',
         LONGRUN_PM2_PROCESS_NAMES: 'customer-management-service,customer-cdc-consumer',
       },
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',

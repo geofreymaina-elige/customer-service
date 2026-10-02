@@ -64,6 +64,8 @@ async function main() {
     apiHost: new URL(config.baseUrl).host,
     dbHost: config.database.host,
     dbPort: config.database.port,
+    dbPoolMin: config.database.poolMin,
+    dbPoolMax: config.database.poolMax,
     apiCycleSeconds: [config.cycleMinMs / 1000, config.cycleMaxMs / 1000],
     balanceIntervalMinutes: config.balanceIntervalMs / 60000,
     dbSamplingIntervalSeconds: config.dbSampleIntervalMs / 1000,

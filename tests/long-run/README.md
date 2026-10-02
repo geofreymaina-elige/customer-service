@@ -11,9 +11,10 @@ It runs until stopped with `Ctrl+C`, or for `LONGRUN_DURATION_HOURS` if set. The
 - GET requests are scheduled from the Postman `Mobile App API` folder and use ASTPP ID `31553`; bearer-token GET requests are accepted only when their JWT belongs to that same ASTPP ID.
 - Balance is disabled by default. The app's balance handler calls SasaPay `getCustomerDetails`, so enabling it sends the wallet account number to SasaPay. To call it periodically, set both `LONGRUN_INCLUDE_BALANCE_API=true` and `LONGRUN_ALLOW_PSP_BALANCE_API=true`; default interval is 30 minutes.
 - Onboarding, recovery, OTP, PIN-set/change/reset, sign-out, and every other state-changing mobile endpoint are skipped. Generic mutation allowlists are rejected. Device sign-in and transaction-token refresh are separately gated one-shot auth flows described below.
-- DB stress is off by default. When enabled, it is restricted to `LONGRUN_TARGET_ENVIRONMENT=staging`, local database host (`127.0.0.1`), valid DB credentials, and `LONGRUN_CONFIRM_DB_STRESS=STAGING_ONLY`. It aggregates only `customer_applications` rows where `astpp_id = 31553`, using read-only transactions, at most four concurrent workers per app node, and a 5-second statement timeout. Do not enable this mode in production.
+- DB stress is off by default. Staging requires the local HAProxy listener and `LONGRUN_CONFIRM_DB_STRESS=STAGING_ONLY`. Production requires the production API target, `LONGRUN_ALLOW_PRODUCTION_DB_STRESS=true`, `LONGRUN_CONFIRM_DB_STRESS=PRODUCTION_READ_ONLY_31553`, explicit DB credentials, and TLS. Both modes use only read-only transactions, at most four workers per app node, 20-second default windows, and a 5-second statement timeout. Stress queries aggregate customer/application data across the database and do not modify rows; account-specific auth actions remain locked to ASTPP 31553.
 - The worker does not automatically retry ordinary API calls because a lost response can follow a committed write. A response explicitly identifying an invalid app-access JWT may trigger one guarded device sign-in and one retry; other 401/403 responses, including bad PIN, ASTPP-token, inactive-device, and scope errors, are not treated as stale app tokens.
 - Credentials are loaded from `tests/long-run/.env` or `LONGRUN_*` environment variables and are never included in logs. App-access and transaction tokens are held in memory only and are obtained from their APIs when the corresponding guarded auth flows are enabled. Do not place credentials in command-line arguments or committed files.
+- PostgreSQL monitoring reads `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_NAME`, `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_SSL`, `DATABASE_POOL_MIN`, and `DATABASE_POOL_MAX` from the same host-local `tests/long-run/.env`. The monitor issues read-only identity/statistics queries; DB stress remains separately gated and staging/local-HAProxy-only.
 
 ## Configuration
 
@@ -30,7 +31,7 @@ LONGRUN_MOBILE_TYPE=android
 
 For backward compatibility, the registered-device ASTPP credential may also use the existing `LONGRUN_DEVICE_SIGNIN_ASTPP_TOKEN` key. The worker uses it as the ASTPP token when `LONGRUN_ASTPP_TOKEN` is not set. Keep the credential local on each host; the worker's startup log reports only whether it was found.
 
-For production API observation, set `LONGRUN_ALLOW_REMOTE_API=true`, `LONGRUN_ALLOW_PRODUCTION_API=true`, and `LONGRUN_CONFIRM_ASTPP_ID=31553`. State-changing flows remain disabled unless their separate confirmations are enabled. Do not enable DB stress against production.
+For production API checks, set `LONGRUN_ALLOW_REMOTE_API=true`, `LONGRUN_ALLOW_PRODUCTION_API=true`, and `LONGRUN_CONFIRM_ASTPP_ID=31553`. Device sign-in and PIN verification require their separate confirmations. PIN verification does not change the PIN but records authentication attempts and can trigger account lockout if the PIN is wrong.
 
 To obtain the app-access token dynamically, explicitly enable `LONGRUN_RUN_DEVICE_SIGNIN_ON_START=true` and `LONGRUN_CONFIRM_DEVICE_SIGNIN_31553=true`, and provide the ASTPP token plus the already registered device identifier for account `31553`. The worker first calls onboarding status and sends `POST /api/v2/auth/sessions/device` only if the wallet is `active`, `locked`, or `frozen`. The current service's existing-wallet branch registers/verifies the device and skips the WaaS onboarding-job enqueue. This still changes that account's device/session state, so enable it only when intended; on production also set `LONGRUN_ALLOW_PRODUCTION_MUTATIONS=true` and `LONGRUN_CONFIRM_ASTPP_ID=31553`. If those confirmations are not enabled, the worker will not silently sign in or create an app-access token.
 
@@ -94,7 +95,9 @@ The worker process loads `tests/long-run/.env` itself; keep that ignored file pr
 
 Logs are written to `logs/long-run/soak-YYYY-MM-DD.jsonl`; if the size limit is reached, numbered parts are created for that day. It will issue API traffic only for ASTPP account `31553` and only perform device sign-in/PIN exchange when their explicit confirmations are enabled.
 
-To enable occasional staging-only DB stress:
+To enable bounded read-only production DB stress, set the production confirmation variables in the host-local env and configure TLS and a dedicated least-privilege database account. The DB stress SQL runs under `BEGIN READ ONLY` and scans customer/application aggregates; it does not modify data. Start at parallelism 1–2 per node and monitor DB latency before increasing it. A two-node run multiplies parallelism by two.
+
+Staging DB stress uses:
 
 ```text
 LONGRUN_TARGET_ENVIRONMENT=staging

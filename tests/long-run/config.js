@@ -126,21 +126,39 @@ function loadConfig() {
   }
 
   const dbStressEnabled = env.LONGRUN_ENABLE_DB_STRESS === 'true';
+  const targetEnvironment = env.LONGRUN_TARGET_ENVIRONMENT || 'unspecified';
   const databaseHost = env.DATABASE_HOST || '127.0.0.1';
+  const databasePoolMax = integer(env.DATABASE_POOL_MAX, 3, 1, 100);
+  const databasePoolMin = Math.min(integer(env.DATABASE_POOL_MIN, 0, 0, 100), databasePoolMax);
   if (dbStressEnabled) {
-    if (env.LONGRUN_TARGET_ENVIRONMENT !== 'staging') {
-      throw new Error('DB stress is staging-only; set LONGRUN_TARGET_ENVIRONMENT=staging.');
+    if (targetEnvironment === 'staging') {
+      if (env.LONGRUN_CONFIRM_DB_STRESS !== 'STAGING_ONLY') {
+        throw new Error('Confirm bounded staging DB stress with LONGRUN_CONFIRM_DB_STRESS=STAGING_ONLY.');
+      }
+      if (!['127.0.0.1', 'localhost', '::1'].includes(databaseHost)) {
+        throw new Error('Staging DB stress must connect through the local HAProxy write listener.');
+      }
+      if (isProductionApi) throw new Error('Staging DB stress is blocked when the API target is production.');
+      if (!env.DATABASE_NAME || !env.DATABASE_USER) {
+        throw new Error('DB stress requires DATABASE_NAME and DATABASE_USER.');
+      }
+    } else if (targetEnvironment === 'production') {
+      if (!isProductionApi) throw new Error('Production DB stress requires LONGRUN_BASE_URL=https://api.ambiapay.com.');
+      if (env.LONGRUN_ALLOW_PRODUCTION_DB_STRESS !== 'true') {
+        throw new Error('Production DB stress requires LONGRUN_ALLOW_PRODUCTION_DB_STRESS=true.');
+      }
+      if (env.LONGRUN_CONFIRM_DB_STRESS !== 'PRODUCTION_READ_ONLY_31553') {
+        throw new Error('Confirm bounded read-only production DB stress with LONGRUN_CONFIRM_DB_STRESS=PRODUCTION_READ_ONLY_31553.');
+      }
+      if (!env.DATABASE_HOST || !env.DATABASE_NAME || !env.DATABASE_USER || !env.DATABASE_PASSWORD) {
+        throw new Error('Production DB stress requires explicit DATABASE_HOST, DATABASE_NAME, DATABASE_USER, and DATABASE_PASSWORD.');
+      }
+      if (env.DATABASE_SSL !== 'true') {
+        throw new Error('Production DB stress requires DATABASE_SSL=true.');
+      }
+    } else {
+      throw new Error('DB stress requires LONGRUN_TARGET_ENVIRONMENT=staging or explicit production confirmation.');
     }
-    if (env.LONGRUN_CONFIRM_DB_STRESS !== 'STAGING_ONLY') {
-      throw new Error('Confirm bounded staging DB stress with LONGRUN_CONFIRM_DB_STRESS=STAGING_ONLY.');
-    }
-    if (!['127.0.0.1', 'localhost', '::1'].includes(databaseHost)) {
-      throw new Error('DB stress must connect through the local HAProxy write listener.');
-    }
-    if (!env.DATABASE_NAME || !env.DATABASE_USER) {
-      throw new Error('DB stress requires DATABASE_NAME and DATABASE_USER.');
-    }
-    if (isProductionApi) throw new Error('DB stress is blocked when the API target is production.');
   }
 
   return {
@@ -165,7 +183,7 @@ function loadConfig() {
     dbSampleIntervalMs: integer(env.LONGRUN_DB_SAMPLE_INTERVAL_SECONDS, 30, 5, 3600) * 1000,
     durationHours: integer(env.LONGRUN_DURATION_HOURS, 0, 0, 24 * 365),
     nodeName: env.LONGRUN_NODE_NAME || require('node:os').hostname(),
-    targetEnvironment: env.LONGRUN_TARGET_ENVIRONMENT || 'unspecified',
+    targetEnvironment,
     pinRefreshEnabled,
     deviceSignInOnStart,
     balanceApiEnabled,
@@ -182,6 +200,8 @@ function loadConfig() {
       user: env.DATABASE_USER,
       password: env.DATABASE_PASSWORD,
       ssl: env.DATABASE_SSL === 'true',
+      poolMin: databasePoolMin,
+      poolMax: databasePoolMax,
     },
     databaseMonitorEnabled: Boolean(env.DATABASE_NAME && env.DATABASE_USER),
   };

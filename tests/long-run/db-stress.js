@@ -78,8 +78,8 @@ class DbStressRunner {
     } else {
       this.logger.info('db_stress_disabled', {
         reason: 'LONGRUN_ENABLE_DB_STRESS is not true',
-        requiredEnvironment: 'staging',
-        databaseStressPolicy: 'production targets are blocked',
+        requiredEnvironment: 'staging or explicitly confirmed production',
+        databaseStressPolicy: 'production requires explicit opt-in, confirmation, and TLS',
       });
     }
   }
@@ -97,6 +97,8 @@ class DbStressRunner {
     this.logger.warn('db_stress_window_started', {
       windowMs: this.config.dbStressWindowMs,
       parallelism: this.config.dbStressParallelism,
+      targetEnvironment: this.config.targetEnvironment,
+      targetEnvironment: this.config.targetEnvironment,
       queryProfile: 'read_only_customer_snapshot_load',
       queryCount: STRESS_QUERY_TEMPLATES.length,
     });

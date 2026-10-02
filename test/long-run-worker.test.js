@@ -98,6 +98,23 @@ test('mutations and stress require explicit safe-target confirmations', () => {
   );
   assert.throws(
     () => buildConfig({
+      LONGRUN_BASE_URL: 'https://api.ambiapay.com',
+      LONGRUN_ALLOW_REMOTE_API: 'true',
+      LONGRUN_ALLOW_PRODUCTION_API: 'true',
+      LONGRUN_CONFIRM_ASTPP_ID: '31553',
+      LONGRUN_TARGET_ENVIRONMENT: 'production',
+      LONGRUN_ENABLE_DB_STRESS: 'true',
+      LONGRUN_CONFIRM_DB_STRESS: 'PRODUCTION_READ_ONLY_31553',
+      DATABASE_HOST: 'db.example.test',
+      DATABASE_NAME: 'customer_management',
+      DATABASE_USER: 'soak_reader',
+      DATABASE_PASSWORD: 'test-only-secret',
+      DATABASE_SSL: 'true',
+    }, workspaceRoot),
+    /LONGRUN_ALLOW_PRODUCTION_DB_STRESS=true/,
+  );
+  assert.throws(
+    () => buildConfig({
       LONGRUN_TARGET_ENVIRONMENT: 'staging',
       LONGRUN_ENABLE_DB_STRESS: 'true',
       LONGRUN_CONFIRM_DB_STRESS: 'STAGING_ONLY',
@@ -116,6 +133,24 @@ test('mutations and stress require explicit safe-target confirmations', () => {
   );
   assert.throws(
     () => buildConfig({
+      LONGRUN_BASE_URL: 'https://api.ambiapay.com',
+      LONGRUN_ALLOW_REMOTE_API: 'true',
+      LONGRUN_ALLOW_PRODUCTION_API: 'true',
+      LONGRUN_CONFIRM_ASTPP_ID: '31553',
+      LONGRUN_TARGET_ENVIRONMENT: 'production',
+      LONGRUN_ENABLE_DB_STRESS: 'true',
+      LONGRUN_ALLOW_PRODUCTION_DB_STRESS: 'true',
+      LONGRUN_CONFIRM_DB_STRESS: 'PRODUCTION_READ_ONLY_31553',
+      DATABASE_HOST: 'db.example.test',
+      DATABASE_NAME: 'customer_management',
+      DATABASE_USER: 'soak_reader',
+      DATABASE_PASSWORD: 'test-only-secret',
+      DATABASE_SSL: 'false',
+    }, workspaceRoot),
+    /DATABASE_SSL=true/,
+  );
+  assert.throws(
+    () => buildConfig({
       LONGRUN_ENABLE_PIN_REFRESH: 'true',
       LONGRUN_ENABLE_MUTATING_API_TESTS: 'true',
       LONGRUN_APP_ACCESS_TOKEN: 'app-token',
@@ -124,6 +159,28 @@ test('mutations and stress require explicit safe-target confirmations', () => {
     }, workspaceRoot),
     /LONGRUN_CONFIRM_PIN_REFRESH_31553/,
   );
+});
+
+test('production read-only DB stress requires production confirmation and TLS', () => {
+  const config = buildConfig({
+    LONGRUN_BASE_URL: 'https://api.ambiapay.com',
+    LONGRUN_ALLOW_REMOTE_API: 'true',
+    LONGRUN_ALLOW_PRODUCTION_API: 'true',
+    LONGRUN_CONFIRM_ASTPP_ID: '31553',
+    LONGRUN_TARGET_ENVIRONMENT: 'production',
+    LONGRUN_ENABLE_DB_STRESS: 'true',
+    LONGRUN_ALLOW_PRODUCTION_DB_STRESS: 'true',
+    LONGRUN_CONFIRM_DB_STRESS: 'PRODUCTION_READ_ONLY_31553',
+    DATABASE_HOST: 'db.example.test',
+    DATABASE_NAME: 'customer_management',
+    DATABASE_USER: 'soak_reader',
+    DATABASE_PASSWORD: 'test-only-secret',
+    DATABASE_SSL: 'true',
+  }, workspaceRoot);
+
+  assert.equal(config.dbStressEnabled, true);
+  assert.equal(config.targetEnvironment, 'production');
+  assert.equal(config.database.ssl, true);
 });
 
 test('Postman classifier keeps balance periodic and state-changing requests out of the loop', () => {
@@ -579,4 +636,29 @@ test('DB stress reports disabled state or its randomized first-window schedule',
   assert.equal(records[0].event, 'db_stress_scheduled');
   assert.ok(records[0].fields.firstWindowDelayMs >= enabledConfig.dbStressIntervalMinMs);
   assert.ok(records[0].fields.firstWindowDelayMs <= enabledConfig.dbStressIntervalMaxMs);
+});
+
+test('database connection settings include configurable pool bounds', () => {
+  const config = buildConfig({
+    LONGRUN_BASE_URL: 'http://localhost:5005',
+    DATABASE_HOST: 'db.example.test',
+    DATABASE_PORT: '5432',
+    DATABASE_NAME: 'customer_management',
+    DATABASE_USER: 'soak_reader',
+    DATABASE_PASSWORD: 'test-only-secret',
+    DATABASE_SSL: 'true',
+    DATABASE_POOL_MIN: '2',
+    DATABASE_POOL_MAX: '20',
+  }, workspaceRoot);
+
+  assert.deepEqual(config.database, {
+    host: 'db.example.test',
+    port: 5432,
+    database: 'customer_management',
+    user: 'soak_reader',
+    password: 'test-only-secret',
+    ssl: true,
+    poolMin: 2,
+    poolMax: 20,
+  });
 });
