@@ -147,11 +147,22 @@ class ApiRunner {
       stateChangingRequests: stateChanging,
       balanceIntervalMs: this.config.balanceIntervalMs,
       balanceApiEnabled: this.config.balanceApiEnabled,
+      authFlows: {
+        astppTokenConfigured: Boolean(this.config.variables.astppToken),
+        deviceSignInEnabled: this.config.deviceSignInOnStart,
+        transactionTokenRefreshEnabled: this.config.pinRefreshEnabled,
+      },
       requestTimeoutMs: this.config.requestTimeoutMs,
     });
   }
 
   async runStartupRequests() {
+    if (!this.config.variables.astppToken) {
+      this.logger.warn('api_auth_unavailable', {
+        credentialType: 'astppToken',
+        reason: 'set LONGRUN_ASTPP_TOKEN in the host-local worker environment; dynamic bearer-token APIs require this header',
+      });
+    }
     const startupReads = this.requests.filter((request) => safeGetClass(request) === 'read_once');
     for (const request of startupReads) await this.execute(request, 'startup_read');
 

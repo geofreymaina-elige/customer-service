@@ -354,7 +354,14 @@ test('app and transaction tokens are hydrated from the auth APIs instead of bein
     }
 
     if (requestUrl.pathname === '/api/v2/auth/sessions/device') {
-      return new Response(JSON.stringify({ success: true, data: { accessToken: appAccessToken } }), {
+      return new Response(JSON.stringify({
+        success: true,
+        data: {
+          user: { astppId: 31553 },
+          token: { accessToken: appAccessToken, tokenType: 'Bearer', expiresInSeconds: 2592000 },
+          otpPending: false,
+        },
+      }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       });
