@@ -1,6 +1,11 @@
 const path = require('node:path');
 
 const projectRoot = path.resolve(__dirname, '../..');
+const selectedNode = process.env.LONGRUN_SOAK_NODE;
+
+if (!['node-1', 'node-2'].includes(selectedNode)) {
+  throw new Error('Set LONGRUN_SOAK_NODE to node-1 or node-2; each host must run exactly one soak worker.');
+}
 
 module.exports = {
   apps: [
@@ -13,7 +18,6 @@ module.exports = {
       watch: false,
       autorestart: true,
       max_memory_restart: '512M',
-      env_file: path.join(__dirname, '.env'),
       env: {
         LONGRUN_NODE_NAME: 'node-1',
         LONGRUN_TARGET_ENVIRONMENT: 'local',
@@ -34,7 +38,6 @@ module.exports = {
       watch: false,
       autorestart: true,
       max_memory_restart: '512M',
-      env_file: path.join(__dirname, '.env'),
       env: {
         LONGRUN_NODE_NAME: 'node-2',
         LONGRUN_TARGET_ENVIRONMENT: 'local',
@@ -46,5 +49,5 @@ module.exports = {
       merge_logs: true,
       exp_backoff_restart_delay: 1000,
     },
-  ],
+  ].filter((app) => app.env.LONGRUN_NODE_NAME === selectedNode),
 };

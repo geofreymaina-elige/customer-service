@@ -3,23 +3,46 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { test } = require('node:test');
-const { loadConfig } = require('../tests/long-run/config');
+const { loadConfig, validateBearerAccount } = require('../tests/long-run/config');
 const { DailyLogger, redact } = require('../tests/long-run/daily-logger');
 const { loadMobileRequests, safeGetClass } = require('../tests/long-run/postman-collection');
 const { ApiRunner } = require('../tests/long-run/api-runner');
 const { redactApplicationLine } = require('../tests/long-run/app-log-tailer');
-const { responseSummary } = require('../tests/long-run/api-runner');
+const { classifyAuthFailure, responseSummary } = require('../tests/long-run/api-runner');
+
+test('auth failures are classified by service response details, not status alone', () => {
+  assert.equal(classifyAuthFailure(401, { code: 'ASTPP_TOKEN_INVALID' }, false), 'astppToken');
+  assert.equal(classifyAuthFailure(401, { code: 'HTTP_ERROR', message: 'Invalid or expired authentication token.' }, true), 'appAccessToken');
+  assert.equal(classifyAuthFailure(401, { code: 'INVALID_PIN', message: 'The PIN is incorrect.' }, true), undefined);
+  assert.equal(classifyAuthFailure(403, { code: 'HTTP_ERROR', message: 'Authentication token does not have the required scope.' }, true), undefined);
+  assert.equal(classifyAuthFailure(401, { code: 'HTTP_ERROR', message: 'Only the active registered device can receive a transaction token.' }, true), undefined);
+});
 const { databaseIdentity, leaderChangeObserved } = require('../tests/long-run/database-monitor');
 const { parsePm2List } = require('../tests/long-run/pm2-monitor');
 const { ACCOUNT_AGGREGATE_SQL, STRESS_QUERY_TEMPLATES } = require('../tests/long-run/db-stress');
 
 const workspaceRoot = path.resolve(__dirname, '..');
 
+function testBearerToken(astppId = 31553) {
+  return `header.${Buffer.from(JSON.stringify({ astppId })).toString('base64url')}.signature`;
+}
+
+test('dynamic bearer tokens are ignored when supplied through environment variables', () => {
+  const config = buildConfig({
+    LONGRUN_BASE_URL: 'http://localhost:5005',
+    LONGRUN_APP_ACCESS_TOKEN: testBearerToken(),
+    LONGRUN_TRANSACTION_TOKEN: testBearerToken(),
+  }, workspaceRoot);
+  assert.equal(config.variables.appAccessToken, undefined);
+  assert.equal(config.variables.transactionToken, undefined);
+});
+
 function configForTest(overrides = {}, cwd = workspaceRoot) {
   const keys = new Set([
     ...Object.keys(process.env).filter((key) => key.startsWith('LONGRUN_') || key.startsWith('DATABASE_')),
     ...Object.keys(overrides),
   ]);
+
   const originalValues = new Map([...keys].map((key) => [key, process.env[key]]));
   const originalCwd = process.cwd();
   for (const key of keys) delete process.env[key];
@@ -61,13 +84,8 @@ test('mutations and stress require explicit safe-target confirmations', () => {
     () => buildConfig({ LONGRUN_ASTPP_ID: '99999' }, workspaceRoot),
     /restricted to ASTPP account 31553/,
   );
-  const foreignAppToken = `header.${Buffer.from(JSON.stringify({ astppId: 99999 })).toString('base64url')}.signature`;
   assert.throws(
-    () => buildConfig({
-      LONGRUN_BASE_URL: 'https://staging.example.test',
-      LONGRUN_ALLOW_REMOTE_API: 'true',
-      LONGRUN_APP_ACCESS_TOKEN: foreignAppToken,
-    }, workspaceRoot),
+    () => validateBearerAccount(testBearerToken(99999), 'App access token', '31553', true),
     /different ASTPP account/,
   );
   assert.throws(
@@ -124,6 +142,7 @@ test('daily logger rotates size-bounded files and redacts secret fields', (conte
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'long-run-log-'));
   context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const logger = new DailyLogger(directory, 1024, 14);
+  logger.nodeName = 'node-1';
   logger.initialize(new Date('2026-10-02T00:00:00.000Z'));
 
   for (let index = 0; index < 20; index += 1) {
@@ -136,6 +155,7 @@ test('daily logger rotates size-bounded files and redacts secret fields', (conte
   assert.ok(files.some((file) => file.startsWith('soak-2026-10-02.part-')));
   assert.ok(files.includes('soak-2026-10-03.jsonl'));
   assert.equal(fs.readFileSync(path.join(directory, 'soak-2026-10-02.jsonl'), 'utf8').includes('do-not-log'), false);
+  assert.match(fs.readFileSync(path.join(directory, 'soak-2026-10-02.jsonl'), 'utf8'), /"nodeName":"node-1"/);
   assert.equal(JSON.stringify(redact({ pin: '1234' })).includes('1234'), false);
 });
 
@@ -232,6 +252,8 @@ test('balance request is skipped on startup and waits for its configured interva
     LONGRUN_INCLUDE_BALANCE_API: 'true',
     LONGRUN_ALLOW_PSP_BALANCE_API: 'true',
   }, workspaceRoot);
+  config.variables.appAccessToken = 'test-app-token';
+  config.variables.transactionToken = 'test-transaction-token';
   const calls = [];
   const originalFetch = global.fetch;
   global.fetch = async (url, options) => {
@@ -276,12 +298,38 @@ test('balance is disabled by default because its handler calls SasaPay', async (
   }
 });
 
+test('missing app tokens do not trigger device sign-in unless its safety gates are enabled', async () => {
+  const config = buildConfig({ LONGRUN_BASE_URL: 'http://localhost:5005' }, workspaceRoot);
+  const calls = [];
+  const originalFetch = global.fetch;
+  global.fetch = async (url) => {
+    calls.push(String(url));
+    return new Response('{"success":true}', { status: 200 });
+  };
+  try {
+    const runner = new ApiRunner(config, { info() {}, warn() {}, error() {} });
+    const walletRequest = runner.requests.find((request) => safeGetClass(request) === 'wallet');
+    const result = await runner.execute(walletRequest, 'test_missing_token');
+    assert.equal(result.skipped, true);
+    assert.equal(calls.length, 0);
+    assert.equal(runner.deviceSignInAttempted, false);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
 test('app and transaction tokens are hydrated from the auth APIs instead of being stored in env', async () => {
   const config = buildConfig({
     LONGRUN_BASE_URL: 'https://api.ambiapay.com',
     LONGRUN_ALLOW_REMOTE_API: 'true',
     LONGRUN_ALLOW_PRODUCTION_API: 'true',
     LONGRUN_CONFIRM_ASTPP_ID: '31553',
+    LONGRUN_ALLOW_PRODUCTION_MUTATIONS: 'true',
+    LONGRUN_RUN_DEVICE_SIGNIN_ON_START: 'true',
+    LONGRUN_CONFIRM_DEVICE_SIGNIN_31553: 'true',
+    LONGRUN_ENABLE_MUTATING_API_TESTS: 'true',
+    LONGRUN_ENABLE_PIN_REFRESH: 'true',
+    LONGRUN_CONFIRM_PIN_REFRESH_31553: 'true',
     LONGRUN_ASTPP_TOKEN: 'test-astpp-token',
     LONGRUN_PIN: '4920',
     LONGRUN_DEVICE_IDENTIFIER: 'SAM-S23-DEVICE-UUID-10492',
@@ -292,20 +340,29 @@ test('app and transaction tokens are hydrated from the auth APIs instead of bein
   }, workspaceRoot);
   const calls = [];
   const originalFetch = global.fetch;
+  const appAccessToken = testBearerToken();
+  const transactionToken = testBearerToken();
   global.fetch = async (url, init = {}) => {
     const requestUrl = new URL(url);
     calls.push({ pathname: requestUrl.pathname, headers: init.headers || {} });
 
+    if (requestUrl.pathname === '/api/v2/wallets/onboarding-status') {
+      return new Response(JSON.stringify({ success: true, data: { wallet: { status: 'active' } } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+
     if (requestUrl.pathname === '/api/v2/auth/sessions/device') {
-      return new Response(JSON.stringify({ success: true, data: { accessToken: 'fresh-app-access-token' } }), {
+      return new Response(JSON.stringify({ success: true, data: { accessToken: appAccessToken } }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       });
     }
 
     if (requestUrl.pathname === '/api/v2/auth/transaction-tokens') {
-      assert.equal(init.headers.Authorization, 'Bearer fresh-app-access-token');
-      return new Response(JSON.stringify({ success: true, data: { token: { accessToken: 'fresh-transaction-token', expiresInSeconds: 300 } } }), {
+      assert.equal(init.headers.Authorization, `Bearer ${appAccessToken}`);
+      return new Response(JSON.stringify({ success: true, data: { token: { accessToken: transactionToken, expiresInSeconds: 300 } } }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       });
@@ -321,13 +378,21 @@ test('app and transaction tokens are hydrated from the auth APIs instead of bein
     const runner = new ApiRunner(config, { info() {}, warn() {}, error() {} });
     const recovered = await runner.ensureLiveTokens(['appAccessToken', 'transactionToken']);
     assert.equal(recovered, true);
-    assert.equal(config.variables.appAccessToken, 'fresh-app-access-token');
-    assert.equal(config.variables.transactionToken, 'fresh-transaction-token');
+    assert.equal(config.variables.appAccessToken, appAccessToken);
+    assert.equal(config.variables.transactionToken, transactionToken);
     assert.ok(calls.some((call) => call.pathname === '/api/v2/auth/sessions/device'));
     assert.ok(calls.some((call) => call.pathname === '/api/v2/auth/transaction-tokens'));
   } finally {
     global.fetch = originalFetch;
   }
+});
+
+test('legacy device-sign-in ASTPP env key is accepted by worker config', () => {
+  const config = buildConfig({
+    LONGRUN_BASE_URL: 'http://localhost:5005',
+    LONGRUN_DEVICE_SIGNIN_ASTPP_TOKEN: 'configured-astpp-token',
+  }, workspaceRoot);
+  assert.equal(config.variables.astppToken, 'configured-astpp-token');
 });
 
 test('transaction token refresh updates memory but never logs the issued token', async () => {
@@ -336,10 +401,13 @@ test('transaction token refresh updates memory but never logs the issued token',
     LONGRUN_ENABLE_MUTATING_API_TESTS: 'true',
     LONGRUN_CONFIRM_PIN_REFRESH_31553: 'true',
     LONGRUN_ENABLE_PIN_REFRESH: 'true',
-    LONGRUN_APP_ACCESS_TOKEN: 'test-app-access-token',
+    LONGRUN_RUN_DEVICE_SIGNIN_ON_START: 'true',
+    LONGRUN_CONFIRM_DEVICE_SIGNIN_31553: 'true',
+    LONGRUN_ASTPP_TOKEN: 'test-astpp-token',
     LONGRUN_PIN: '1234',
     LONGRUN_DEVICE_IDENTIFIER: 'registered-test-device',
   }, workspaceRoot);
+  config.variables.appAccessToken = 'test-app-access-token';
   const records = [];
   const logger = {
     info: (event, fields) => records.push({ level: 'info', event, fields }),

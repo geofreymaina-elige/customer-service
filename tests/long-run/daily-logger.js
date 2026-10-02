@@ -65,7 +65,7 @@ class DailyLogger {
     if (dayStamp(now) !== path.basename(this.currentFile).slice(5, 15)) {
       this.selectFile(now);
     }
-    const record = redact({ timestamp: now.toISOString(), level, event, ...fields });
+    const record = redact({ timestamp: now.toISOString(), level, event, ...fields, ...(this.nodeName ? { nodeName: this.nodeName } : {}) });
     const line = `${JSON.stringify(record)}\n`;
     const bytes = Buffer.byteLength(line);
     if (this.currentBytes + bytes > this.maxBytes) {

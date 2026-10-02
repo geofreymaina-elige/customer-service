@@ -65,9 +65,9 @@ function loadConfig() {
   const variables = {
     baseUrl: env.LONGRUN_BASE_URL || 'http://localhost:5005',
     astppId: allowedAstppId,
-    astppToken: env.LONGRUN_ASTPP_TOKEN,
-    appAccessToken: env.LONGRUN_APP_ACCESS_TOKEN,
-    transactionToken: env.LONGRUN_TRANSACTION_TOKEN,
+    astppToken: env.LONGRUN_ASTPP_TOKEN || env.LONGRUN_DEVICE_SIGNIN_ASTPP_TOKEN,
+    appAccessToken: undefined,
+    transactionToken: undefined,
     deviceIdentifier: env.LONGRUN_DEVICE_IDENTIFIER,
     deviceModel: env.LONGRUN_DEVICE_MODEL || 'Long-Run Soak Test Device',
     deviceOs: env.LONGRUN_DEVICE_OS || 'Android 14',
@@ -79,9 +79,6 @@ function loadConfig() {
   const parsedBaseUrl = new URL(baseUrl);
   const isLoopback = ['localhost', '127.0.0.1', '::1'].includes(parsedBaseUrl.hostname);
   const isProductionApi = parsedBaseUrl.hostname.toLowerCase() === 'api.ambiapay.com';
-  validateBearerAccount(variables.appAccessToken, 'App access token', allowedAstppId, !isLoopback && !!variables.appAccessToken);
-  validateBearerAccount(variables.transactionToken, 'Transaction token', allowedAstppId, !isLoopback && !!variables.transactionToken);
-
   if (!isLoopback && env.LONGRUN_ALLOW_REMOTE_API !== 'true') {
     throw new Error('Remote API targets require LONGRUN_ALLOW_REMOTE_API=true.');
   }
@@ -186,10 +183,11 @@ function loadConfig() {
       password: env.DATABASE_PASSWORD,
       ssl: env.DATABASE_SSL === 'true',
     },
+    databaseMonitorEnabled: Boolean(env.DATABASE_NAME && env.DATABASE_USER),
   };
 }
 
 global.buildConfig = buildConfig;
 global.loadConfig = loadConfig;
 
-module.exports = { buildConfig, loadConfig };
+module.exports = { buildConfig, loadConfig, validateBearerAccount };

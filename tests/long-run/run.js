@@ -27,6 +27,7 @@ function randomBetween(minimum, maximum) {
 async function main() {
   const config = loadConfig();
   const logger = new DailyLogger(config.logDirectory, config.logMaxBytes, config.logRetentionDays);
+  logger.nodeName = config.nodeName;
   logger.initialize();
   const apiRunner = new ApiRunner(config, logger);
 
@@ -67,6 +68,13 @@ async function main() {
     balanceIntervalMinutes: config.balanceIntervalMs / 60000,
     dbSamplingIntervalSeconds: config.dbSampleIntervalMs / 1000,
     dbStressEnabled: config.dbStressEnabled,
+    databaseMonitorConfigured: config.databaseMonitorEnabled,
+    authFlowsConfigured: {
+      astppToken: Boolean(config.variables.astppToken),
+      appAccessToken: config.deviceSignInOnStart,
+      transactionToken: config.pinRefreshEnabled,
+      deviceIdentifier: Boolean(config.variables.deviceIdentifier),
+    },
     logDirectory: config.logDirectory,
     logRetentionDays: config.logRetentionDays,
     logMaxBytes: config.logMaxBytes,

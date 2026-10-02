@@ -1,6 +1,11 @@
 const { performance } = require('node:perf_hooks');
 const { randomUUID } = require('node:crypto');
 const { buildRequest, loadMobileRequests, safeGetClass, safeRoute } = require('./postman-collection');
+const { validateBearerAccount } = require('./config');
+
+function requiresAccountBoundJwt(baseUrl) {
+  return !['localhost', '127.0.0.1', '::1'].includes(new URL(baseUrl).hostname);
+}
 
 function extractAccessToken(payload) {
   if (!payload || typeof payload !== 'object') return undefined;
@@ -12,11 +17,20 @@ function extractAccessToken(payload) {
   return undefined;
 }
 
-function isAuthFailure(statusCode, payload) {
+function classifyAuthFailure(statusCode, payload, hasAuthorization) {
   const code = String(payload?.code || '').toUpperCase();
   const message = String(payload?.message || '').toUpperCase();
-  const combined = `${statusCode} ${code} ${message}`;
-  return Number(statusCode) === 401 || Number(statusCode) === 403 || /INVALID.*(TOKEN|SESSION)|EXPIRED.*(TOKEN|SESSION)|SESSION.*EXPIRED|TOKEN.*EXPIRED|UNAUTHORIZED|AUTHENTICATION.*FAILED|DIFFERENT DEVICE|DEVICE.*MISMATCH|INVALID.*DEVICE|DEVICE.*REVOKED/.test(combined);
+  if (code === 'ASTPP_TOKEN_INVALID' || /ASTPP TOKEN.*(MISSING|INVALID|EXPIRED)|X-ASTPP-TOKEN.*(MISSING|INVALID|EXPIRED)/.test(message)) {
+    return 'astppToken';
+  }
+  if (!hasAuthorization || ![401, 403].includes(Number(statusCode))) return undefined;
+  if (['INVALID_TOKEN', 'TOKEN_EXPIRED', 'ACCESS_TOKEN_EXPIRED', 'AUTHENTICATION_TOKEN_INVALID', 'SESSION_EXPIRED'].includes(code)) {
+    return 'appAccessToken';
+  }
+  if (/INVALID OR EXPIRED AUTHENTICATION TOKEN|MISSING OR INVALID AUTHORIZATION HEADER|AUTHENTICATION TOKEN IS BOUND TO A DIFFERENT DEVICE|DEVICE SESSION HAS EXPIRED OR WAS REVOKED/.test(message)) {
+    return 'appAccessToken';
+  }
+  return undefined;
 }
 
 function responseSummary(value) {
@@ -40,30 +54,51 @@ class ApiRunner {
     this.byName = new Map(this.requests.map((request) => [request.name, request]));
     this.tokenRefreshFailed = false;
     this.refreshingTokens = false;
+    this.deviceSignInAttempted = false;
+    this.deviceSignInRecoveryAttempted = false;
     this.nextTransactionTokenRefreshAt = Date.now() +
       Math.max(30, config.initialTransactionTokenTtlSeconds - 60) * 1000;
   }
 
-  async ensureLiveTokens(missing = []) {
+  async ensureLiveTokens(missing = [], authRecovery = false) {
     if (this.refreshingTokens) return false;
     this.refreshingTokens = true;
     try {
       const missingSet = new Set(missing);
       if (missingSet.has('appAccessToken') || !this.config.variables.appAccessToken) {
+        if (!this.config.deviceSignInOnStart) return false;
+        if (authRecovery) {
+          if (this.deviceSignInRecoveryAttempted) return false;
+          this.deviceSignInRecoveryAttempted = true;
+        } else if (this.deviceSignInAttempted) {
+          return Boolean(this.config.variables.appAccessToken);
+        }
+
+        const statusRequest = this.requests.find((item) => safeGetClass(item) === 'status');
         const sessionRequest = this.requests.find((item) => item.method === 'POST'
-          && (item.url.includes('/api/v2/auth/sessions/device') || item.url.includes('/api/v2/auth/sessions/recovery'))
-          && !item.url.includes('/recovery-otp')
-          && !item.url.includes('/otp-verifications'));
-        if (sessionRequest) {
-          const result = await this.execute(sessionRequest, 'session_recovery');
-          if (!result.success) {
-            this.logger.warn('session_token_recovery_failed', { requestName: sessionRequest.name, statusCode: result.statusCode });
-            return false;
-          }
+          && item.url.includes('/api/v2/auth/sessions/device'));
+        this.deviceSignInAttempted = true;
+        const statusResult = statusRequest
+          ? await this.execute(statusRequest, 'device_signin_preflight')
+          : null;
+        if (!statusResult?.success || !['active', 'locked', 'frozen'].includes(statusResult.summary?.walletStatus)) {
+          this.logger.warn('session_token_recovery_skipped', {
+            reason: 'device sign-in requires a confirmed existing wallet',
+            statusCode: statusResult?.statusCode,
+            walletStatus: statusResult?.summary?.walletStatus,
+          });
+          return false;
+        }
+        if (!sessionRequest) return false;
+        const result = await this.execute(sessionRequest, authRecovery ? 'session_auth_recovery' : 'session_token_recovery');
+        if (!result.success || !this.config.variables.appAccessToken) {
+          this.logger.warn('session_token_recovery_failed', { requestName: sessionRequest.name, statusCode: result.statusCode });
+          return false;
         }
       }
 
-      if (missingSet.has('transactionToken') || !this.config.variables.transactionToken) {
+      if (missingSet.has('transactionToken')) {
+        if (!this.config.pinRefreshEnabled) return false;
         const refreshRequest = this.requests.find((item) => safeGetClass(item) === 'token_refresh');
         if (refreshRequest) {
           const result = await this.execute(refreshRequest, 'transaction_token_recovery');
@@ -126,13 +161,14 @@ class ApiRunner {
         reason: 'state-changing mobile endpoints are disabled in this worker',
       });
     }
-    if (this.config.deviceSignInOnStart) {
+    if (this.config.deviceSignInOnStart && !this.deviceSignInAttempted) {
       const statusRequest = this.requests.find((item) => safeGetClass(item) === 'status');
       const deviceRequest = this.requests.find((item) => safeGetClass(item) === 'device_signin');
       const statusResult = statusRequest
         ? await this.execute(statusRequest, 'device_signin_preflight')
         : null;
       if (statusResult?.success && ['active', 'locked', 'frozen'].includes(statusResult.summary?.walletStatus)) {
+        this.deviceSignInAttempted = true;
         await this.execute(deviceRequest, 'one_shot_existing_wallet_device_signin');
       } else {
         this.logger.warn('device_signin_skipped', {
@@ -142,7 +178,7 @@ class ApiRunner {
           walletStatus: statusResult?.summary?.walletStatus,
         });
       }
-    } else {
+    } else if (!this.config.deviceSignInOnStart) {
       const deviceRequest = this.requests.find((item) => safeGetClass(item) === 'device_signin');
       if (deviceRequest) {
         this.logger.info('api_mutation_skipped', {
@@ -206,7 +242,7 @@ class ApiRunner {
     }
   }
 
-  async execute(request, phase) {
+  async execute(request, phase, allowAuthRetry = true) {
     let built = buildRequest(request, this.config.baseUrl, this.config.variables);
     if (built.missing && built.missing.some((variable) => variable === 'appAccessToken' || variable === 'transactionToken')) {
       const recovered = await this.ensureLiveTokens(built.missing);
@@ -217,7 +253,7 @@ class ApiRunner {
           route: safeRoute(new URL(request.url.replace(/\{\{baseUrl\}\}/g, this.config.baseUrl), this.config.baseUrl).toString()),
           phase,
           missingVariables: built.missing,
-          reason: 'live auth tokens were refreshed before retrying the request',
+          reason: 'required live auth token is unavailable and its guarded auth flow did not complete',
         });
         return { skipped: true, missing: built.missing, success: false };
       }
@@ -262,27 +298,16 @@ class ApiRunner {
       } catch {
         summary = { responseType: 'non_json' };
       }
-      if (isAuthFailure(response.status, responseJson)) {
-        const invalidated = [];
-        if (request.url.includes('/api/v2/auth/transaction-tokens') || request.url.includes('/api/v2/auth/transaction')) {
-          invalidated.push('transactionToken');
-        }
-        if (built.headers.Authorization || request.url.includes('/api/v2/auth/sessions') || request.url.includes('/api/v2/auth/transaction-tokens')) {
-          invalidated.push('appAccessToken');
-        }
-        for (const key of invalidated) {
-          if (key === 'appAccessToken' || key === 'transactionToken') {
-            this.config.variables[key] = undefined;
-          }
-        }
+      const invalidatedCredential = classifyAuthFailure(response.status, responseJson, Boolean(built.headers.Authorization));
+      if (invalidatedCredential) {
+        this.config.variables[invalidatedCredential] = undefined;
         this.logger.warn('auth_token_invalidated', {
           requestName: request.name,
           route,
           phase,
           statusCode: response.status,
           responseCode: responseJson?.code,
-          responseMessage: responseJson?.message,
-          invalidatedKeys: invalidated,
+          credentialType: invalidatedCredential,
         });
       }
       const durationMs = Math.round(performance.now() - startedAt);
@@ -306,6 +331,13 @@ class ApiRunner {
       if (!response.ok || summary.success === false) this.logger.error('api_request_failed', fields);
       else this.logger.info('api_request_completed', fields);
 
+      if (invalidatedCredential === 'appAccessToken' && allowAuthRetry && this.config.deviceSignInOnStart) {
+        const recovered = await this.ensureLiveTokens(['appAccessToken'], true);
+        if (recovered && this.config.variables.appAccessToken) {
+          return this.execute(request, `${phase}_auth_retry`, false);
+        }
+      }
+
       if (safeGetClass(request) === 'token_refresh') {
         const token = extractAccessToken(responseJson);
         const expiresInSeconds = Number(responseJson?.data?.token?.expiresInSeconds ?? responseJson?.data?.expiresInSeconds);
@@ -316,6 +348,7 @@ class ApiRunner {
             statusCode: response.status,
           });
         } else {
+          validateBearerAccount(token, 'Transaction token', String(this.config.variables.astppId), requiresAccountBoundJwt(this.config.baseUrl));
           this.config.variables.transactionToken = token;
           const ttl = Number.isFinite(expiresInSeconds) && expiresInSeconds > 0
             ? expiresInSeconds
@@ -328,6 +361,7 @@ class ApiRunner {
         && responseJson && response.status >= 200 && response.status < 300) {
         const appToken = extractAccessToken(responseJson);
         if (typeof appToken === 'string' && appToken) {
+          validateBearerAccount(appToken, 'App access token', String(this.config.variables.astppId), requiresAccountBoundJwt(this.config.baseUrl));
           this.config.variables.appAccessToken = appToken;
         }
       }
@@ -356,4 +390,4 @@ class ApiRunner {
   }
 }
 
-module.exports = { ApiRunner, responseSummary };
+module.exports = { ApiRunner, classifyAuthFailure, responseSummary };
