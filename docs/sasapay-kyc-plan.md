@@ -40,29 +40,29 @@ For example, an approved customer with an active wallet and configured PIN shoul
 
 ```json
 {
-	"success": true,
-	"data": {
-		"applicationStatus": "approved",
-		"wallet": {
-			"walletId": "7aba4cc8-d917-40d7-a73e-31b25891697c",
-			"accountNumber": "1862533",
-			"currency": "KES",
-			"status": "active",
-			"createdAt": "2026-09-18T08:57:56.796Z"
-		},
-		"application": {
-			"sasapayRequestId": "00536e58-24ae-4288-bd1a-440b0ca67f70",
-			"sasapayAccountNumber": "1862624",
-			"sasapayAccountStatus": "ACTIVE",
-			"submittedAt": "2026-09-18T08:48:02.692Z",
-			"approvedAt": "2026-07-23T12:22:42.000Z",
-			"rejectedAt": "2026-07-23T12:22:37.000Z"
-		},
-		"requiredDocuments": [],
-		"nextAction": {
-			"type": "make_transaction"
-		}
-	}
+  "success": true,
+  "data": {
+    "applicationStatus": "approved",
+    "wallet": {
+      "walletId": "7aba4cc8-d917-40d7-a73e-31b25891697c",
+      "accountNumber": "1862533",
+      "currency": "KES",
+      "status": "active",
+      "createdAt": "2026-09-18T08:57:56.796Z"
+    },
+    "application": {
+      "sasapayRequestId": "00536e58-24ae-4288-bd1a-440b0ca67f70",
+      "sasapayAccountNumber": "1862624",
+      "sasapayAccountStatus": "ACTIVE",
+      "submittedAt": "2026-09-18T08:48:02.692Z",
+      "approvedAt": "2026-07-23T12:22:42.000Z",
+      "rejectedAt": "2026-07-23T12:22:37.000Z"
+    },
+    "requiredDocuments": [],
+    "nextAction": {
+      "type": "make_transaction"
+    }
+  }
 }
 ```
 
@@ -88,6 +88,8 @@ Admin review APIs and UI are out of scope for this service and must be built by 
 - View uploaded images through an authorized, time-limited mechanism; never expose public image URLs or filesystem paths.
 - Approve or reject a submission with reviewer identity, decision time, and reason recorded against that submission.
 - See the requirements-policy version and exact document set submitted, and distinguish internal review approval from the PSP's final decision.
+
+This service publishes the durable `sasapay_kyc.submitted_for_review` event with the submission ID and policy version. The admin system should consume that handoff, obtain customer/submission details through an agreed private integration, and return review decisions through the agreed service integration; it must not rely on public image URLs or direct filesystem access.
 
 The admin system must use explicit admin authorization and permissions. Its decisions and status changes must update only the SasaPay submission/review state through the agreed service integration; they must not overwrite shared `customer_applications` KYC state or customer lifecycle status. Do not reuse the current operations KYC review behavior for SasaPay review.
 
@@ -126,7 +128,7 @@ Add focused tests covering:
 - SasaPay-first selection, eligibility checks, and wallet/primary fallback.
 - PIN notification priority, message interpolation, failure counts, and lock warnings.
 
-Roll out behind a feature/configuration switch. Enable the workflow for SasaPay only after confirming the PSP's resubmission/upload API, accepted document types, callback identifiers, and document requirements. Monitor submission failures, callback mismatches, and notification delivery during rollout.
+Roll out behind `SASAPAY_KYC_ENABLED` and the existing SasaPay configuration switch. Enable the workflow for SasaPay only after confirming the PSP's resubmission/upload API, accepted document types, callback identifiers, and document requirements. Monitor submission failures, callback mismatches, and notification delivery during rollout.
 
 ## PSP Contract To Confirm Before Implementation
 

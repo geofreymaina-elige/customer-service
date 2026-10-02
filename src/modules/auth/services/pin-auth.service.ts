@@ -7,12 +7,14 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
+import { randomUUID } from 'crypto';
 import { DatabaseService } from '../../../core/database/database.service';
 import { SecureJwtService, TokenResponse } from '../../../core/auth/jwt.service';
 import { MessageService } from '../../../core/messages/message.service';
 import { EventService } from '../../../core/events/event.service';
 import { SetPinDto, VerifyPinDto, ChangePinDto } from '../dto/pin-auth.dto';
 import { AppException, PinLockedException } from '../../../core/errors/app.exception';
+import { KafkaNotificationService } from '../../../core/notifications/kafka-notification.service';
 
 @Injectable()
 export class PinAuthService {
@@ -21,6 +23,7 @@ export class PinAuthService {
     private readonly jwtService: SecureJwtService,
     private readonly messages: MessageService,
     private readonly events: EventService,
+    private readonly notifications: KafkaNotificationService,
   ) { }
 
   /**
@@ -224,6 +227,33 @@ export class PinAuthService {
       await this.recordAttempt(customer.id, false, 'INVALID_PIN', ip, userAgent);
 
       const attemptsRemaining = Math.max(0, 5 - newAttempts);
+      const lockWarning = newAttempts >= 5
+        ? 'Your PIN is permanently locked. Contact support to restore access.'
+        : newAttempts === 3
+          ? `Your PIN is temporarily locked for 15 minutes. ${5 - newAttempts} incorrect attempt(s) remain before permanent lock.`
+          : newAttempts === 4
+            ? 'One incorrect attempt remains before permanent lock.'
+          : `${3 - newAttempts} incorrect attempt(s) remain before a 15-minute temporary lock; five failures permanently lock the PIN.`;
+      try {
+        await this.notifications.sendNotification({
+          astppId: String(customer.astpp_id),
+          channels: ['push'],
+          title: this.messages.get('auth.pin.failedNotification.title'),
+          body: this.messages.get('auth.pin.failedNotification.body', {
+            attemptsRemaining,
+            lockWarning,
+          }),
+          priority: 'urgent',
+          correlationId: `pin_failure_${randomUUID()}`,
+          sourceService: 'customer_service',
+          type: 'pin_failure',
+          notifyTopic: true,
+          context: { attemptsRemaining, failureCount: newAttempts },
+        });
+      } catch {
+        // Notification delivery must not alter PIN verification behavior.
+      }
+
       if (isPermanent) {
         throw new PinLockedException(this.messages.get('auth.pin.permanentlyLocked'));
       }

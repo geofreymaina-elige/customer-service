@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { JobService } from '../core/jobs/job.service';
 import { WaasOnboardingJobService, OnboardingJobPayload } from '../modules/onboarding/services/waas-onboarding-job.service';
+import { SasaPayKycService } from '../modules/onboarding/services/sasapay-kyc.service';
 import * as os from 'os';
 
 @Injectable()
@@ -13,6 +14,7 @@ export class JobsWorker implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly jobService: JobService,
     private readonly waasOnboardingJob: WaasOnboardingJobService,
+    private readonly sasaPayKyc: SasaPayKycService,
   ) {}
 
   async onModuleInit() {
@@ -33,6 +35,7 @@ export class JobsWorker implements OnModuleInit, OnModuleDestroy {
     if (!this.isRunning) return;
 
     try {
+      await this.sasaPayKyc.enqueueApprovedSubmission();
       const job = await this.jobService.claimNextJob(this.workerId);
       if (job) {
         this.logger.log(`[JOBS WORKER] Found pending job ${job.job_type} (${job.uuid})`);
@@ -97,6 +100,18 @@ export class JobsWorker implements OnModuleInit, OnModuleDestroy {
           break;
         }
 
+        case 'sasapay_kyc_submission_upload': {
+          const payload = job.payload as OnboardingJobPayload & { submissionId: string };
+          const stateAfterFetch = await this.waasOnboardingJob.step2_FetchKycImagesViaSSH(
+            payload,
+            { step: 'fetch_images' },
+          );
+          await this.waasOnboardingJob.step3_UploadKycToSasaPay(payload, stateAfterFetch);
+          await this.jobService.markCompleted(job.id);
+          this.logger.log(`[JOBS WORKER] Completed SasaPay KYC submission ${payload.submissionId}`);
+          break;
+        }
+
         case 'KycVerificationJob':
           this.logger.log(`[KYC JOB] Executing automated verification for customer ${job.payload?.customerId}`);
           // Simulate / execute automated KYC / IPRS lookup
@@ -123,6 +138,17 @@ export class JobsWorker implements OnModuleInit, OnModuleDestroy {
     } catch (error) {
       const errorDetails = this.formatError(error);
       this.logger.error(`[JOBS WORKER] Job ${job.job_type} (${job.uuid}) failed: ${errorDetails}`);
+      if (
+        job.job_type === 'sasapay_kyc_submission_upload' &&
+        job.attempts >= job.max_attempts &&
+        job.payload?.submissionId
+      ) {
+        try {
+          await this.sasaPayKyc.markPspUploadFailed(job.payload.submissionId, errorDetails);
+        } catch (stateError) {
+          this.logger.error(`[JOBS WORKER] Could not persist failed KYC upload state: ${stateError?.message}`);
+        }
+      }
       await this.jobService.markFailed(job.id, errorDetails);
     }
   }

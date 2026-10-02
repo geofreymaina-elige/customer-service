@@ -15,6 +15,7 @@ export interface OnboardingJobPayload {
   customerId: number;
   astppId: number;
   applicationId: number | null;
+  submissionId?: string;
   requestId?: string;
   otp?: string;
 }
@@ -25,9 +26,12 @@ interface OnboardingJobState {
   sasapay_account_number?: string;
   sasapay_account_status?: string;
   images?: {
-    front?: string; // Local temporary path
+    front?: string;
     back?: string;
     selfie?: string;
+    requiredDocuments?: string[];
+    submissionId?: string;
+    cleanupDirectory?: string;
   };
   error?: string;
 }
@@ -275,17 +279,43 @@ export class WaasOnboardingJobService {
       customer = await this.fetchFromMysqlAndUpsert(payload.astppId);
     }
 
-    // --- 1b. Fetch KYC details (prioritize wallet_kyc, fallback to primary_kyc) ---
+    // --- 1b. Fetch eligible SasaPay KYC, then wallet KYC, then primary KYC ---
     const kycDetails = await this.db.queryOne(
       `SELECT cad.identity_document_type, cad.identity_document_number, cad.application_type
        FROM customer_applications ca
        JOIN customer_applicant_details cad ON cad.customer_application_id = ca.id
        WHERE ca.customer_id = $1
-         AND cad.application_type IN ('wallet_kyc', 'primary_kyc')
+         AND (
+           cad.application_type IN ('wallet_kyc', 'primary_kyc')
+           OR (
+             $2::boolean
+             AND
+             cad.application_type = 'sasapay_kyc'
+             AND EXISTS (
+               SELECT 1
+               FROM sasapay_kyc_submissions s
+               WHERE s.customer_applicant_detail_id = cad.id
+                 AND s.status = 'approved_for_psp'
+                 AND NOT EXISTS (
+                   SELECT 1
+                   FROM unnest(s.required_documents) AS required(document_type)
+                   WHERE NOT EXISTS (
+                     SELECT 1 FROM sasapay_kyc_submission_images image
+                     WHERE image.submission_id = s.id
+                       AND image.document_type = required.document_type
+                   )
+                 )
+             )
+           )
+         )
        ORDER BY 
-         CASE cad.application_type WHEN 'wallet_kyc' THEN 1 ELSE 2 END ASC
+         CASE cad.application_type
+           WHEN 'sasapay_kyc' THEN 1
+           WHEN 'wallet_kyc' THEN 2
+           ELSE 3
+         END ASC
        LIMIT 1`,
-      [payload.customerId],
+      [payload.customerId, this.config.get<boolean>('sasapay.kycEnabled') === true],
     );
 
     // --- 1c. Call SasaPay WaaS /personal-onboarding/ ---
@@ -626,6 +656,95 @@ export class WaasOnboardingJobService {
   ): Promise<OnboardingJobState> {
     this.logger.log(`[STEP 2] Fetching KYC images via SSH for customer ${payload.customerId}`);
 
+    if (payload.submissionId && this.config.get<boolean>('sasapay.kycEnabled') !== true) {
+      throw new Error('SasaPay KYC feature is disabled for this submission job.');
+    }
+
+    const sasaPayImageResult = await this.db.query(
+      `SELECT s.id AS submission_id, ca.id AS customer_application_id,
+              s.required_documents, image.document_type, image.relative_path
+       FROM sasapay_kyc_submissions s
+       JOIN customer_applications ca ON ca.id = s.customer_application_id
+       JOIN sasapay_kyc_submission_images image ON image.submission_id = s.id
+       WHERE ca.customer_id = $1
+         AND $2::boolean
+         AND s.status IN ('approved_for_psp', 'processing_psp_upload')
+         AND ($3::uuid IS NULL OR s.id = $3::uuid)
+         AND NOT EXISTS (
+           SELECT 1
+           FROM unnest(s.required_documents) AS required(document_type)
+           WHERE NOT EXISTS (
+             SELECT 1 FROM sasapay_kyc_submission_images required_image
+             WHERE required_image.submission_id = s.id
+               AND required_image.document_type = required.document_type
+           )
+         )
+       ORDER BY s.updated_at DESC, image.document_type`,
+      [payload.customerId, this.config.get<boolean>('sasapay.kycEnabled') === true, payload.submissionId || null],
+    );
+    const sasaPayImageRows = sasaPayImageResult.rows as any[];
+    if (sasaPayImageRows.length) {
+      const submission = sasaPayImageRows[0];
+      const requiredDocuments = submission.required_documents as string[];
+      const applicationDirectory = path.resolve(
+        process.cwd(),
+        'uploads',
+        'images',
+        String(submission.customer_application_id),
+      );
+      const images: Record<string, string> = {};
+      let filesAvailable = true;
+
+      for (const image of sasaPayImageRows) {
+        const imagePath = path.resolve(process.cwd(), image.relative_path);
+        if (!imagePath.startsWith(`${applicationDirectory}${path.sep}`)) {
+          throw new Error('Stored SasaPay KYC image path is outside its application directory.');
+        }
+        const imageKey = image.document_type === 'document_front'
+          ? 'front'
+          : image.document_type === 'document_back'
+            ? 'back'
+            : 'selfie';
+        images[imageKey] = imagePath;
+      }
+
+      for (const documentType of requiredDocuments) {
+        const imageKey = documentType === 'document_front'
+          ? 'front'
+          : documentType === 'document_back'
+            ? 'back'
+            : 'selfie';
+        if (!images[imageKey]) {
+          filesAvailable = false;
+          break;
+        }
+        try {
+          await fsPromises.access(images[imageKey]);
+        } catch {
+          filesAvailable = false;
+          break;
+        }
+      }
+
+      if (filesAvailable) {
+        return {
+          ...state,
+          step: 'upload_kyc',
+          images: {
+            front: images.front,
+            back: images.back,
+            selfie: images.selfie,
+            requiredDocuments,
+            submissionId: submission.submission_id,
+          },
+        };
+      }
+    }
+
+    if (payload.submissionId) {
+      throw new Error(`Required images for SasaPay submission ${payload.submissionId} are unavailable.`);
+    }
+
     // Query for both primary and wallet KYC details
     const rows = await this.db.query(
       `SELECT ca.id AS pg_application_id,
@@ -718,6 +837,8 @@ export class WaasOnboardingJobService {
         front: localFrontPath,
         back: localBackPath,
         selfie: localSelfiePath,
+        requiredDocuments: ['document_front', 'document_back', 'selfie'],
+        cleanupDirectory: localTempDir,
       },
     };
   }
@@ -732,8 +853,17 @@ export class WaasOnboardingJobService {
   ): Promise<OnboardingJobState> {
     this.logger.log(`[STEP 3] Uploading KYC documents to SasaPay for customer ${payload.customerId}`);
 
-    if (!state.images?.front || !state.images?.back || !state.images?.selfie) {
+    if (!state.images) {
       throw new Error('KYC images not found in job state');
+    }
+    const requiredDocuments = state.images.requiredDocuments || ['document_front', 'document_back', 'selfie'];
+    const imagePaths: Record<string, string | undefined> = {
+      document_front: state.images.front,
+      document_back: state.images.back,
+      selfie: state.images.selfie,
+    };
+    if (requiredDocuments.some((documentType) => !imagePaths[documentType])) {
+      throw new Error('One or more required KYC images are missing from job state');
     }
 
     // Get customer phone number
@@ -742,23 +872,28 @@ export class WaasOnboardingJobService {
       [payload.customerId],
     );
 
+    let uploadRequestId: string | null = null;
     try {
       await this.writeAuditLog(payload.customerId, 'SASAPAY_KYC_UPLOAD_STARTED', {
         requestId: state.sasapay_request_id || null,
         accountNumber: state.sasapay_account_number || null,
-        frontImage: state.images?.front || null,
-        backImage: state.images?.back || null,
-        selfieImage: state.images?.selfie || null,
+        documentTypes: requiredDocuments,
       });
 
-      await this.sasapayWaas.uploadKycDocuments(
+      const uploadResult = await this.sasapayWaas.uploadKycDocuments(
         customer.phone_number.replace(/^\+?254/, ''),
         state.images.front,
         state.images.back,
         state.images.selfie,
       );
+      if (!uploadResult.status) {
+        throw new Error(`SasaPay KYC upload failed: ${uploadResult.message}`);
+      }
+      uploadRequestId = uploadResult.requestId || uploadResult.request_id || null;
 
-      await fsPromises.rm(path.dirname(state.images.front), { recursive: true, force: true });
+      if (state.images.cleanupDirectory) {
+        await fsPromises.rm(state.images.cleanupDirectory, { recursive: true, force: true });
+      }
 
       await this.writeAuditLog(payload.customerId, 'SASAPAY_KYC_UPLOAD_SUCCEEDED', {
         requestId: state.sasapay_request_id || null,
@@ -766,7 +901,7 @@ export class WaasOnboardingJobService {
       });
     } catch (error) {
       this.logger.warn(
-        `[STEP 3] SasaPay upload failed; staged files retained for retry in ${path.dirname(state.images.front)}`,
+        '[STEP 3] SasaPay upload failed; staged files retained for retry.',
       );
 
       await this.writeAuditLog(payload.customerId, 'SASAPAY_KYC_UPLOAD_FAILED', {
@@ -778,7 +913,23 @@ export class WaasOnboardingJobService {
       throw error;
     }
 
-    // Update wallet to active + application to approved
+    if (state.images.submissionId) {
+      await this.db.query(
+        `UPDATE sasapay_kyc_submissions
+         SET status = 'awaiting_psp_result',
+             sasapay_request_id = COALESCE($2, sasapay_request_id),
+             psp_submitted_at = NOW(), updated_at = NOW()
+         WHERE id = $1 AND status = 'processing_psp_upload'`,
+        [state.images.submissionId, uploadRequestId],
+      );
+      await this.writeAuditLog(payload.customerId, 'SASAPAY_KYC_RESUBMISSION_SENT', {
+        submissionId: state.images.submissionId,
+        documentTypes: requiredDocuments,
+      });
+      return { ...state, step: 'completed' };
+    }
+
+    // Update wallet to active + application to approved for the legacy onboarding flow.
     await this.db.query(
       `UPDATE customer_wallets
        SET status = 'active', is_locked = FALSE, lock_reason = NULL, locked_by = NULL, updated_at = NOW()

@@ -271,13 +271,15 @@ export class SasaPayWaasService {
    */
   async uploadKycDocuments(
     customerMobileNumber: string,
-    frontImagePath: string,
-    backImagePath: string,
-    selfieImagePath: string
+    frontImagePath: string | null | undefined,
+    backImagePath: string | null | undefined,
+    selfieImagePath: string | null | undefined
   ): Promise<{
     status: boolean;
     responseCode: string;
     message: string;
+    requestId?: string;
+    request_id?: string;
   }> {
     return this.callSasaPayApi(async (token) => {
       const FormData = require('form-data');
@@ -286,17 +288,20 @@ export class SasaPayWaasService {
       const formData = new FormData();
       formData.append('merchantCode', this.merchantCode);
       formData.append('customerMobileNumber', customerMobileNumber);
-      formData.append('documentImageFront', fs.createReadStream(frontImagePath));
-      formData.append('documentImageBack', fs.createReadStream(backImagePath));
-      formData.append('passportSizePhoto', fs.createReadStream(selfieImagePath));
+      if (frontImagePath) formData.append('documentImageFront', fs.createReadStream(frontImagePath));
+      if (backImagePath) formData.append('documentImageBack', fs.createReadStream(backImagePath));
+      if (selfieImagePath) formData.append('passportSizePhoto', fs.createReadStream(selfieImagePath));
+      if (!frontImagePath && !backImagePath && !selfieImagePath) {
+        throw new Error('At least one KYC image must be provided.');
+      }
 
       const url = `${this.baseUrl}/api/v2/waas/personal-onboarding/kyc/`;
       this.logProviderRequest('POST', url, {
         merchantCode: this.merchantCode,
         customerMobileNumber,
-        documentImageFront: '[FILE]',
-        documentImageBack: '[FILE]',
-        passportSizePhoto: '[FILE]',
+        documentImageFront: frontImagePath ? '[FILE]' : undefined,
+        documentImageBack: backImagePath ? '[FILE]' : undefined,
+        passportSizePhoto: selfieImagePath ? '[FILE]' : undefined,
       });
       const response = await axios.post(url, formData, {
         headers: {

@@ -5,6 +5,7 @@ import { MessageService } from '../../../core/messages/message.service';
 import { EventService } from '../../../core/events/event.service';
 import { LockWalletDto, UnlockWalletDto } from '../dto/wallet.dto';
 import { SasaPayWaasService } from '../../onboarding/services/sasapay-waas.service';
+import { SasaPayKycService } from '../../onboarding/services/sasapay-kyc.service';
 
 @Injectable()
 export class WalletService {
@@ -13,6 +14,7 @@ export class WalletService {
     private readonly messages: MessageService,
     private readonly events: EventService,
     private readonly sasaPayWaas: SasaPayWaasService,
+    private readonly sasaPayKyc: SasaPayKycService,
   ) {}
 
   /**
@@ -87,56 +89,24 @@ export class WalletService {
     if (!customer) {
       throw new NotFoundException(this.messages.get('common.notFound'));
     }
-    const status = await this.getWalletOnboardingStatus(customer.id, customer.phone_number);
-    
-    // Add nextStep field for v2 API
-    // Check device registration status
-    const device = await this.db.queryOne(
-      `SELECT id FROM customer_devices WHERE customer_id = $1 AND status = 'active'`,
-      [customer.id]
-    );
-    const deviceRegistered = !!device;
-    
-    // Check PIN status
-    const pin = await this.db.queryOne(
-      `SELECT id FROM customer_pins WHERE customer_id = $1`,
-      [customer.id]
-    );
-    const pinSet = !!pin;
-    
-    // Derive nextStep
-    let nextStep: 'register_device' | 'verify_otp' | 'set_pin' | 'none';
-    if (!deviceRegistered) {
-      nextStep = 'register_device';
-    } else if (status.applicationStatus === 'pending') {
-      nextStep = 'verify_otp';
-    } else if (status.hasWallet && !pinSet) {
-      nextStep = 'set_pin';
-    } else {
-      nextStep = 'none';
-    }
-    
-    return {
-      ...status,
-      nextStep,
-    };
+    return this.getWalletOnboardingStatus(customer.id);
   }
 
   /**
    * Get wallet onboarding readiness status (fast - no joins)
    * Returns wallet status, application progress, and KYC requirements
    */
-  async getWalletOnboardingStatus(customerId: number, phoneNumber?: string) {
+  async getWalletOnboardingStatus(customerId: number) {
     // Single query to fetch wallet data
     const wallet = await this.db.queryOne(
-      `SELECT id, uuid, account_number, currency, status, tier_level, created_at
+      `SELECT id, uuid, account_number, currency, status, created_at
        FROM customer_wallets WHERE customer_id = $1`,
       [customerId]
     );
 
     // Single query to fetch customer application status
     const application = await this.db.queryOne(
-      `SELECT kyc_status, sasapay_request_id, sasapay_account_number, sasapay_account_status, submitted_at, approved_at, rejected_at
+      `SELECT id, kyc_status, sasapay_request_id, sasapay_account_number, sasapay_account_status, submitted_at, approved_at, rejected_at
        FROM customer_applications
        WHERE customer_id = $1
        ORDER BY created_at DESC
@@ -144,86 +114,94 @@ export class WalletService {
       [customerId]
     );
 
-    // Determine readiness
-    const hasWallet = !!wallet;
-    const hasApplication = !!application;
     const applicationStatus = application?.kyc_status || 'not_started';
-    const requiresAdditionalKyc = !hasWallet || applicationStatus === 'unverified' || applicationStatus === 'requires_kyc_upload';
-    const isReadyToOnboard = !hasApplication || applicationStatus === 'unverified';
-    const isPending = applicationStatus === 'pending' || applicationStatus === 'requires_kyc_upload';
-    const isApproved = applicationStatus === 'approved' && hasWallet;
-    const isRejected = applicationStatus === 'rejected';
+    await this.sasaPayKyc.ensureSystemCase(
+      customerId,
+      'The system detected missing or insufficient images for SasaPay requirements.',
+      ['REJECTED', 'REQUIRES_KYC_UPLOAD'].includes(application?.sasapay_account_status)
+        ? 'SasaPay rejected the existing KYC documents.'
+        : undefined,
+    );
+    const kycSubmission = await this.sasaPayKyc.getCurrentStatus(customerId);
+    const requiredDocuments: string[] = kycSubmission?.requiredDocuments || [];
 
-    // Build response based on status
-    const response: any = {
-      hasWallet,
-      hasApplication,
-      isReadyToOnboard,
-      requiresAdditionalKyc,
+    const pin = await this.db.queryOne(
+      `SELECT id FROM customer_pins WHERE customer_id = $1 AND pin_hash IS NOT NULL`,
+      [customerId],
+    );
+    const device = await this.db.queryOne(
+      `SELECT id FROM customer_devices WHERE customer_id = $1 AND status = 'active'`,
+      [customerId],
+    );
+
+    let nextAction: Record<string, string>;
+    if (kycSubmission?.status === 'awaiting_documents' && requiredDocuments.length) {
+      nextAction = {
+        type: 'upload_required_documents',
+        method: 'POST',
+        endpoint: `/api/v2/wallets/kyc/submissions/${kycSubmission.submissionId}/images`,
+      };
+    } else if (kycSubmission?.status === 'awaiting_documents') {
+      nextAction = {
+        type: 'submit_kyc_for_review',
+        method: 'POST',
+        endpoint: `/api/v2/wallets/kyc/submissions/${kycSubmission.submissionId}/submit`,
+      };
+    } else if (kycSubmission?.status === 'psp_upload_failed') {
+      nextAction = { type: 'contact_support' };
+    } else if ([
+      'submitted_for_review',
+      'approved_for_psp',
+      'processing_psp_upload',
+      'awaiting_psp_result',
+    ].includes(kycSubmission?.status)) {
+      nextAction = { type: 'wait_for_kyc_review' };
+    } else if (applicationStatus === 'pending') {
+      nextAction = { type: 'verify_otp' };
+    } else if (applicationStatus === 'requires_kyc_upload') {
+      nextAction = { type: 'wait_for_kyc_requirements' };
+    } else if (applicationStatus === 'rejected' && (!wallet || wallet.status !== 'active')) {
+      nextAction = { type: 'contact_support' };
+    } else if (!wallet) {
+      nextAction = {
+        type: 'start_onboarding',
+        method: 'POST',
+        endpoint: '/api/v2/auth/sessions/device',
+      };
+    } else if (wallet.status !== 'active') {
+      nextAction = { type: 'wait_for_wallet_activation' };
+    } else if (!pin) {
+      nextAction = { type: 'set_pin' };
+    } else if (!device) {
+      nextAction = {
+        type: 'register_device',
+        method: 'POST',
+        endpoint: '/api/v2/auth/sessions/device',
+      };
+    } else {
+      nextAction = { type: 'make_transaction' };
+    }
+
+    return {
       applicationStatus,
-    };
-
-    // Add wallet details if exists
-    if (hasWallet) {
-      response.wallet = {
+      wallet: wallet ? {
         walletId: wallet.uuid,
         accountNumber: wallet.account_number,
         currency: wallet.currency,
         status: wallet.status,
-        tierLevel: wallet.tier_level,
         createdAt: wallet.created_at,
-      };
-    }
-
-    // Add application details if exists
-    if (hasApplication) {
-      response.application = {
-        status: applicationStatus,
+      } : null,
+      application: application ? {
         sasapayRequestId: application.sasapay_request_id,
         sasapayAccountNumber: application.sasapay_account_number,
         sasapayAccountStatus: application.sasapay_account_status,
         submittedAt: application.submitted_at,
         approvedAt: application.approved_at,
         rejectedAt: application.rejected_at,
-      };
-    }
-
-    // Determine user-facing message
-    let message: string;
-    let nextAction: string | null = null;
-
-    if (!hasApplication) {
-      message = this.messages.get('wallets.onboarding.notStarted');
-      nextAction = 'start_onboarding';
-    } else if (applicationStatus === 'unverified') {
-      message = this.messages.get('wallets.onboarding.readyToStart');
-      nextAction = 'start_onboarding';
-    } else if (applicationStatus === 'pending') {
-      message = this.messages.get('wallets.onboarding.awaitingOtp', {
-        phoneNumber: phoneNumber ? this.maskPhoneNumber(phoneNumber) : 'your registered phone number'
-      });
-      nextAction = 'verify_otp';
-    } else if (applicationStatus === 'requires_kyc_upload') {
-      message = this.messages.get('wallets.onboarding.processingKyc');
-      nextAction = 'wait_for_approval';
-    } else if (applicationStatus === 'approved' && hasWallet) {
-      message = this.messages.get('wallets.onboarding.approved');
-      nextAction = null;
-    } else if (applicationStatus === 'rejected') {
-      message = this.messages.get('wallets.onboarding.rejected');
-      nextAction = 'contact_support';
-    } else {
-      message = this.messages.get('wallets.onboarding.inProgress');
-      nextAction = 'wait_for_approval';
-    }
-
-    response.message = message;
-    response.nextAction = nextAction;
-    response.isPending = isPending;
-    response.isApproved = isApproved;
-    response.isRejected = isRejected;
-
-    return response;
+      } : null,
+      requiredDocuments,
+      nextAction,
+    };
   }
 
   /**

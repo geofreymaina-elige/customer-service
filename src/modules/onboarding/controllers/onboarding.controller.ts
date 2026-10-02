@@ -1,11 +1,10 @@
 import { Controller, Post, Body, Req, HttpCode, HttpStatus, UseGuards, UnauthorizedException, Delete } from '@nestjs/common';
 import { Request } from 'express';
 import * as crypto from 'crypto';
-import * as fs from 'fs';
-import * as path from 'path';
 import { ConfigService } from '@nestjs/config';
 import { OnboardingService } from '../services/onboarding.service';
 import { SasaPayWaasService } from '../services/sasapay-waas.service';
+import { SasaPayKycService } from '../services/sasapay-kyc.service';
 import { PinAuthService } from '../../auth/services/pin-auth.service';
 import { DeviceLogoutService } from '../../devices/services/device-logout.service';
 import { DeviceGatekeeperService } from '../../devices/services/device-gatekeeper.service';
@@ -36,6 +35,7 @@ export class OnboardingController {
   constructor(
     private readonly onboardingService: OnboardingService,
     private readonly sasapayWaas: SasaPayWaasService,
+    private readonly sasaPayKyc: SasaPayKycService,
     private readonly pinAuthService: PinAuthService,
     private readonly deviceLogoutService: DeviceLogoutService,
     private readonly deviceGatekeeper: DeviceGatekeeperService,
@@ -327,13 +327,11 @@ export class OnboardingController {
     @Body() dto: SasaPayOnboardingCallbackDto,
     @Req() req: Request,
   ) {
-    // Log the full callback payload first
     const callbackPayload = dto as SasaPayOnboardingCallbackDto & Record<string, unknown>;
-    this.logSasaPayCallback(callbackPayload, req);
-
     this.verifySasaPayCallback(req, dto);
     const callbackAccountNumber = this.callbackValue(callbackPayload, 'account_number', 'accountNumber');
     const callbackAccountStatus = this.callbackValue(callbackPayload, 'account_status', 'accountStatus');
+    const signedPaymentReference = this.callbackValue(callbackPayload, 'payment_reference', 'paymentReference');
 
     const application = await this.db.queryOne(
       `SELECT id, customer_id, kyc_status
@@ -356,16 +354,21 @@ export class OnboardingController {
       };
     }
 
-    const kycStatus = callbackAccountStatus === 'APPROVED' ? 'approved' : 'rejected';
     await this.db.query(
       `UPDATE customer_applications
        SET sasapay_account_status = $1,
-           kyc_status = $2,
-           rejection_reason = CASE WHEN $2 = 'rejected' THEN $3 ELSE NULL END,
            updated_at = NOW()
-       WHERE id = $4
+         WHERE id = $2
          AND sasapay_account_number IS NOT NULL`,
-      [callbackAccountStatus, kycStatus, dto.description || 'SasaPay onboarding rejected', application.id],
+      [callbackAccountStatus, application.id],
+    );
+
+    const callbackResult = await this.sasaPayKyc.recordCallbackEvent(
+      application.customer_id,
+      callbackAccountStatus,
+      dto.description,
+      callbackPayload,
+      signedPaymentReference,
     );
 
     // Get customer details for notification
@@ -375,15 +378,41 @@ export class OnboardingController {
     );
 
     // Send notification via Kafka (push + websocket)
-    if (customer) {
-      await this.notifications.sendWalletOnboardingNotification(
-        String(customer.astpp_id),
-        kycStatus as 'approved' | 'rejected',
-        callbackAccountNumber,
-        dto.description || undefined,
-        customer.phone_number,
-        customer.email
-      );
+    if (customer && callbackResult.processed) {
+      const notificationStatus = callbackAccountStatus === 'APPROVED' ? 'approved' : 'rejected';
+      const kycStatus = callbackResult.submissionId
+        ? await this.sasaPayKyc.getCurrentStatus(application.customer_id)
+        : null;
+
+      if (notificationStatus === 'rejected' && kycStatus?.requiredDocuments?.length) {
+        await this.notifications.sendNotification({
+          astppId: String(customer.astpp_id),
+          channels: ['push', 'websocket'],
+          title: this.messages.get('kyc.additionalDocumentsRequired.title'),
+          body: this.messages.get('kyc.additionalDocumentsRequired.body', {
+            documents: kycStatus.requiredDocuments.join(', '),
+          }),
+          priority: 'high',
+          correlationId: `sasapay_kyc_required_${callbackResult.submissionId}`,
+          sourceService: 'customer_service',
+          type: 'kyc_documents_required',
+          notifyTopic: true,
+          context: {
+            submissionId: callbackResult.submissionId,
+            requiredDocuments: kycStatus.requiredDocuments,
+            policyVersion: kycStatus.policyVersion,
+          },
+        });
+      } else {
+        await this.notifications.sendWalletOnboardingNotification(
+          String(customer.astpp_id),
+          notificationStatus,
+          callbackAccountNumber,
+          dto.description || undefined,
+          customer.phone_number,
+          customer.email,
+        );
+      }
     }
 
     this.logger.log(
@@ -391,8 +420,8 @@ export class OnboardingController {
     );
     return {
       success: true,
-      processed: true,
-      message: 'Callback received and processed',
+      processed: callbackResult.processed,
+      message: callbackResult.processed ? 'Callback received and processed' : 'Duplicate callback ignored',
     };
   }
 
@@ -408,38 +437,6 @@ export class OnboardingController {
        VALUES ($1, $2, 'SYSTEM', 'ONBOARDING_CONTROLLER', $3::jsonb, NOW())`,
       [customerId, eventType, details],
     );
-  }
-
-  private logSasaPayCallback(payload: Record<string, unknown>, req: Request): void {
-    try {
-      const logsDir = path.join(process.cwd(), 'logs');
-      if (!fs.existsSync(logsDir)) {
-        fs.mkdirSync(logsDir, { recursive: true });
-      }
-
-      const logFilePath = path.join(logsDir, 'sasapay-callbacks.log');
-      const timestamp = new Date().toISOString();
-      const sourceIp = this.normalizeIp(req.socket.remoteAddress || req.ip);
-      const headers = {
-        'x-sasapay-signature': req.header('X-SasaPay-Signature'),
-        'content-type': req.header('Content-Type'),
-        'user-agent': req.header('User-Agent'),
-      };
-
-      const logEntry = {
-        timestamp,
-        sourceIp,
-        headers,
-        payload,
-      };
-
-      const logLine = JSON.stringify(logEntry, null, 2) + '\n' + '-'.repeat(80) + '\n';
-      fs.appendFileSync(logFilePath, logLine, 'utf8');
-
-      this.logger.log(`[SASAPAY CALLBACK] Full payload logged to ${logFilePath}`);
-    } catch (error) {
-      this.logger.error(`[SASAPAY CALLBACK] Failed to write callback log: ${error.message}`);
-    }
   }
 
   private verifySasaPayCallback(req: Request, dto: SasaPayOnboardingCallbackDto): void {

@@ -12,6 +12,7 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/src/main",
+    "test": "npm run build && node --test test/*.test.js",
     "migrate": "ts-node database/migrate.ts",
     "snapshot": "ts-node src/workers/snapshot/run-snapshot.ts",
     "cdc:start": "ts-node src/workers/cdc/run-cdc-consumer.ts",

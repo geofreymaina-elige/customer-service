@@ -90,6 +90,14 @@ export class ConfirmWalletOtpDto {
 export class SasaPayOnboardingCallbackDto {
   @IsOptional()
   @IsString()
+  requestId?: string;
+
+  @IsOptional()
+  @IsString()
+  request_id?: string;
+
+  @IsOptional()
+  @IsString()
   sasapay_transaction_code?: string;
 
   @IsOptional()
@@ -131,6 +139,10 @@ export class SasaPayOnboardingCallbackDto {
   @IsOptional()
   @IsString()
   payment_reference?: string;
+
+  @IsOptional()
+  @IsString()
+  paymentReference?: string;
 
   @IsOptional()
   @IsString()

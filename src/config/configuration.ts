@@ -52,6 +52,7 @@ export default () => ({
   },
   sasapay: {
     enabled: process.env.SASAPAY_ENABLED === 'true',
+    kycEnabled: process.env.SASAPAY_KYC_ENABLED === 'true',
     environment: process.env.SASAPAY_ENVIRONMENT,
     clientId: process.env.SASAPAY_CLIENT_ID,
     clientSecret: process.env.SASAPAY_CLIENT_SECRET,

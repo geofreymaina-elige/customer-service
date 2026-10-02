@@ -9,6 +9,10 @@
       "mustBeFourDigits": "PIN must be exactly 4 digits.",
       "pinsMustMatch": "PIN and confirm PIN do not match.",
       "invalid": "Invalid PIN. {attemptsRemaining} attempt(s) remaining.",
+      "failedNotification": {
+        "title": "Incorrect security PIN",
+        "body": "An incorrect PIN was entered. {attemptsRemaining} attempt(s) remain before permanent lock. {lockWarning}"
+      },
       "oldPinInvalid": "Current PIN is incorrect.",
       "newPinCannotBeSame": "New PIN cannot be the same as your current PIN.",
       "temporarilyLocked": "PIN verification is locked due to too many failed attempts. Try again in {minutes} minutes.",
@@ -49,6 +53,10 @@
   },
   "kyc": {
     "submitted": "KYC identity documents submitted successfully for review.",
+    "additionalDocumentsRequired": {
+      "title": "Additional identity documents required",
+      "body": "Please upload the required images: {documents}."
+    },
     "approved": "KYC profile approved successfully.",
     "rejected": "KYC profile rejected.",
     "alreadyApproved": "Customer KYC is already approved.",

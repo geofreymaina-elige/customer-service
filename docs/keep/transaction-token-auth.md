@@ -9,19 +9,19 @@ The mobile app exchanges its normal app-access token and the customer's PIN for 
 `POST /api/v2/auth/transaction-tokens` requires a valid app-access bearer token, the customer's PIN, and metadata for the customer's registered active device:
 
 ```bash
-curl --location 'http://dev-api.ambiapay.com/api/v2/auth/transaction-tokens' \
-  --header 'Content-Type: application/json' \
-  --header 'Authorization: Bearer <APP_ACCESS_TOKEN>' \
-  --data '{
-    "pin": "<CUSTOMER_PIN>",
-    "device": {
-      "device_identifier": "<REGISTERED_DEVICE_IDENTIFIER>",
-      "mobile_type": "android",
-      "device_model": "Samsung Galaxy S23",
-      "device_os": "Android 14",
-      "app_version": "2.4.1"
-    }
-  }'
+curl --location 'http://dev-api.ambiapay.com//api/v2/auth/transaction-tokens' \
+--header 'Content-Type: application/json' \
+--header 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzZWUwZTRjZC01OTdlLTQ4MmYtYTlhNi01MmIwNjI2MTJmMTQiLCJhc3RwcElkIjo1NzYsImRldmljZUhhc2giOiJhYTg0NWRjMWRhMDQzODVmMjQyOThlOTMxMWI0ZDk1ZDMzOTY0YTc4NTkyNzIxNDcxMWI5ZWNhYWM0Zjk2NDRhIiwidm9pcE51bWJlciI6IjI1NDIwNTkwMDIwNiIsImp0aSI6ImE4ZGNhY2NjLWVkZDktNDk2Yi1hZDIwLWI0Nzk0ZDcwMDI2YSIsInNjb3BlIjpbImFwcDphY2Nlc3MiXSwiaXNzIjoiY3VzdG9tZXItbWFuYWdlbWVudC1zZXJ2aWNlIiwiYXVkIjoiYW1iaWEtY2xpZW50IiwiaWF0IjoxNzkwOTMyNzk0LCJleHAiOjE3OTM1MjQ3OTR9.ElHKAGbZnpoLeuvWM47BBqCQgxvcxIOCTfBg0H-RBoY' \
+--data '{
+  "pin": "",
+  "device": {
+    "device_identifier": "SAM-S23-DEVICE-UUID-10492",
+    "mobile_type": "android",
+    "device_model": "Samsung Galaxy S23",
+    "device_os": "Android 14",
+    "app_version": "2.4.1"
+  }
+}'
 ```
 
 Replace the bearer token, PIN, and device identifier with current values. The service checks the app session, verifies the PIN, and requires the device to be registered and active. The bearer token in the original example has `app:access` scope and is only for this exchange; use the returned transaction token for wallet transaction requests.
