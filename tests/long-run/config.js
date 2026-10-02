@@ -153,8 +153,9 @@ function loadConfig() {
       if (!env.DATABASE_HOST || !env.DATABASE_NAME || !env.DATABASE_USER || !env.DATABASE_PASSWORD) {
         throw new Error('Production DB stress requires explicit DATABASE_HOST, DATABASE_NAME, DATABASE_USER, and DATABASE_PASSWORD.');
       }
-      if (env.DATABASE_SSL !== 'true') {
-        throw new Error('Production DB stress requires DATABASE_SSL=true.');
+      const databaseUsesLoopback = ['127.0.0.1', 'localhost', '::1'].includes(databaseHost.toLowerCase());
+      if (!databaseUsesLoopback && env.DATABASE_SSL !== 'true') {
+        throw new Error('Production DB stress requires DATABASE_SSL=true for non-loopback database hosts.');
       }
     } else {
       throw new Error('DB stress requires LONGRUN_TARGET_ENVIRONMENT=staging or explicit production confirmation.');

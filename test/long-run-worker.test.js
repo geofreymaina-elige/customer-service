@@ -183,6 +183,28 @@ test('production read-only DB stress requires production confirmation and TLS', 
   assert.equal(config.database.ssl, true);
 });
 
+test('production DB stress allows plaintext only through the local HAProxy loopback', () => {
+  const config = buildConfig({
+    LONGRUN_BASE_URL: 'https://api.ambiapay.com',
+    LONGRUN_ALLOW_REMOTE_API: 'true',
+    LONGRUN_ALLOW_PRODUCTION_API: 'true',
+    LONGRUN_CONFIRM_ASTPP_ID: '31553',
+    LONGRUN_TARGET_ENVIRONMENT: 'production',
+    LONGRUN_ENABLE_DB_STRESS: 'true',
+    LONGRUN_ALLOW_PRODUCTION_DB_STRESS: 'true',
+    LONGRUN_CONFIRM_DB_STRESS: 'PRODUCTION_READ_ONLY_31553',
+    DATABASE_HOST: '127.0.0.1',
+    DATABASE_NAME: 'customer_management',
+    DATABASE_USER: 'soak_reader',
+    DATABASE_PASSWORD: 'test-only-secret',
+    DATABASE_SSL: 'false',
+  }, workspaceRoot);
+
+  assert.equal(config.dbStressEnabled, true);
+  assert.equal(config.database.host, '127.0.0.1');
+  assert.equal(config.database.ssl, false);
+});
+
 test('Postman classifier keeps balance periodic and state-changing requests out of the loop', () => {
   const requests = loadMobileRequests(path.join(workspaceRoot, 'postman/Customer_Management_API_v2_postman_collection.json'));
   const balance = requests.find((request) => request.name === 'Get my balance');
