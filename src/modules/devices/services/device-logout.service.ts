@@ -202,7 +202,7 @@ export class DeviceLogoutService {
 
     // Fetch customer for token generation
     const customer = await this.db.queryOne(
-      `SELECT id, uuid, voip_number, status, deleted_at FROM customers WHERE id = $1`,
+      `SELECT id, uuid, astpp_id, voip_number, status, deleted_at FROM customers WHERE id = $1`,
       [session.customer_id]
     );
 

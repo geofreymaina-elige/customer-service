@@ -158,7 +158,7 @@ export class PinAuthService {
   }> {
     // Find customer
     const customer = await this.db.queryOne(
-      `SELECT id, uuid, voip_number, first_name, last_name, email, phone_number, status, timezone, deleted_at
+      `SELECT id, uuid, astpp_id, voip_number, first_name, last_name, email, phone_number, status, timezone, deleted_at
        FROM customers
        WHERE astpp_id::text = $1`,
       [dto.astpp_id]

@@ -116,12 +116,15 @@ npm run pm2:start
 ### 🔐 Security & PIN Management
 | Method | Endpoint | Description |
 |---|---|---|
+| `POST` | `/api/v2/auth/transaction-tokens` | Verify PIN and issue a short-lived, device-bound wallet transaction token |
 | `POST` | `/api/v1/auth/pin/set` | Initial 4-digit PIN setup |
 | `POST` | `/api/v1/auth/pin/verify` | Authenticate PIN & issue scoped JWT token |
 | `POST` | `/api/v1/auth/pin/change` | Authenticated PIN change (requires old PIN validation) |
 | `POST` | `/api/v1/auth/reset-pin/initiate` | Step 1: Verify ID document number & send reset OTP |
 | `POST` | `/api/v1/auth/reset-pin/verify-otp` | Step 2: Verify reset OTP code |
 | `POST` | `/api/v1/auth/reset-pin/complete` | Step 3: Set new 4-digit PIN |
+
+See [docs/transaction-token-auth.md](docs/transaction-token-auth.md) for the transaction token request, claims, expiry configuration, and wallet-service verification requirements.
 
 ### 📱 Device Management
 | Method | Endpoint | Description |

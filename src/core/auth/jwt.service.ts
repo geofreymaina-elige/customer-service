@@ -5,7 +5,8 @@ import * as crypto from 'crypto';
 
 export interface TokenPayload {
   sub: string;           // Customer UUID
-  customerId: number;    // Internal Customer ID
+  astppId?: number;      // ASTPP account ID used by external services
+  customerId?: number;   // Internal ID on tokens issued before astppId was added
   deviceHash: string;    // Bound Device Fingerprint Hash
   voipNumber: string;    // Customer VoIP number
   jti: string;           // Unique JWT ID
@@ -47,15 +48,19 @@ export class SecureJwtService {
   }
 
   generateToken(
-    customer: { id: number; uuid: string; voip_number: string },
+    customer: { uuid: string; astpp_id: number; voip_number: string },
     deviceHash: string,
     scopes: string[] = [JwtScopes.AppAccess],
     expiresInSeconds: number = this.transactionExpiresInSeconds,
   ): TokenResponse {
+    if (!Number.isInteger(customer.astpp_id)) {
+      throw new UnauthorizedException('Customer ASTPP ID is required to issue an authentication token.');
+    }
+
     const jti = crypto.randomUUID();
     const payload: TokenPayload = {
       sub: customer.uuid,
-      customerId: customer.id,
+      astppId: customer.astpp_id,
       deviceHash,
       voipNumber: customer.voip_number,
       jti,
@@ -77,14 +82,14 @@ export class SecureJwtService {
   }
 
   generateAppAccessToken(
-    customer: { id: number; uuid: string; voip_number: string },
+    customer: { id: number; uuid: string; astpp_id: number; voip_number: string },
     deviceHash: string,
   ): TokenResponse {
     return this.generateToken(customer, deviceHash, [JwtScopes.AppAccess], this.appAccessExpiresInSeconds);
   }
 
   generateTransactionToken(
-    customer: { id: number; uuid: string; voip_number: string },
+    customer: { id: number; uuid: string; astpp_id: number; voip_number: string },
     deviceHash: string,
   ): TokenResponse {
     return this.generateToken(customer, deviceHash, [JwtScopes.Transaction], this.transactionExpiresInSeconds);

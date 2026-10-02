@@ -32,9 +32,20 @@ export class AuthGuard implements CanActivate {
     const payload = this.jwtService.verifyToken(token, deviceHeader ? String(deviceHeader) : undefined);
 
     // Verify customer exists and is not deleted, suspended, or closed
+    const hasAstppId = payload.astppId !== undefined;
+    const hasLegacyCustomerId = payload.customerId !== undefined;
+    if (hasAstppId === hasLegacyCustomerId) {
+      throw new UnauthorizedException('Authentication token must contain one customer identifier.');
+    }
+
+    const customerIdColumn = hasAstppId ? 'astpp_id' : 'id';
+    const customerIdentifier = hasAstppId ? payload.astppId : payload.customerId;
+    if (!Number.isInteger(customerIdentifier)) {
+      throw new UnauthorizedException('Authentication token contains an invalid customer identifier.');
+    }
     const customer = await this.db.queryOne(
-      `SELECT id, uuid, voip_number, status, deleted_at FROM customers WHERE id = $1`,
-      [payload.customerId]
+      `SELECT id, uuid, voip_number, status, deleted_at FROM customers WHERE ${customerIdColumn} = $1`,
+      [customerIdentifier]
     );
 
     if (!customer || customer.deleted_at || customer.status === 'suspended' || customer.status === 'closed') {
@@ -59,7 +70,7 @@ export class AuthGuard implements CanActivate {
     if (payload.deviceHash) {
       const activeDevice = await this.db.queryOne(
         `SELECT id FROM customer_devices WHERE customer_id = $1 AND device_uuid_hash = $2 AND status = 'active'`,
-        [payload.customerId, payload.deviceHash]
+        [customer.id, payload.deviceHash]
       );
 
       if (!activeDevice) {

@@ -22,7 +22,7 @@ import { MessageService } from '../../../core/messages/message.service';
 import { AstppTokenGuard } from '../../../core/auth/astpp-token.guard';
 import { PinAstppTokenGuard } from '../../../core/auth/pin-astpp-token.guard';
 import { AuthGuard } from '../../../core/auth/auth.guard';
-import { SecureJwtService } from '../../../core/auth/jwt.service';
+import { SecureJwtService, TokenPayload } from '../../../core/auth/jwt.service';
 import { KafkaNotificationService } from '../../../core/notifications/kafka-notification.service';
 import { DatabaseService } from '../../../core/database/database.service';
 import { JobService } from '../../../core/jobs/job.service';
@@ -164,12 +164,40 @@ export class OnboardingController {
     const token = authHeader.substring(7);
     
     let customerId: number;
+    let payload: TokenPayload;
     try {
       // Verify token but don't check device status
-      const payload = this.jwtService.verifyToken(token);
-      customerId = payload.customerId;
+      payload = this.jwtService.verifyToken(token);
     } catch (error) {
       // Token is invalid or expired - that's fine, nothing to revoke
+      return {
+        success: true,
+        message: 'No active sessions to revoke',
+      };
+    }
+
+    if (payload.astppId !== undefined && payload.customerId !== undefined) {
+      return {
+        success: true,
+        message: 'No active sessions to revoke',
+      };
+    }
+
+    if (payload.astppId !== undefined && Number.isInteger(payload.astppId)) {
+      const customer = await this.db.queryOne<{ id: number }>(
+        `SELECT id FROM customers WHERE astpp_id = $1`,
+        [payload.astppId]
+      );
+      if (!customer) {
+        return {
+          success: true,
+          message: 'No active sessions to revoke',
+        };
+      }
+      customerId = customer.id;
+    } else if (payload.customerId !== undefined && Number.isInteger(payload.customerId)) {
+      customerId = payload.customerId;
+    } else {
       return {
         success: true,
         message: 'No active sessions to revoke',
