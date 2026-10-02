@@ -2,14 +2,15 @@ export default () => ({
   port: parseInt(process.env.PORT, 10),
   nodeEnv: process.env.NODE_ENV,
   database: {
-    host: process.env.DATABASE_HOST,
-    port: parseInt(process.env.DATABASE_PORT, 10),
+    host: process.env.DATABASE_HOST || '127.0.0.1',
+    port: parseInt(process.env.DATABASE_PORT || '5432', 10),
     name: process.env.DATABASE_NAME,
     user: process.env.DATABASE_USER,
     password: process.env.DATABASE_PASSWORD,
     ssl: process.env.DATABASE_SSL === 'true',
     poolMin: parseInt(process.env.DATABASE_POOL_MIN, 10),
     poolMax: parseInt(process.env.DATABASE_POOL_MAX, 10),
+    connectionTimeoutMillis: parseInt(process.env.DATABASE_CONNECTION_TIMEOUT_MS || '5000', 10),
   },
   jwt: {
     secret: process.env.JWT_SECRET,

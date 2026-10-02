@@ -1,0 +1,861 @@
+{
+  "info": {
+    "_postman_id": "cc4c66a2-8f8f-467b-b8c3-43de4d237d1f",
+    "name": "Patroni REST API",
+    "description": "Full Patroni REST API surface (v4.1.0) — health/status, cluster info, role-based queries, dynamic config, and cluster actions (reload/restart/reinitialize/switchover/failover).\n\nNode-specific requests (health, reload, restart, reinitialize, and role checks such as /primary and /replica) use per-node variables ({{node1_url}}, {{node2_url}}, {{node3_url}}). Role checks are node-local: call each member URL to identify which node currently returns 200 for /primary.\n\nCluster information and configuration requests default to node1; use another reachable member if node1 is down. These are Patroni HTTP URLs, not PostgreSQL connection endpoints. See docs/postgres-patroni-primary-routing.md for application routing, cache, and failover trade-offs.\n\nUse the Patroni - Staging or Patroni — Production environment as appropriate.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "38371113"
+  },
+  "item": [
+    {
+      "name": "Node 1 — Health & Local Actions",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{node1_url}}/health",
+              "host": [
+                "{{node1_url}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Returns 200 if Patroni is responsive on this node."
+          },
+          "response": []
+        },
+        {
+          "name": "Liveness Probe",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{node1_url}}/liveness",
+              "host": [
+                "{{node1_url}}"
+              ],
+              "path": [
+                "liveness"
+              ]
+            },
+            "description": "Kubernetes-style liveness probe. 200 if the Patroni process is alive."
+          },
+          "response": []
+        },
+        {
+          "name": "Readiness Probe",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{node1_url}}/readiness",
+              "host": [
+                "{{node1_url}}"
+              ],
+              "path": [
+                "readiness"
+              ]
+            },
+            "description": "200 only if this node is a running primary or a streaming replica ready to serve traffic."
+          },
+          "response": []
+        },
+        {
+          "name": "Patroni Status (this node)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{node1_url}}/patroni",
+              "host": [
+                "{{node1_url}}"
+              ],
+              "path": [
+                "patroni"
+              ]
+            },
+            "description": "Detailed local status: role, state, timeline, xlog position, Patroni version."
+          },
+          "response": []
+        },
+        {
+          "name": "Reload Patroni Config (SIGHUP)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{node1_url}}/reload",
+              "host": [
+                "{{node1_url}}"
+              ],
+              "path": [
+                "reload"
+              ]
+            },
+            "description": "Tells Patroni to re-read patroni.yml on this node. NOTE: this reloads Patroni's own config, not PostgreSQL's pg_hba.conf — use SELECT pg_reload_conf() or pg_ctl reload against Postgres directly for that."
+          },
+          "response": []
+        },
+        {
+          "name": "Restart PostgreSQL",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"restart_pending\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{node1_url}}/restart",
+              "host": [
+                "{{node1_url}}"
+              ],
+              "path": [
+                "restart"
+              ]
+            },
+            "description": "Restarts PostgreSQL on this node. Optional body can constrain the restart (e.g. only if a restart is pending, or within a timeframe/schedule) — see Patroni docs for full body options (schedule, role, postgres_version)."
+          },
+          "response": []
+        },
+        {
+          "name": "Reinitialize Replica",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"force\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{node1_url}}/reinitialize",
+              "host": [
+                "{{node1_url}}"
+              ],
+              "path": [
+                "reinitialize"
+              ]
+            },
+            "description": "Wipes this node's local data directory and re-clones it from the current leader via pg_basebackup. Only valid on a replica — will error if run against the current leader. \"force\": true skips the check for an in-progress operation."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Node 2 — Health & Local Actions",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{node2_url}}/health",
+              "host": [
+                "{{node2_url}}"
+              ],
+              "path": [
+                "health"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Liveness Probe",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{node2_url}}/liveness",
+              "host": [
+                "{{node2_url}}"
+              ],
+              "path": [
+                "liveness"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Readiness Probe",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{node2_url}}/readiness",
+              "host": [
+                "{{node2_url}}"
+              ],
+              "path": [
+                "readiness"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Patroni Status (this node)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{node2_url}}/patroni",
+              "host": [
+                "{{node2_url}}"
+              ],
+              "path": [
+                "patroni"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reload Patroni Config (SIGHUP)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{node2_url}}/reload",
+              "host": [
+                "{{node2_url}}"
+              ],
+              "path": [
+                "reload"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Restart PostgreSQL",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"restart_pending\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{node2_url}}/restart",
+              "host": [
+                "{{node2_url}}"
+              ],
+              "path": [
+                "restart"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reinitialize Replica",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"force\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{node2_url}}/reinitialize",
+              "host": [
+                "{{node2_url}}"
+              ],
+              "path": [
+                "reinitialize"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Node 3 — Health & Local Actions",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{node3_url}}/health",
+              "host": [
+                "{{node3_url}}"
+              ],
+              "path": [
+                "health"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Liveness Probe",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{node3_url}}/liveness",
+              "host": [
+                "{{node3_url}}"
+              ],
+              "path": [
+                "liveness"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Readiness Probe",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{node3_url}}/readiness",
+              "host": [
+                "{{node3_url}}"
+              ],
+              "path": [
+                "readiness"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Patroni Status (this node)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{node3_url}}/patroni",
+              "host": [
+                "{{node3_url}}"
+              ],
+              "path": [
+                "patroni"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reload Patroni Config (SIGHUP)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{node3_url}}/reload",
+              "host": [
+                "{{node3_url}}"
+              ],
+              "path": [
+                "reload"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Restart PostgreSQL",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"restart_pending\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{node3_url}}/restart",
+              "host": [
+                "{{node3_url}}"
+              ],
+              "path": [
+                "restart"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reinitialize Replica",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"force\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{node3_url}}/reinitialize",
+              "host": [
+                "{{node3_url}}"
+              ],
+              "path": [
+                "reinitialize"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Cluster-Wide Info",
+      "item": [
+        {
+          "name": "Cluster Status (all members)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{node1_url}}/cluster",
+              "host": [
+                "{{node1_url}}"
+              ],
+              "path": [
+                "cluster"
+              ]
+            },
+            "description": "Full member list with role, state, timeline, and replication lag for every node in the cluster — the same data patronictl list shows."
+          },
+          "response": []
+        },
+        {
+          "name": "Cluster Timeline History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{node1_url}}/history",
+              "host": [
+                "{{node1_url}}"
+              ],
+              "path": [
+                "history"
+              ]
+            },
+            "description": "Timeline switch history (each promotion/failover creates a new timeline)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Dynamic Configuration",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{node1_url}}/config",
+              "host": [
+                "{{node1_url}}"
+              ],
+              "path": [
+                "config"
+              ]
+            },
+            "description": "Returns the cluster-wide dynamic configuration stored in the DCS (postgresql parameters, TTL, loop_wait, etc.)."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Dynamic Configuration",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"postgresql\": {\n    \"parameters\": {\n      \"work_mem\": \"32MB\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{node1_url}}/config",
+              "host": [
+                "{{node1_url}}"
+              ],
+              "path": [
+                "config"
+              ]
+            },
+            "description": "Merges the given keys into the cluster-wide dynamic config, propagated to every node. Example bumps work_mem — replace with the actual change you intend to make. Set a key to null to remove it."
+          },
+          "response": []
+        },
+        {
+          "name": "Prometheus Metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{node1_url}}/metrics",
+              "host": [
+                "{{node1_url}}"
+              ],
+              "path": [
+                "metrics"
+              ]
+            },
+            "description": "Prometheus-format exposition of Patroni's internal metrics for this node."
+          },
+          "response": []
+        }
+      ],
+      "description": "These answer the same regardless of which node you hit, as long as that node can reach the DCS (etcd). Defaults to node1_url — switch to node2/node3 if node1 is unreachable."
+    },
+    {
+      "name": "Role-Based Queries",
+      "item": [
+        {
+          "name": "Leader",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{node1_url}}/primary",
+              "host": [
+                "{{node1_url}}"
+              ],
+              "path": [
+                "primary"
+              ]
+            },
+            "description": "Node-local role check: HTTP 200 only if this node is the current leader (PostgreSQL primary) and holds the leader lock; otherwise non-200. Run the corresponding check against node2_url and node3_url too."
+          },
+          "response": []
+        },
+        {
+          "name": "Leader (node2)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{node2_url}}/primary",
+              "host": ["{{node2_url}}"],
+              "path": ["primary"]
+            },
+            "description": "Node-local role check for node2. HTTP 200 only if node2 is the current leader (PostgreSQL primary) and holds the leader lock."
+          },
+          "response": []
+        },
+        {
+          "name": "Leader (node3)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{node3_url}}/primary",
+              "host": ["{{node3_url}}"],
+              "path": ["primary"]
+            },
+            "description": "Node-local role check for node3. HTTP 200 only if node3 is the current leader (PostgreSQL primary) and holds the leader lock."
+          },
+          "response": []
+        },
+        {
+          "name": "Standby Leader",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{node1_url}}/standby-leader",
+              "host": [
+                "{{node1_url}}"
+              ],
+              "path": [
+                "standby-leader"
+              ]
+            },
+            "description": "200 if this node is the leader of a standby cluster (cascading/cross-DC setups)."
+          },
+          "response": []
+        },
+        {
+          "name": "Replica",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{node1_url}}/replica",
+              "host": [
+                "{{node1_url}}"
+              ],
+              "path": [
+                "replica"
+              ]
+            },
+            "description": "200 if this node is a running replica. Alias: /read-only."
+          },
+          "response": []
+        },
+        {
+          "name": "Replica (max lag filter)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{node1_url}}/replica?lag=1048576",
+              "host": [
+                "{{node1_url}}"
+              ],
+              "path": [
+                "replica"
+              ],
+              "query": [
+                {
+                  "key": "lag",
+                  "value": "1048576",
+                  "description": "Max acceptable lag in bytes — 200 only if replica lag is under this."
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Synchronous Replica",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{node1_url}}/sync",
+              "host": [
+                "{{node1_url}}"
+              ],
+              "path": [
+                "sync"
+              ]
+            },
+            "description": "200 if this node is a synchronous standby. Alias: /synchronous."
+          },
+          "response": []
+        },
+        {
+          "name": "Asynchronous Replica",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{node1_url}}/async",
+              "host": [
+                "{{node1_url}}"
+              ],
+              "path": [
+                "async"
+              ]
+            },
+            "description": "200 if this node is an asynchronous standby. Alias: /asynchronous, /read-only-sync."
+          },
+          "response": []
+        },
+        {
+          "name": "Quorum",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{node1_url}}/quorum",
+              "host": [
+                "{{node1_url}}"
+              ],
+              "path": [
+                "quorum"
+              ]
+            },
+            "description": "200 if this node is eligible to participate in quorum-based synchronous replication."
+          },
+          "response": []
+        }
+      ],
+      "description": "Used for load-balancer / HAProxy-style health checks: hit any node, get a 200 only if it currently matches the requested role."
+    },
+    {
+      "name": "Cluster Actions (Failover / Switchover)",
+      "item": [
+        {
+          "name": "Switchover (planned)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"leader\": \"REPLACE_WITH_CURRENT_LEADER_NAME\",\n  \"candidate\": \"REPLACE_WITH_TARGET_NODE_NAME\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{node1_url}}/switchover",
+              "host": [
+                "{{node1_url}}"
+              ],
+              "path": [
+                "switchover"
+              ]
+            },
+            "description": "Graceful, planned promotion — requires the current leader to be healthy. Optional \"scheduled_at\": \"<ISO8601 timestamp>\" to schedule it for later instead of running immediately."
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel Scheduled Switchover",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{node1_url}}/switchover",
+              "host": [
+                "{{node1_url}}"
+              ],
+              "path": [
+                "switchover"
+              ]
+            },
+            "description": "Cancels a switchover that was scheduled with scheduled_at but hasn't run yet."
+          },
+          "response": []
+        },
+        {
+          "name": "Failover (leader may be unhealthy)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"candidate\": \"REPLACE_WITH_TARGET_NODE_NAME\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{node1_url}}/failover",
+              "host": [
+                "{{node1_url}}"
+              ],
+              "path": [
+                "failover"
+              ]
+            },
+            "description": "Forces promotion of the given candidate even if the current leader is unreachable/unhealthy. Use switchover instead when the leader is healthy."
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel Scheduled Failover",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{node1_url}}/failover",
+              "host": [
+                "{{node1_url}}"
+              ],
+              "path": [
+                "failover"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "description": "Destructive / topology-changing operations. Can be sent to any reachable node — Patroni coordinates via the DCS."
+    }
+  ],
+  "variable": [
+    {
+      "key": "scope",
+      "value": "postgres"
+    }
+  ]
+}

@@ -1,9 +1,10 @@
-import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
 
 @Injectable()
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(DatabaseService.name);
   private pool: Pool;
 
   constructor(private configService: ConfigService) {}
@@ -19,6 +20,10 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       ssl: dbConfig.ssl ? { rejectUnauthorized: false } : false,
       min: dbConfig.poolMin,
       max: dbConfig.poolMax,
+      connectionTimeoutMillis: dbConfig.connectionTimeoutMillis,
+    });
+    this.pool.on('error', (error) => {
+      this.logger.error(`Idle PostgreSQL client disconnected: ${error.message}`);
     });
 
     try {
