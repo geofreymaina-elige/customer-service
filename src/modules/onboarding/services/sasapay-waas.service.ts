@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import { AppCacheService } from '../../../core/cache/app-cache.service';
+import { SasaPayLogger } from '../../../core/logging/sasapay-logger.service';
 import { PersonalOnboardingDto, PersonalOnboardingConfirmDto } from '../dto/onboarding.dto';
 
 export interface SasaPayCustomerDetails {
@@ -37,6 +38,7 @@ export class SasaPayWaasService {
   constructor(
     private readonly config: ConfigService,
     private readonly appCache: AppCacheService,
+    private readonly sasaPayLogger: SasaPayLogger,
   ) {
     const configuredBaseUrl = this.config.get<string>('sasapay.baseUrl') || 'https://sandbox.sasapay.app';
     this.baseUrl = configuredBaseUrl.replace(/\/+$/, '').replace(/\/api\/v2\/waas$/i, '');
@@ -396,11 +398,19 @@ export class SasaPayWaasService {
   }
 
   private logProviderRequest(method: string, url: string, payload?: unknown): void {
+    const operation = this.extractOperationFromUrl(url);
+    this.sasaPayLogger.logRequest(operation, method, url, payload);
+    
+    // Also log to standard logger for console visibility
     const payloadLog = payload === undefined ? '' : `: ${this.formatLogData(payload)}`;
     this.logger.log(`[SASAPAY] Request ${method} ${url}${payloadLog}`);
   }
 
   private logProviderResponse(url: string, status: number, data: unknown): void {
+    const operation = this.extractOperationFromUrl(url);
+    this.sasaPayLogger.logResponse(operation, url, status, data);
+    
+    // Also log to standard logger for console visibility
     this.logger.log(`[SASAPAY] Response ${status} ${url}: ${this.formatLogData(data)}`);
   }
 
@@ -408,6 +418,11 @@ export class SasaPayWaasService {
     const url = error?.config?.url || fallbackUrl || 'unknown URL';
     const status = error?.response?.status || 'NO_STATUS';
     const data = error?.response?.data ?? { message: error?.message || 'Unknown provider error' };
+    const operation = this.extractOperationFromUrl(url);
+    
+    this.sasaPayLogger.logError(operation, error);
+    
+    // Also log to standard logger for console visibility
     this.logger.error(`[SASAPAY] Response ${status} ${url}: ${this.formatLogData(data)}`);
   }
 
@@ -419,6 +434,19 @@ export class SasaPayWaasService {
     } catch {
       return String(data);
     }
+  }
+
+  /**
+   * Extract operation name from URL for better log categorization
+   */
+  private extractOperationFromUrl(url: string): string {
+    if (url.includes('/auth/token')) return 'AUTH_TOKEN';
+    if (url.includes('/personal-onboarding/confirmation')) return 'ONBOARDING_CONFIRM';
+    if (url.includes('/personal-onboarding/kyc')) return 'KYC_UPLOAD';
+    if (url.includes('/personal-onboarding')) return 'ONBOARDING_INITIATE';
+    if (url.includes('/customer-details/update')) return 'CUSTOMER_UPDATE';
+    if (url.includes('/customer-details')) return 'CUSTOMER_DETAILS';
+    return 'UNKNOWN_OPERATION';
   }
 
   /**

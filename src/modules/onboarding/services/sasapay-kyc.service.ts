@@ -11,6 +11,7 @@ import { randomUUID } from 'crypto';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { DatabaseService } from '../../../core/database/database.service';
+import { SasaPayLogger } from '../../../core/logging/sasapay-logger.service';
 
 const DOCUMENT_TYPES = ['document_front', 'document_back', 'selfie'] as const;
 type KycDocumentType = typeof DOCUMENT_TYPES[number];
@@ -30,6 +31,7 @@ export class SasaPayKycService {
   constructor(
     private readonly db: DatabaseService,
     private readonly config: ConfigService,
+    private readonly sasaPayLogger: SasaPayLogger,
   ) {}
 
   async getActiveRequirements(customerId: number) {
@@ -216,6 +218,13 @@ export class SasaPayKycService {
       [customerId],
     );
     if (!application) return { processed: false, submissionId: null };
+
+    // Log the callback using dedicated SasaPay logger
+    this.sasaPayLogger.logCallback(callbackPayload, customerId, application.id, {
+      callbackStatus,
+      reason,
+      signedPaymentReference,
+    });
 
     const relevantFields = [
       'sasapay_transaction_code', 'transactionCode', 'merchantCode', 'merchant_code',
@@ -434,7 +443,28 @@ export class SasaPayKycService {
           );
         }
       });
+
+      // Log successful image upload
+      this.sasaPayLogger.logImageUpload(
+        customerId,
+        submission.customer_application_id,
+        submission.id,
+        files.map((f) => f.fieldname),
+        200,
+        { uploadedDocuments: files.map((f) => f.fieldname), submissionId: submission.id },
+      );
     } catch (error) {
+      // Log failed image upload
+      this.sasaPayLogger.logImageUpload(
+        customerId,
+        submission.customer_application_id,
+        submission.id,
+        files.map((f) => f.fieldname),
+        undefined,
+        undefined,
+        error,
+      );
+      
       await Promise.all(savedFiles.map(({ filePath }) => fs.rm(filePath, { force: true })));
       throw error;
     }
