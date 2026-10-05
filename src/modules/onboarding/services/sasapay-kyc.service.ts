@@ -34,6 +34,23 @@ export class SasaPayKycService {
     private readonly sasaPayLogger: SasaPayLogger,
   ) {}
 
+  async getAllDocumentRequirements() {
+    const policies = await this.db.query(
+      `SELECT document_type, version, required_documents, accepted_mime_types, max_file_size_bytes
+       FROM sasapay_kyc_document_policies
+       WHERE is_active = TRUE
+       ORDER BY document_type`,
+    );
+
+    return policies.rows.map(policy => ({
+      documentType: policy.document_type,
+      policyVersion: policy.version,
+      requiredDocuments: this.withRequiredSelfie(policy.required_documents),
+      acceptedMimeTypes: policy.accepted_mime_types,
+      maxFileSizeBytes: policy.max_file_size_bytes,
+    }));
+  }
+
   async getActiveRequirements(customerId: number) {
     const source = await this.getCustomerApplicationAndDocument(customerId);
     if (!source) {
@@ -88,11 +105,19 @@ export class SasaPayKycService {
   }
 
   async getCurrentStatus(customerId: number) {
+    console.log('[SASAPAY-KYC] getCurrentStatus called for customer:', customerId);
+
     const application = await this.db.queryOne(
       `SELECT id FROM customer_applications WHERE customer_id = $1`,
       [customerId],
     );
-    if (!application) return null;
+    
+    if (!application) {
+      console.log('[SASAPAY-KYC] No customer application found for customer:', customerId);
+      return null;
+    }
+
+    console.log('[SASAPAY-KYC] Application found:', { applicationId: application.id, customerId });
 
     const submission = await this.db.queryOne(
       `SELECT id, status, required_documents, system_reason, psp_reason,
@@ -104,7 +129,17 @@ export class SasaPayKycService {
        LIMIT 1`,
       [application.id],
     );
-    if (!submission) return null;
+    
+    if (!submission) {
+      console.log('[SASAPAY-KYC] No KYC submission found for application:', application.id);
+      return null;
+    }
+
+    console.log('[SASAPAY-KYC] Submission found:', {
+      submissionId: submission.id,
+      status: submission.status,
+      requiredDocuments: submission.required_documents,
+    });
 
     const uploaded = await this.db.query(
       `SELECT document_type FROM sasapay_kyc_submission_images WHERE submission_id = $1`,
@@ -113,6 +148,11 @@ export class SasaPayKycService {
     const uploadedTypes = new Set(uploaded.rows.map((row) => row.document_type));
     const requiredDocuments = this.withRequiredSelfie(submission.required_documents)
       .filter((documentType) => !uploadedTypes.has(documentType));
+
+    console.log('[SASAPAY-KYC] Upload status:', {
+      uploadedDocuments: Array.from(uploadedTypes),
+      remainingDocuments: requiredDocuments,
+    });
 
     return {
       submissionId: submission.id,

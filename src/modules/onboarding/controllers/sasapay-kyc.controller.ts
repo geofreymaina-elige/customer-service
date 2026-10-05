@@ -20,7 +20,7 @@ export class SasaPayKycController {
   async getRequirements(@CurrentUser() user: AuthenticatedUser) {
     return {
       success: true,
-      data: await this.sasaPayKyc.getActiveRequirements(user.id),
+      data: await this.sasaPayKyc.getAllDocumentRequirements(),
     };
   }
 
