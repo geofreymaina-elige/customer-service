@@ -37,10 +37,13 @@ export class SasaPayKycService {
     this.maxUploadBytes = 20 * 1024 * 1024;
   }
 
+  /**
+   * Get all available document policies (for mobile app to show all types)
+   */
   async getAllDocumentRequirements() {
     const policies = await this.db.query(
       `SELECT document_type, version, required_documents, accepted_mime_types, max_file_size_bytes
-       FROM sasapay_kyc_document_policies
+       FROM document_policies
        WHERE is_active = TRUE
        ORDER BY document_type`,
     );
@@ -54,49 +57,25 @@ export class SasaPayKycService {
     }));
   }
 
+  /**
+   * Get policy requirements for specific customer's document type
+   */
   async getActiveRequirements(customerId: number) {
     const source = await this.getCustomerApplicationAndDocument(customerId);
     if (!source) {
-      console.error('[SASAPAY-KYC] Customer application not found for customer ID:', customerId);
       throw new NotFoundException('Customer application was not found.');
     }
 
-    console.log('[SASAPAY-KYC] Looking up policy for customer:', {
-      customerId,
-      applicationId: source.id,
-      documentType: source.identity_document_type,
-    });
-
-    // Debug: Check all available policies
-    const allPolicies = await this.db.query(
-      `SELECT document_type, version, is_active FROM sasapay_kyc_document_policies ORDER BY document_type`,
-    );
-    console.log('[SASAPAY-KYC] Available policies in database:', 
-      allPolicies.rows.map(p => ({ type: p.document_type, version: p.version, active: p.is_active }))
-    );
-
     const policy = await this.db.queryOne(
       `SELECT document_type, version, required_documents, accepted_mime_types, max_file_size_bytes
-       FROM sasapay_kyc_document_policies
+       FROM document_policies
        WHERE LOWER(document_type) = LOWER($1) AND is_active = TRUE`,
       [source.identity_document_type],
     );
     
     if (!policy) {
-      console.error('[SASAPAY-KYC] No policy found for document type:', {
-        requestedType: source.identity_document_type,
-        customerId,
-        applicationId: source.id,
-        availablePolicies: allPolicies.rows.map(p => p.document_type),
-      });
-      throw new ConflictException('SasaPay document requirements have not been configured for this document type.');
+      throw new ConflictException('Document requirements have not been configured for this document type.');
     }
-
-    console.log('[SASAPAY-KYC] Policy found:', {
-      documentType: policy.document_type,
-      version: policy.version,
-      requiredDocs: policy.required_documents,
-    });
 
     return {
       documentType: policy.document_type,
@@ -107,9 +86,10 @@ export class SasaPayKycService {
     };
   }
 
+  /**
+   * Get prioritized KYC status (sasapay > wallet > primary) with full image URLs
+   */
   async getAllKycStatus(customerId: number) {
-    console.log('[SASAPAY-KYC] getAllKycStatus called for customer:', customerId);
-
     // Get the customer application with prioritized KYC data (sasapay > wallet > primary)
     const application = await this.db.queryOne(
       `SELECT ca.id, ca.customer_id, ca.astpp_id, ca.kyc_status,
@@ -125,12 +105,24 @@ export class SasaPayKycService {
               COALESCE(sasapay.name, wallet.name, primary_kyc.name) AS name,
               COALESCE(sasapay.identity_document_number, wallet.identity_document_number, primary_kyc.identity_document_number) AS identity_document_number,
               COALESCE(sasapay.created_at, wallet.created_at, primary_kyc.created_at) AS submitted_at,
-              -- Image URLs (only for wallet_kyc and primary_kyc - sasapay uses local filesystem)
-              COALESCE(sasapay.doc_front_url, wallet.doc_front_url, primary_kyc.doc_front_url) AS doc_front_url,
-              COALESCE(sasapay.doc_back_url, wallet.doc_back_url, primary_kyc.doc_back_url) AS doc_back_url,
-              COALESCE(sasapay.passport_photo_url, wallet.passport_photo_url, primary_kyc.passport_photo_url) AS passport_photo_url,
-              -- Check if sasapay has submission with local images
-              CASE WHEN sasapay.id IS NOT NULL THEN TRUE ELSE FALSE END AS has_sasapay_kyc
+              -- SasaPay-specific columns
+              sasapay.id AS sasapay_detail_id,
+              sasapay.sasapay_submission_status,
+              sasapay.sasapay_request_id,
+              sasapay.sasapay_submitted_at,
+              sasapay.sasapay_result_at,
+              sasapay.sasapay_psp_status,
+              sasapay.sasapay_psp_reason,
+              sasapay.review_status,
+              sasapay.required_documents AS sasapay_required_documents,
+              sasapay.images AS sasapay_images,
+              -- Other KYC sources
+              wallet.doc_front_url AS wallet_doc_front,
+              wallet.doc_back_url AS wallet_doc_back,
+              wallet.passport_photo_url AS wallet_selfie,
+              primary_kyc.doc_front_url AS primary_doc_front,
+              primary_kyc.doc_back_url AS primary_doc_back,
+              primary_kyc.passport_photo_url AS primary_selfie
        FROM customer_applications ca
        LEFT JOIN customer_applicant_details sasapay
          ON sasapay.customer_application_id = ca.id AND sasapay.application_type = 'sasapay_kyc'
@@ -144,209 +136,154 @@ export class SasaPayKycService {
     );
     
     if (!application) {
-      console.log('[SASAPAY-KYC] No customer application found for customer:', customerId);
-      return {
-        hasApplication: false,
-        kycSource: null,
-        overallKycStatus: null,
-        documentType: null,
-        name: null,
-        submittedAt: null,
-        imagesSource: null,
-        sasapaySubmission: null,
-      };
+      return null;
     }
 
-    console.log('[SASAPAY-KYC] Application found:', { 
-      applicationId: application.id,
-      kycSource: application.kyc_source,
-      kycStatus: application.kyc_status,
-      hasSasapayKyc: application.has_sasapay_kyc,
-      customerId 
-    });
-
-    // If using sasapay_kyc, check for submission and local images
-    let sasapaySubmission = null;
-    if (application.has_sasapay_kyc) {
-      const submission = await this.db.queryOne(
-        `SELECT id, status, required_documents, system_reason, psp_reason,
-                customer_submitted_at, psp_result_at, created_at
-         FROM sasapay_kyc_submissions
-         WHERE customer_application_id = $1
-         ORDER BY created_at DESC
-         LIMIT 1`,
-        [application.id],
-      );
-
-      if (submission) {
-        // Get uploaded documents from local filesystem
-        const uploaded = await this.db.query(
-          `SELECT document_type, relative_path FROM sasapay_kyc_submission_images WHERE submission_id = $1`,
-          [submission.id],
-        );
-        const uploadedDocs = uploaded.rows.map(row => row.document_type);
-        const remainingDocs = this.withRequiredSelfie(submission.required_documents)
-          .filter(doc => !uploadedDocs.includes(doc));
-
-        sasapaySubmission = {
-          submissionId: submission.id,
-          status: submission.status,
-          requiredDocuments: this.withRequiredSelfie(submission.required_documents),
-          uploadedDocuments: uploadedDocs,
-          remainingDocuments: remainingDocs,
-          reason: submission.psp_reason || submission.system_reason || null,
-          customerSubmittedAt: submission.customer_submitted_at,
-          pspResultAt: submission.psp_result_at,
-          createdAt: submission.created_at,
-        };
-
-        console.log('[SASAPAY-KYC] SasaPay submission found:', {
-          submissionId: submission.id,
-          status: submission.status,
-          uploaded: uploadedDocs.length,
-          remaining: remainingDocs.length,
-        });
-      } else {
-        console.log('[SASAPAY-KYC] SasaPay KYC details exist but no submission workflow started');
-      }
-    }
-
-    // Determine image source and build URLs
-    let imagesSource;
-    let imageUrls = null;
+    // Build image URLs based on KYC source
     const astppBaseUrl = this.config.get<string>('astpp.baseUrl') || 'https://msa-portal.elige-africa.com';
     const publicUrl = this.config.get<string>('publicUrl') || 'https://api.ambiapay.com';
     
-    if (application.kyc_source === 'sasapay_kyc' && sasapaySubmission) {
-      imagesSource = 'local_filesystem'; // SasaPay images stored locally
-      // Get image URLs from local filesystem
-      if (sasapaySubmission.uploadedDocuments && sasapaySubmission.uploadedDocuments.length > 0) {
-        const images = await this.db.query(
-          `SELECT document_type, relative_path FROM sasapay_kyc_submission_images 
-           WHERE submission_id = $1`,
-          [sasapaySubmission.submissionId],
-        );
-        imageUrls = {};
-        images.rows.forEach(img => {
-          const fileName = img.relative_path.split('/').pop(); // Extract filename
-          // Build full URL: https://api.ambiapay.com/uploads/images/{applicationId}/{filename}
-          const fullUrl = `${publicUrl}/uploads/images/${application.id}/${fileName}`;
-          if (img.document_type === 'document_front') imageUrls.docFront = fullUrl;
-          if (img.document_type === 'document_back') imageUrls.docBack = fullUrl;
-          if (img.document_type === 'selfie') imageUrls.passportPhoto = fullUrl;
+    let documents = [];
+    
+    if (application.kyc_source === 'sasapay_kyc' && application.sasapay_images) {
+      // SasaPay KYC: images stored in JSONB field
+      const images = Array.isArray(application.sasapay_images) ? application.sasapay_images : [];
+      const docFront = images.find(img => img.type === 'document_front');
+      const docBack = images.find(img => img.type === 'document_back');
+      const selfie = images.find(img => img.type === 'selfie');
+      
+      if (docFront) {
+        documents.push({
+          type: 'document_front',
+          url: `${publicUrl}/uploads/images/${application.id}/${docFront.filename}`,
         });
       }
-    } else if (application.kyc_source === 'wallet_kyc' || application.kyc_source === 'primary_kyc') {
-      imagesSource = 'astpp_external'; // Wallet/Primary KYC images from ASTPP
-      // Build ASTPP URLs: https://msa-portal.elige-africa.com/application_images/{astppId}/{filename}
-      const astppId = application.astpp_id;
-      imageUrls = {
-        docFront: application.doc_front_url ? 
-          `${astppBaseUrl}/application_images/${astppId}/${application.doc_front_url}` : null,
-        docBack: application.doc_back_url ? 
-          `${astppBaseUrl}/application_images/${astppId}/${application.doc_back_url}` : null,
-        passportPhoto: application.passport_photo_url ? 
-          `${astppBaseUrl}/application_images/${astppId}/${application.passport_photo_url}` : null,
-      };
-    } else {
-      imagesSource = null;
+      if (docBack) {
+        documents.push({
+          type: 'document_back',
+          url: `${publicUrl}/uploads/images/${application.id}/${docBack.filename}`,
+        });
+      }
+      if (selfie) {
+        documents.push({
+          type: 'selfie',
+          url: `${publicUrl}/uploads/images/${application.id}/${selfie.filename}`,
+        });
+      }
+    } else if (application.kyc_source === 'wallet_kyc') {
+      // Wallet KYC: images from ASTPP
+      if (application.wallet_doc_front) {
+        documents.push({
+          type: 'document_front',
+          url: `${astppBaseUrl}/application_images/${application.astpp_id}/${application.wallet_doc_front}`,
+        });
+      }
+      if (application.wallet_doc_back) {
+        documents.push({
+          type: 'document_back',
+          url: `${astppBaseUrl}/application_images/${application.astpp_id}/${application.wallet_doc_back}`,
+        });
+      }
+      if (application.wallet_selfie) {
+        documents.push({
+          type: 'selfie',
+          url: `${astppBaseUrl}/application_images/${application.astpp_id}/${application.wallet_selfie}`,
+        });
+      }
+    } else if (application.kyc_source === 'primary_kyc') {
+      // Primary KYC: images from ASTPP
+      if (application.primary_doc_front) {
+        documents.push({
+          type: 'document_front',
+          url: `${astppBaseUrl}/application_images/${application.astpp_id}/${application.primary_doc_front}`,
+        });
+      }
+      if (application.primary_doc_back) {
+        documents.push({
+          type: 'document_back',
+          url: `${astppBaseUrl}/application_images/${application.astpp_id}/${application.primary_doc_back}`,
+        });
+      }
+      if (application.primary_selfie) {
+        documents.push({
+          type: 'selfie',
+          url: `${astppBaseUrl}/application_images/${application.astpp_id}/${application.primary_selfie}`,
+        });
+      }
     }
-
-    const result = {
-      hasApplication: true,
-      kycSource: application.kyc_source, // 'sasapay_kyc', 'wallet_kyc', or 'primary_kyc'
-      overallKycStatus: application.kyc_status,
-      documentType: application.identity_document_type,
-      name: application.name,
-      identityDocumentNumber: application.identity_document_number,
-      submittedAt: application.submitted_at,
-      imagesSource, // 'local_filesystem' or 'astpp_external'
-      
-      // Only included if using sasapay_kyc AND has submission
-      sasapaySubmission,
-      
-      // Image URLs (full URLs ready to display)
-      imageUrls,
-    };
-
-    console.log('[SASAPAY-KYC] Final status:', {
-      kycSource: result.kycSource,
-      imagesSource: result.imagesSource,
-      overallStatus: result.overallKycStatus,
-      hasSasapaySubmission: !!sasapaySubmission,
-    });
-
-    return result;
-  }
-
-  async getCurrentStatus(customerId: number) {
-    console.log('[SASAPAY-KYC] getCurrentStatus called for customer:', customerId);
-
-    const applicationQuery = `SELECT id FROM customer_applications WHERE customer_id = $1`;
-    console.log('[SASAPAY-KYC] Executing query:', applicationQuery, 'with params:', [customerId]);
-    
-    const application = await this.db.queryOne(applicationQuery, [customerId]);
-    
-    if (!application) {
-      console.log('[SASAPAY-KYC] No customer application found for customer:', customerId);
-      return null;
-    }
-
-    console.log('[SASAPAY-KYC] Application found:', { applicationId: application.id, customerId });
-
-    const submissionQuery = `SELECT id, status, required_documents, system_reason, psp_reason,
-              customer_submitted_at, internal_reviewed_at, psp_submitted_at, psp_result_at,
-              policy_version, created_at, updated_at
-       FROM sasapay_kyc_submissions
-       WHERE customer_application_id = $1
-       ORDER BY created_at DESC
-       LIMIT 1`;
-    console.log('[SASAPAY-KYC] Executing query:', submissionQuery, 'with params:', [application.id]);
-    
-    const submission = await this.db.queryOne(submissionQuery, [application.id]);
-    
-    if (!submission) {
-      console.log('[SASAPAY-KYC] No KYC submission found for application:', application.id);
-      console.log('[SASAPAY-KYC] This means the customer has not started a KYC submission yet.');
-      console.log('[SASAPAY-KYC] To check if any submissions exist, run:');
-      console.log(`  SELECT * FROM sasapay_kyc_submissions WHERE customer_application_id = ${application.id};`);
-      return null;
-    }
-
-    console.log('[SASAPAY-KYC] Submission found:', {
-      submissionId: submission.id,
-      status: submission.status,
-      requiredDocuments: submission.required_documents,
-    });
-
-    const uploadedQuery = `SELECT document_type FROM sasapay_kyc_submission_images WHERE submission_id = $1`;
-    console.log('[SASAPAY-KYC] Executing query:', uploadedQuery, 'with params:', [submission.id]);
-    
-    const uploaded = await this.db.query(uploadedQuery, [submission.id]);
-    const uploadedTypes = new Set(uploaded.rows.map((row) => row.document_type));
-    const requiredDocuments = this.withRequiredSelfie(submission.required_documents)
-      .filter((documentType) => !uploadedTypes.has(documentType));
-
-    console.log('[SASAPAY-KYC] Upload status:', {
-      uploadedDocuments: Array.from(uploadedTypes),
-      remainingDocuments: requiredDocuments,
-    });
 
     return {
-      submissionId: submission.id,
-      status: submission.status,
-      policyVersion: submission.policy_version,
-      requiredDocuments,
-      reason: submission.psp_reason || submission.system_reason || null,
-      customerSubmittedAt: submission.customer_submitted_at,
-      internalReviewedAt: submission.internal_reviewed_at,
-      pspSubmittedAt: submission.psp_submitted_at,
-      pspResultAt: submission.psp_result_at,
-      createdAt: submission.created_at,
-      updatedAt: submission.updated_at,
+      kycSource: application.kyc_source,
+      customer: {
+        id: application.customer_id,
+        astppId: application.astpp_id,
+      },
+      application: {
+        id: application.id,
+        kycStatus: application.kyc_status,
+      },
+      status: application.sasapay_submission_status || null,
+      documentType: application.identity_document_type,
+      documents,
+      submittedAt: application.sasapay_submitted_at || application.submitted_at || null,
+      reviewedAt: application.sasapay_result_at || null,
     };
   }
 
+  /**
+   * Get current submission status for customer
+   */
+  async getCurrentStatus(customerId: number) {
+    const application = await this.db.queryOne(
+      `SELECT ca.id, ca.customer_id,
+              sasapay.id AS detail_id,
+              sasapay.sasapay_submission_status AS status,
+              sasapay.required_documents,
+              sasapay.sasapay_psp_reason AS psp_reason,
+              sasapay.sasapay_submitted_at AS customer_submitted_at,
+              sasapay.reviewed_at AS internal_reviewed_at,
+              sasapay.sasapay_submitted_at AS psp_submitted_at,
+              sasapay.sasapay_result_at AS psp_result_at,
+              sasapay.policy_version,
+              sasapay.images,
+              sasapay.created_at,
+              sasapay.updated_at
+       FROM customer_applications ca
+       LEFT JOIN customer_applicant_details sasapay
+         ON sasapay.customer_application_id = ca.id AND sasapay.application_type = 'sasapay_kyc'
+       WHERE ca.customer_id = $1
+       LIMIT 1`,
+      [customerId],
+    );
+    
+    if (!application || !application.detail_id) {
+      return null;
+    }
+
+    // Count uploaded documents from images JSONB array
+    const images = Array.isArray(application.images) ? application.images : [];
+    const uploadedTypes = new Set(images.map(img => img.type));
+    const requiredDocuments = this.withRequiredSelfie(application.required_documents)
+      .filter((documentType) => !uploadedTypes.has(documentType));
+
+    return {
+      submissionId: application.detail_id,
+      status: application.status,
+      policyVersion: application.policy_version,
+      requiredDocuments,
+      reason: application.psp_reason || null,
+      customerSubmittedAt: application.customer_submitted_at,
+      internalReviewedAt: application.internal_reviewed_at,
+      pspSubmittedAt: application.psp_submitted_at,
+      pspResultAt: application.psp_result_at,
+      createdAt: application.created_at,
+      updatedAt: application.updated_at,
+    };
+  }
+
+  /**
+   * Create or update sasapay_kyc applicant details when system needs to request re-upload
+   */
   async ensureSystemCase(customerId: number, reason: string, pspReason?: string) {
     if (!this.config.get<boolean>('sasapay.kycEnabled')) return null;
 
@@ -355,27 +292,20 @@ export class SasaPayKycService {
 
     const policy = await this.db.queryOne(
       `SELECT id, version, required_documents
-       FROM sasapay_kyc_document_policies
+       FROM document_policies
        WHERE LOWER(document_type) = LOWER($1) AND is_active = TRUE`,
       [application.identity_document_type],
     );
     if (!policy) return null;
 
+    // Check if there's already a completed submission
     const completedSubmission = await this.db.queryOne(
       `SELECT id
-       FROM sasapay_kyc_submissions s
-       WHERE s.customer_application_id = $1
-         AND s.policy_id = $2
-         AND s.status = 'psp_approved'
-         AND NOT EXISTS (
-           SELECT 1
-           FROM unnest(s.required_documents) AS required(document_type)
-           WHERE NOT EXISTS (
-             SELECT 1 FROM sasapay_kyc_submission_images image
-             WHERE image.submission_id = s.id
-               AND image.document_type = required.document_type
-           )
-         )
+       FROM customer_applicant_details
+       WHERE customer_application_id = $1
+         AND application_type = 'sasapay_kyc'
+         AND sasapay_submission_status = 'psp_approved'
+         AND policy_id = $2
        LIMIT 1`,
       [application.id, policy.id],
     );
@@ -398,28 +328,36 @@ export class SasaPayKycService {
       : policyDocuments.filter((documentType) => !existingDocuments.has(documentType));
     if (!requiredDocuments.length) return null;
 
+    // Check for open submission
     const openSubmission = await this.db.queryOne(
       `SELECT id
-       FROM sasapay_kyc_submissions
+       FROM customer_applicant_details
        WHERE customer_application_id = $1
-         AND status IN ('awaiting_documents', 'submitted_for_review', 'approved_for_psp', 'awaiting_psp_result')
+         AND application_type = 'sasapay_kyc'
+         AND sasapay_submission_status IN ('awaiting_documents', 'submitted_for_review', 'approved_for_psp', 'awaiting_psp_result')
        ORDER BY created_at DESC
        LIMIT 1`,
       [application.id],
     );
     if (openSubmission) return openSubmission.id;
 
+    // Create or update sasapay_kyc applicant details
     const detail = await this.db.queryOne(
       `INSERT INTO customer_applicant_details (
          customer_application_id, customer_id, astpp_id, application_type,
          name, identity_document_type, identity_document_number, issuing_country,
          date_of_birth, gender, nationality, physical_address,
+         policy_id, policy_version, sasapay_submission_status, required_documents,
          created_at, updated_at
        )
-       VALUES ($1, $2, $3, 'sasapay_kyc', $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
+       VALUES ($1, $2, $3, 'sasapay_kyc', $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'awaiting_documents', $14, NOW(), NOW())
        ON CONFLICT (customer_application_id, application_type) DO UPDATE SET
          identity_document_type = EXCLUDED.identity_document_type,
          identity_document_number = EXCLUDED.identity_document_number,
+         policy_id = EXCLUDED.policy_id,
+         policy_version = EXCLUDED.policy_version,
+         sasapay_submission_status = 'awaiting_documents',
+         required_documents = EXCLUDED.required_documents,
          updated_at = NOW()
        RETURNING id`,
       [
@@ -434,24 +372,30 @@ export class SasaPayKycService {
         application.gender,
         application.nationality,
         application.physical_address,
+        policy.id,
+        policy.version,
+        requiredDocuments,
       ],
     );
 
-    const submission = await this.db.queryOne(
-      `INSERT INTO sasapay_kyc_submissions (
-         customer_application_id, customer_applicant_detail_id, policy_id,
-         document_type, policy_version, status, required_documents,
-         system_reason, psp_reason, created_at, updated_at
-       )
-       VALUES ($1, $2, $3, $4, $5, 'awaiting_documents', $6, $7, $8, NOW(), NOW())
-       RETURNING id`,
-      [application.id, detail.id, policy.id, application.identity_document_type, policy.version,
-        requiredDocuments, reason, pspReason || null],
+    // Log submission creation
+    await this.logSubmissionEvent(
+      'submission_created',
+      application.id,
+      detail.id,
+      'system',
+      {
+        submissionStatus: 'awaiting_documents',
+        metadata: { reason, pspReason: pspReason || null },
+      },
     );
 
-    return submission.id;
+    return detail.id;
   }
 
+  /**
+   * Record SasaPay callback event
+   */
   async recordCallbackEvent(
     customerId: number,
     callbackStatus: string,
@@ -482,14 +426,16 @@ export class SasaPayKycService {
         .filter((key) => callbackPayload[key] !== undefined && callbackPayload[key] !== null)
         .map((key) => [key, callbackPayload[key]]),
     );
-    const serializedPayload = JSON.stringify(payload);
 
+    // Correlate with existing submission if request ID provided
     const correlatedSubmission = signedPaymentReference
       ? await this.db.queryOne(
-        `SELECT s.id
-         FROM sasapay_kyc_submissions s
-         JOIN customer_applications ca ON ca.id = s.customer_application_id
-        WHERE ca.id = $1 AND s.sasapay_request_id = $2
+        `SELECT cad.id
+         FROM customer_applicant_details cad
+         JOIN customer_applications ca ON ca.id = cad.customer_application_id
+         WHERE ca.id = $1 
+           AND cad.application_type = 'sasapay_kyc'
+           AND cad.sasapay_request_id = $2
          LIMIT 1`,
         [application.id, signedPaymentReference],
       )
@@ -502,76 +448,85 @@ export class SasaPayKycService {
         reason,
       )
       : null;
+    
     const submissionId = correlatedSubmission?.id || newSubmissionId;
-    const payloadHash = createHash('sha256').update(serializedPayload).digest('hex');
-    const receiptInserted = await this.db.transaction(async (client) => {
-      const receipt = await client.query(
-        `INSERT INTO sasapay_kyc_callback_receipts (
-           customer_application_id, submission_id, payload_sha256,
-           callback_status, psp_reason, payload
-         ) VALUES ($1, $2, $3, $4, $5, $6::jsonb)
-         ON CONFLICT (payload_sha256) DO NOTHING
-         RETURNING id`,
-        [application.id, submissionId, payloadHash, callbackStatus, reason || null, serializedPayload],
+
+    // Update submission status if correlated
+    if (correlatedSubmission) {
+      await this.db.query(
+        `UPDATE customer_applicant_details
+         SET sasapay_submission_status = $1,
+             sasapay_psp_status = $2,
+             sasapay_psp_reason = $3,
+             sasapay_result_at = NOW(),
+             sasapay_callback_payload = $4::jsonb,
+             updated_at = NOW()
+         WHERE id = $5 AND application_type = 'sasapay_kyc'`,
+        [
+          callbackStatus === 'APPROVED' ? 'psp_approved' : 'psp_rejected',
+          callbackStatus,
+          reason || null,
+          JSON.stringify(payload),
+          correlatedSubmission.id,
+        ],
       );
-      if (!receipt.rowCount) return false;
 
-      if (correlatedSubmission) {
-        await client.query(
-          `UPDATE sasapay_kyc_submissions
-           SET status = $1,
-               psp_status = $2,
-               psp_reason = $3,
-               psp_result_at = NOW(),
-               latest_callback_payload = $4::jsonb,
-               updated_at = NOW()
-           WHERE id = $5`,
-          [
-            callbackStatus === 'APPROVED' ? 'psp_approved' : 'psp_rejected',
-            callbackStatus,
-            reason || null,
-            serializedPayload,
-            correlatedSubmission.id,
-          ],
-        );
-      }
-      return true;
-    });
+      // Log the callback event
+      await this.logSubmissionEvent(
+        callbackStatus === 'APPROVED' ? 'psp_approved' : 'psp_rejected',
+        application.id,
+        correlatedSubmission.id,
+        'sasapay_callback',
+        {
+          submissionStatus: callbackStatus === 'APPROVED' ? 'psp_approved' : 'psp_rejected',
+          sasapayRequestId: signedPaymentReference,
+          sasapayCallbackPayload: payload,
+          sasapayPspStatus: callbackStatus,
+          sasapayPspReason: reason || null,
+        },
+      );
+    }
 
-    return { processed: receiptInserted, submissionId };
+    return { processed: true, submissionId };
   }
 
+  /**
+   * Queue approved submissions for PSP upload
+   */
   async enqueueApprovedSubmission(): Promise<void> {
     if (!this.config.get<boolean>('sasapay.kycEnabled')) return;
 
     await this.db.transaction(async (client) => {
       const result = await client.query(
-        `SELECT s.id, s.customer_application_id, ca.customer_id, ca.astpp_id
-         FROM sasapay_kyc_submissions s
-         JOIN customer_applications ca ON ca.id = s.customer_application_id
-         WHERE s.status = 'approved_for_psp'
-           AND NOT EXISTS (
-             SELECT 1
-             FROM unnest(s.required_documents) AS required(document_type)
-             WHERE NOT EXISTS (
-               SELECT 1 FROM sasapay_kyc_submission_images image
-               WHERE image.submission_id = s.id
-                 AND image.document_type = required.document_type
-             )
-           )
-         ORDER BY s.updated_at ASC
-         FOR UPDATE OF s SKIP LOCKED
+        `SELECT cad.id, cad.customer_application_id, ca.customer_id, ca.astpp_id, cad.images
+         FROM customer_applicant_details cad
+         JOIN customer_applications ca ON ca.id = cad.customer_application_id
+         WHERE cad.application_type = 'sasapay_kyc'
+           AND cad.sasapay_submission_status = 'approved_for_psp'
+           AND cad.required_documents IS NOT NULL
+           AND CARDINALITY(cad.required_documents) > 0
+         ORDER BY cad.updated_at ASC
+         FOR UPDATE OF cad SKIP LOCKED
          LIMIT 1`,
       );
       const submission = result.rows[0];
       if (!submission) return;
 
+      // Verify all required documents are uploaded
+      const images = Array.isArray(submission.images) ? submission.images : [];
+      const uploadedTypes = new Set(images.map(img => img.type));
+      const requiredDocs = submission.required_documents || [];
+      const allUploaded = requiredDocs.every(docType => uploadedTypes.has(docType));
+      
+      if (!allUploaded) return;
+
       await client.query(
-        `UPDATE sasapay_kyc_submissions
-         SET status = 'processing_psp_upload', updated_at = NOW()
-         WHERE id = $1 AND status = 'approved_for_psp'`,
+        `UPDATE customer_applicant_details
+         SET sasapay_submission_status = 'processing_psp_upload', updated_at = NOW()
+         WHERE id = $1 AND sasapay_submission_status = 'approved_for_psp'`,
         [submission.id],
       );
+      
       await client.query(
         `INSERT INTO jobs (job_type, payload, status, attempts, available_at, created_at, updated_at)
          VALUES ('sasapay_kyc_submission_upload', $1::jsonb, 'PENDING', 0, NOW(), NOW(), NOW())`,
@@ -585,14 +540,22 @@ export class SasaPayKycService {
     });
   }
 
+  /**
+   * Mark PSP upload as failed
+   */
   async markPspUploadFailed(submissionId: string, reason: string): Promise<void> {
     await this.db.transaction(async (client) => {
       await client.query(
-        `UPDATE sasapay_kyc_submissions
-         SET status = 'psp_upload_failed', psp_reason = $2, updated_at = NOW()
-         WHERE id = $1 AND status = 'processing_psp_upload'`,
+        `UPDATE customer_applicant_details
+         SET sasapay_submission_status = 'psp_upload_failed', 
+             sasapay_psp_reason = $2, 
+             updated_at = NOW()
+         WHERE id = $1 
+           AND application_type = 'sasapay_kyc'
+           AND sasapay_submission_status = 'processing_psp_upload'`,
         [submissionId, reason.slice(0, 2000)],
       );
+      
       await client.query(
         `INSERT INTO events (event_type, aggregate_type, aggregate_id, payload, created_at)
          VALUES ('sasapay_kyc.psp_upload_failed', 'SasaPayKycSubmission', $1, $2::jsonb, NOW())`,
@@ -601,19 +564,23 @@ export class SasaPayKycService {
     });
   }
 
+  /**
+   * Upload KYC images and store in images JSONB field
+   */
   async uploadImages(customerId: number, files: UploadedKycFile[]) {
     this.ensureEnabled();
     if (!files.length) throw new BadRequestException('At least one required image must be provided.');
 
     const submission = await this.db.queryOne(
-      `SELECT s.id, s.customer_application_id, s.required_documents, s.status,
-              p.accepted_mime_types, p.max_file_size_bytes
-       FROM sasapay_kyc_submissions s
-       JOIN customer_applications ca ON ca.id = s.customer_application_id
-       JOIN sasapay_kyc_document_policies p ON p.id = s.policy_id
+      `SELECT cad.id, cad.customer_application_id, cad.required_documents, cad.sasapay_submission_status,
+              cad.images, p.accepted_mime_types, p.max_file_size_bytes
+       FROM customer_applicant_details cad
+       JOIN customer_applications ca ON ca.id = cad.customer_application_id
+       JOIN document_policies p ON p.id = cad.policy_id
        WHERE ca.customer_id = $1
-         AND s.status = 'awaiting_documents'
-       ORDER BY s.created_at DESC
+         AND cad.application_type = 'sasapay_kyc'
+         AND cad.sasapay_submission_status = 'awaiting_documents'
+       ORDER BY cad.created_at DESC
        LIMIT 1`,
       [customerId],
     );
@@ -621,7 +588,10 @@ export class SasaPayKycService {
 
     const requiredDocuments = this.withRequiredSelfie(submission.required_documents);
     const acceptedMimeTypes = new Set<string>(submission.accepted_mime_types);
+    const existingImages = Array.isArray(submission.images) ? submission.images : [];
+    const existingTypes = new Set(existingImages.map(img => img.type));
     const seen = new Set<KycDocumentType>();
+    
     for (const file of files) {
       if (!DOCUMENT_TYPES.includes(file.fieldname as KycDocumentType)) {
         throw new BadRequestException(`Unsupported KYC image field: ${file.fieldname}`);
@@ -631,6 +601,7 @@ export class SasaPayKycService {
         throw new BadRequestException(`${documentType} is not required for this submission.`);
       }
       if (seen.has(documentType)) throw new BadRequestException(`Only one ${documentType} image is allowed.`);
+      if (existingTypes.has(documentType)) throw new ConflictException(`An image of type ${documentType} is already uploaded.`);
       seen.add(documentType);
       if (file.size <= 0 || file.size > Math.min(submission.max_file_size_bytes, this.maxUploadBytes)) {
         throw new BadRequestException(`Image size exceeds the allowed limit for ${documentType}.`);
@@ -640,15 +611,6 @@ export class SasaPayKycService {
       }
     }
 
-    const existing = await this.db.query(
-      `SELECT document_type FROM sasapay_kyc_submission_images
-       WHERE submission_id = $1 AND document_type = ANY($2::text[])`,
-      [submission.id, files.map((file) => file.fieldname)],
-    );
-    if (existing.rowCount) {
-      throw new ConflictException('An image of this type is already stored for this submission.');
-    }
-
     const applicationId = String(submission.customer_application_id);
     const applicationDirectory = path.resolve(this.imageRoot, applicationId);
     if (!applicationDirectory.startsWith(`${this.imageRoot}${path.sep}`)) {
@@ -656,7 +618,7 @@ export class SasaPayKycService {
     }
     await fs.mkdir(applicationDirectory, { recursive: true, mode: 0o700 });
 
-    const savedFiles: Array<{ file: UploadedKycFile; filePath: string; relativePath: string }> = [];
+    const savedFiles: Array<{ file: UploadedKycFile; filePath: string; filename: string }> = [];
     try {
       for (const file of files) {
         const extension = this.extensionForMimeType(file.mimetype);
@@ -666,29 +628,28 @@ export class SasaPayKycService {
         savedFiles.push({
           file,
           filePath,
-          relativePath: path.posix.join('uploads', 'images', applicationId, fileName),
+          filename: fileName,
         });
       }
 
-      await this.db.transaction(async (client) => {
-        for (const saved of savedFiles) {
-          await client.query(
-            `INSERT INTO sasapay_kyc_submission_images (
-               submission_id, customer_application_id, document_type, relative_path,
-               mime_type, file_size_bytes, original_filename
-             ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-            [
-              submission.id,
-              submission.customer_application_id,
-              saved.file.fieldname,
-              saved.relativePath,
-              saved.file.mimetype,
-              saved.file.size,
-              this.safeOriginalName(saved.file.originalname),
-            ],
-          );
-        }
-      });
+      // Build new images array
+      const newImages = savedFiles.map(saved => ({
+        type: saved.file.fieldname,
+        filename: saved.filename,
+        url: `uploads/images/${applicationId}/${saved.filename}`,
+        mime_type: saved.file.mimetype,
+        file_size: saved.file.size,
+        uploaded_at: new Date().toISOString(),
+      }));
+
+      // Update images JSONB field
+      await this.db.query(
+        `UPDATE customer_applicant_details
+         SET images = COALESCE(images, '[]'::jsonb) || $1::jsonb,
+             updated_at = NOW()
+         WHERE id = $2 AND application_type = 'sasapay_kyc'`,
+        [JSON.stringify(newImages), submission.id],
+      );
 
       // Log successful image upload
       this.sasaPayLogger.logImageUpload(
@@ -698,6 +659,22 @@ export class SasaPayKycService {
         files.map((f) => f.fieldname),
         200,
         { uploadedDocuments: files.map((f) => f.fieldname), submissionId: submission.id },
+      );
+
+      // Log to submission log table
+      await this.logSubmissionEvent(
+        'documents_uploaded',
+        submission.customer_application_id,
+        submission.id,
+        `customer_${customerId}`,
+        {
+          submissionStatus: submission.sasapay_submission_status || 'awaiting_documents',
+          uploadedDocuments: newImages,
+          metadata: {
+            document_types: files.map(f => f.fieldname),
+            file_count: files.length,
+          },
+        },
       );
     } catch (error) {
       // Log failed image upload
@@ -725,26 +702,28 @@ export class SasaPayKycService {
     return { uploadedDocuments: files.map((file) => file.fieldname), submission: status };
   }
 
+  /**
+   * Submit KYC for internal review (auto-called when all docs uploaded)
+   */
   private async submitForReview(customerId: number, submissionId: string) {
     this.ensureEnabled();
     const submission = await this.db.queryOne(
-      `SELECT s.id, s.required_documents, s.status, s.policy_version
-       FROM sasapay_kyc_submissions s
-       JOIN customer_applications ca ON ca.id = s.customer_application_id
-       WHERE s.id = $1 AND ca.customer_id = $2`,
+      `SELECT cad.id, cad.required_documents, cad.sasapay_submission_status, cad.policy_version, cad.images
+       FROM customer_applicant_details cad
+       JOIN customer_applications ca ON ca.id = cad.customer_application_id
+       WHERE cad.id = $1 
+         AND ca.customer_id = $2
+         AND cad.application_type = 'sasapay_kyc'`,
       [submissionId, customerId],
     );
     if (!submission) throw new NotFoundException('KYC submission was not found.');
-    if (submission.status !== 'awaiting_documents') {
+    if (submission.sasapay_submission_status !== 'awaiting_documents') {
       throw new ConflictException('This KYC submission is not awaiting documents.');
     }
 
     const requiredDocuments = this.withRequiredSelfie(submission.required_documents);
-    const uploaded = await this.db.query(
-      `SELECT document_type FROM sasapay_kyc_submission_images WHERE submission_id = $1`,
-      [submissionId],
-    );
-    const uploadedTypes = new Set(uploaded.rows.map((row) => row.document_type));
+    const images = Array.isArray(submission.images) ? submission.images : [];
+    const uploadedTypes = new Set(images.map(img => img.type));
     const missing = requiredDocuments.filter((documentType) => !uploadedTypes.has(documentType));
     if (missing.length) {
       throw new BadRequestException(`Missing required images: ${missing.join(', ')}`);
@@ -752,20 +731,42 @@ export class SasaPayKycService {
 
     await this.db.transaction(async (client) => {
       await client.query(
-        `UPDATE sasapay_kyc_submissions
-         SET status = 'submitted_for_review', customer_submitted_at = NOW(), updated_at = NOW()
-         WHERE id = $1 AND status = 'awaiting_documents'`,
+        `UPDATE customer_applicant_details
+         SET sasapay_submission_status = 'submitted_for_review', 
+             sasapay_submitted_at = NOW(), 
+             updated_at = NOW()
+         WHERE id = $1 
+           AND application_type = 'sasapay_kyc'
+           AND sasapay_submission_status = 'awaiting_documents'`,
         [submissionId],
       );
+      
       await client.query(
         `INSERT INTO events (event_type, aggregate_type, aggregate_id, payload, created_at)
          VALUES ('sasapay_kyc.submitted_for_review', 'SasaPayKycSubmission', $1, $2::jsonb, NOW())`,
         [submissionId, JSON.stringify({ submissionId, policyVersion: submission.policy_version })],
       );
     });
+
+    // Log submission for review
+    await this.logSubmissionEvent(
+      'submitted_for_review',
+      await this.getApplicationId(customerId),
+      parseInt(submissionId, 10),
+      `customer_${customerId}`,
+      {
+        submissionStatus: 'submitted_for_review',
+        uploadedDocuments: images,
+        metadata: { policyVersion: submission.policy_version },
+      },
+    );
+
     return this.getCurrentStatus(customerId);
   }
 
+  /**
+   * Get customer application with prioritized KYC document data
+   */
   private async getCustomerApplicationAndDocument(customerId: number) {
     return this.db.queryOne(
       `SELECT ca.id, ca.customer_id, ca.astpp_id,
@@ -793,6 +794,17 @@ export class SasaPayKycService {
        LIMIT 1`,
       [customerId],
     );
+  }
+
+  /**
+   * Get application ID for a customer (helper for logging)
+   */
+  private async getApplicationId(customerId: number): Promise<number> {
+    const app = await this.db.queryOne(
+      `SELECT id FROM customer_applications WHERE customer_id = $1`,
+      [customerId],
+    );
+    return app?.id || 0;
   }
 
   private withRequiredSelfie(value: string[] | null | undefined): KycDocumentType[] {
@@ -832,6 +844,70 @@ export class SasaPayKycService {
   private ensureEnabled(): void {
     if (!this.config.get<boolean>('sasapay.kycEnabled')) {
       throw new ForbiddenException('SasaPay KYC submissions are not enabled.');
+    }
+  }
+
+  /**
+   * Log SasaPay KYC submission event to audit log table
+   */
+  private async logSubmissionEvent(
+    eventType: string,
+    applicationId: number,
+    applicantDetailId: number | null,
+    triggeredBy: string,
+    data: {
+      submissionStatus?: string;
+      sasapayRequestId?: string;
+      sasapayCallbackPayload?: any;
+      sasapayPspStatus?: string;
+      sasapayPspReason?: string;
+      reviewDecision?: string;
+      reviewedBy?: string;
+      reviewReason?: string;
+      uploadedDocuments?: any[];
+      metadata?: any;
+    } = {},
+  ) {
+    try {
+      await this.db.query(
+        `INSERT INTO sasapay_kyc_submission_log (
+          customer_application_id,
+          customer_applicant_detail_id,
+          event_type,
+          triggered_by,
+          submission_status,
+          sasapay_request_id,
+          sasapay_callback_payload,
+          sasapay_psp_status,
+          sasapay_psp_reason,
+          review_decision,
+          reviewed_by,
+          review_reason,
+          uploaded_documents,
+          metadata,
+          event_timestamp,
+          created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11, $12, $13::jsonb, $14::jsonb, NOW(), NOW())`,
+        [
+          applicationId,
+          applicantDetailId,
+          eventType,
+          triggeredBy,
+          data.submissionStatus || null,
+          data.sasapayRequestId || null,
+          data.sasapayCallbackPayload ? JSON.stringify(data.sasapayCallbackPayload) : null,
+          data.sasapayPspStatus || null,
+          data.sasapayPspReason || null,
+          data.reviewDecision || null,
+          data.reviewedBy || null,
+          data.reviewReason || null,
+          data.uploadedDocuments ? JSON.stringify(data.uploadedDocuments) : null,
+          data.metadata ? JSON.stringify(data.metadata) : '{}',
+        ],
+      );
+    } catch (error) {
+      // Don't fail the operation if logging fails, but log the error
+      console.error('[SASAPAY-KYC] Failed to log submission event:', error);
     }
   }
 }

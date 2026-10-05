@@ -1,4 +1,4 @@
--- Seed SasaPay KYC document policies based on their API requirements
+-- Seed SasaPay KYC document policies based on SasaPay API requirements
 -- https://sandbox.sasapay.app/api/v2/waas/personal-onboarding/kyc/
 --
 -- SasaPay documentType values:
@@ -10,6 +10,9 @@
 --   - passportSizePhoto (selfie)
 --   - documentImageFront (front of document)
 --   - documentImageBack (back of document)
+--
+-- Note: This seeds into sasapay_kyc_document_policies (created in migration 004).
+-- Migration 006 will rename this table to document_policies.
 
 -- National ID policy
 INSERT INTO sasapay_kyc_document_policies (
@@ -78,8 +81,8 @@ BEGIN
     WHERE is_active = TRUE;
     
     IF policy_count < 3 THEN
-        RAISE EXCEPTION 'Expected at least 3 active KYC policies, found %', policy_count;
+        RAISE EXCEPTION 'Expected at least 3 active document policies, found %', policy_count;
     END IF;
     
-    RAISE NOTICE 'Successfully seeded % active SasaPay KYC document policies', policy_count;
+    RAISE NOTICE 'Successfully seeded % active document policies', policy_count;
 END $$;

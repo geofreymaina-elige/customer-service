@@ -11012,126 +11012,8 @@
         },
         {
           "name": "SasaPay KYC Admin",
-          "description": "Backoffice and Admin APIs for compliance staff to inspect, approve, or reject customer SasaPay KYC submissions using API Key authentication.",
+          "description": "Admin API for compliance staff to inspect customer SasaPay KYC submissions. Uses ASTPP ID for lookup. Images are returned as full URLs (ASTPP: https://msa-portal.elige-africa.com/application_images/{astppId}/{filename}, Local: https://api.ambiapay.com/uploads/images/{applicationId}/{filename}). Review decisions will be handled via Kafka (sasapay.kyc.review.decisions topic).",
           "item": [
-            {
-              "name": "List SasaPay KYC submissions queue",
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "pm.test(\"Status code is 200\", () => pm.expect(pm.response.code).to.eql(200));",
-                      "const res = pm.response.json();",
-                      "if (res.data && res.data.submissions && res.data.submissions.length > 0) {",
-                      "  pm.collectionVariables.set(\"submissionId\", res.data.submissions[0].submissionId);",
-                      "  pm.environment.set(\"submissionId\", res.data.submissions[0].submissionId);",
-                      "}"
-                    ]
-                  }
-                }
-              ],
-              "request": {
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "x-api-key",
-                    "value": "{{adminApiKey}}",
-                    "description": "Machine-to-machine Admin API Key"
-                  },
-                  {
-                    "key": "x-admin-user-id",
-                    "value": "{{adminUserId}}",
-                    "description": "Admin officer email or ID for audit logging"
-                  }
-                ],
-                "url": {
-                  "raw": "{{baseUrl}}/api/v2/admin/sasapay-kyc/submissions?status=submitted_for_review&limit=20&offset=0",
-                  "host": [
-                    "{{baseUrl}}"
-                  ],
-                  "path": [
-                    "api",
-                    "v2",
-                    "admin",
-                    "sasapay-kyc",
-                    "submissions"
-                  ],
-                  "query": [
-                    {
-                      "key": "status",
-                      "value": "submitted_for_review",
-                      "description": "Filter by status: awaiting_documents, submitted_for_review, approved_for_psp, rejected, psp_approved, psp_rejected"
-                    },
-                    {
-                      "key": "limit",
-                      "value": "20"
-                    },
-                    {
-                      "key": "offset",
-                      "value": "0"
-                    },
-                    {
-                      "key": "query",
-                      "value": "",
-                      "disabled": true,
-                      "description": "Search by phone number, name, or document ID"
-                    }
-                  ]
-                },
-                "description": "Returns paginated list of KYC submissions in the compliance review queue."
-              }
-            },
-            {
-              "name": "Get submission dossier (Customer, App, KYC Status, Image URLs)",
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "pm.test(\"Status code is 200\", () => pm.expect(pm.response.code).to.eql(200));",
-                      "const res = pm.response.json();",
-                      "if (res.data && res.data.documents && res.data.documents.length > 0) {",
-                      "  pm.collectionVariables.set(\"imageId\", res.data.documents[0].id);",
-                      "  pm.environment.set(\"imageId\", res.data.documents[0].id);",
-                      "}"
-                    ]
-                  }
-                }
-              ],
-              "request": {
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "x-api-key",
-                    "value": "{{adminApiKey}}",
-                    "description": "Machine-to-machine Admin API Key"
-                  },
-                  {
-                    "key": "x-admin-user-id",
-                    "value": "{{adminUserId}}",
-                    "description": "Admin officer email or ID for audit logging"
-                  }
-                ],
-                "url": {
-                  "raw": "{{baseUrl}}/api/v2/admin/sasapay-kyc/submissions/{{submissionId}}",
-                  "host": [
-                    "{{baseUrl}}"
-                  ],
-                  "path": [
-                    "api",
-                    "v2",
-                    "admin",
-                    "sasapay-kyc",
-                    "submissions",
-                    "{{submissionId}}"
-                  ]
-                },
-                "description": "Returns full customer details, application details (including kyc_status), SasaPay submission metadata, and document image URLs pointing to https://api.ambiapay.com."
-              }
-            },
             {
               "name": "Get customer KYC profile by ASTPP ID",
               "event": [
@@ -11140,7 +11022,13 @@
                   "script": {
                     "type": "text/javascript",
                     "exec": [
-                      "pm.test(\"Status code is 200\", () => pm.expect(pm.response.code).to.eql(200));"
+                      "pm.test(\"Status code is 200\", () => pm.expect(pm.response.code).to.eql(200));",
+                      "const res = pm.response.json();",
+                      "if (res.success && res.data) {",
+                      "  console.log('KYC Source:', res.data.kycSource);",
+                      "  console.log('Status:', res.data.status);",
+                      "  console.log('Document URLs:', res.data.documents);",
+                      "}"
                     ]
                   }
                 }
@@ -11168,107 +11056,158 @@
                     "{{astppId}}"
                   ]
                 },
-                "description": "Fetches a customer's complete KYC profile, application status, and all submission documents by ASTPP account ID."
-              }
-            },
-            {
-              "name": "View / Download KYC document image",
-              "event": [
+                "description": "Fetches a customer's complete KYC profile by ASTPP ID. Returns prioritized KYC data (sasapay > wallet > primary) with full image URLs. The response includes:\n- kycSource: which KYC type is being used (sasapay_kyc, wallet_kyc, or primary_kyc)\n- customer: basic customer info\n- application: wallet application details and kyc_status\n- status: current submission status (if SasaPay KYC exists)\n- documents: array of document objects with full URLs\n- submittedAt, reviewedAt: timestamps (if applicable)\n\nImage URLs are complete and ready to use:\n- ASTPP images: https://msa-portal.elige-africa.com/application_images/{astppId}/{filename}\n- Local images: https://api.ambiapay.com/uploads/images/{applicationId}/{filename}"
+              },
+              "response": [
                 {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "pm.test(\"Status code is 200\", () => pm.expect(pm.response.code).to.eql(200));"
-                    ]
-                  }
-                }
-              ],
-              "request": {
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "x-api-key",
-                    "value": "{{adminApiKey}}",
-                    "description": "Machine-to-machine Admin API Key"
-                  }
-                ],
-                "url": {
-                  "raw": "{{baseUrl}}/api/v2/admin/sasapay-kyc/files/{{imageId}}?apiKey={{adminApiKey}}",
-                  "host": [
-                    "{{baseUrl}}"
-                  ],
-                  "path": [
-                    "api",
-                    "v2",
-                    "admin",
-                    "sasapay-kyc",
-                    "files",
-                    "{{imageId}}"
-                  ],
-                  "query": [
-                    {
-                      "key": "apiKey",
-                      "value": "{{adminApiKey}}",
-                      "description": "Allows direct browser rendering <img src=\"...\">"
+                  "name": "200 Customer KYC Profile",
+                  "originalRequest": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "x-api-key",
+                        "value": "{{adminApiKey}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/v2/admin/sasapay-kyc/customers/{{astppId}}",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v2",
+                        "admin",
+                        "sasapay-kyc",
+                        "customers",
+                        "{{astppId}}"
+                      ]
                     }
-                  ]
-                },
-                "description": "Streams binary KYC image directly with proper Content-Type and Cache-Control headers."
-              }
-            },
-            {
-              "name": "Submit review decision (Approve / Reject)",
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "pm.test(\"Status code is 200\", () => pm.expect(pm.response.code).to.eql(200));"
-                    ]
-                  }
-                }
-              ],
-              "request": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "x-api-key",
-                    "value": "{{adminApiKey}}",
-                    "description": "Machine-to-machine Admin API Key"
                   },
-                  {
-                    "key": "x-admin-user-id",
-                    "value": "{{adminUserId}}",
-                    "description": "Admin officer email or ID for audit logging"
-                  },
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"decision\": \"approved\",\n  \"reviewerName\": \"Sarah Ochieng\",\n  \"notes\": \"Verified ID clear, selfie biometric match confirmed.\"\n}"
-                },
-                "url": {
-                  "raw": "{{baseUrl}}/api/v2/admin/sasapay-kyc/submissions/{{submissionId}}/review-decision",
-                  "host": [
-                    "{{baseUrl}}"
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": "json",
+                  "header": [
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    }
                   ],
-                  "path": [
-                    "api",
-                    "v2",
-                    "admin",
-                    "sasapay-kyc",
-                    "submissions",
-                    "{{submissionId}}",
-                    "review-decision"
-                  ]
+                  "cookie": [],
+                  "body": "{\n  \"success\": true,\n  \"message\": \"Customer KYC profile retrieved successfully.\",\n  \"data\": {\n    \"kycSource\": \"sasapay_kyc\",\n    \"customer\": {\n      \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n      \"astppId\": \"10001\",\n      \"firstName\": \"John\",\n      \"lastName\": \"Kamau\",\n      \"phoneNumber\": \"+254712345678\",\n      \"email\": \"john.kamau@example.com\",\n      \"idNumber\": \"12345678\",\n      \"countryCode\": \"KE\"\n    },\n    \"application\": {\n      \"id\": \"7c1e4a92-58d3-4b6f-a0e1-3d9b5c8f2a47\",\n      \"kycStatus\": \"kyc_submitted\",\n      \"createdAt\": \"2026-09-20T08:30:00Z\"\n    },\n    \"status\": \"submitted_for_review\",\n    \"documentType\": \"NATIONAL_ID\",\n    \"documents\": [\n      {\n        \"type\": \"document_front\",\n        \"url\": \"https://api.ambiapay.com/uploads/images/7c1e4a92-58d3-4b6f-a0e1-3d9b5c8f2a47/id_front_1632145678.jpg\"\n      },\n      {\n        \"type\": \"document_back\",\n        \"url\": \"https://api.ambiapay.com/uploads/images/7c1e4a92-58d3-4b6f-a0e1-3d9b5c8f2a47/id_back_1632145679.jpg\"\n      },\n      {\n        \"type\": \"selfie\",\n        \"url\": \"https://api.ambiapay.com/uploads/images/7c1e4a92-58d3-4b6f-a0e1-3d9b5c8f2a47/selfie_1632145680.jpg\"\n      }\n    ],\n    \"submittedAt\": \"2026-09-20T09:15:00Z\",\n    \"reviewedAt\": null\n  }\n}"
                 },
-                "description": "Submits internal compliance review decision (approved or rejected). If approved, triggers automated dispatch to SasaPay API."
-              }
+                {
+                  "name": "200 ASTPP KYC Source",
+                  "originalRequest": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "x-api-key",
+                        "value": "{{adminApiKey}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/v2/admin/sasapay-kyc/customers/{{astppId}}",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v2",
+                        "admin",
+                        "sasapay-kyc",
+                        "customers",
+                        "{{astppId}}"
+                      ]
+                    }
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": "json",
+                  "header": [
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    }
+                  ],
+                  "cookie": [],
+                  "body": "{\n  \"success\": true,\n  \"message\": \"Customer KYC profile retrieved successfully.\",\n  \"data\": {\n    \"kycSource\": \"primary_kyc\",\n    \"customer\": {\n      \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n      \"astppId\": \"10002\",\n      \"firstName\": \"Jane\",\n      \"lastName\": \"Wanjiku\",\n      \"phoneNumber\": \"+254723456789\",\n      \"email\": null,\n      \"idNumber\": \"23456789\",\n      \"countryCode\": \"KE\"\n    },\n    \"application\": {\n      \"id\": \"8d2f5b03-69e4-5c7g-b1f2-4e0c6d9g3b58\",\n      \"kycStatus\": \"kyc_approved\",\n      \"createdAt\": \"2026-09-18T10:00:00Z\"\n    },\n    \"status\": null,\n    \"documentType\": \"NATIONAL_ID\",\n    \"documents\": [\n      {\n        \"type\": \"document_front\",\n        \"url\": \"https://msa-portal.elige-africa.com/application_images/10002/national_id_front.jpg\"\n      },\n      {\n        \"type\": \"document_back\",\n        \"url\": \"https://msa-portal.elige-africa.com/application_images/10002/national_id_back.jpg\"\n      },\n      {\n        \"type\": \"selfie\",\n        \"url\": \"https://msa-portal.elige-africa.com/application_images/10002/selfie_photo.jpg\"\n      }\n    ],\n    \"submittedAt\": null,\n    \"reviewedAt\": null\n  }\n}"
+                },
+                {
+                  "name": "401 Unauthorized",
+                  "originalRequest": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "x-api-key",
+                        "value": "invalid_key"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/v2/admin/sasapay-kyc/customers/{{astppId}}",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v2",
+                        "admin",
+                        "sasapay-kyc",
+                        "customers",
+                        "{{astppId}}"
+                      ]
+                    }
+                  },
+                  "status": "Unauthorized",
+                  "code": 401,
+                  "_postman_previewlanguage": "json",
+                  "header": [
+                    {
+                      "key": "Content-Type",
+                      "value": "application/problem+json"
+                    }
+                  ],
+                  "cookie": [],
+                  "body": "{\n  \"success\": false,\n  \"message\": \"Invalid or missing API key.\",\n  \"code\": \"UNAUTHORIZED\",\n  \"traceId\": \"4bf92f3577b34da6a3ce929d0e0e4736\"\n}"
+                },
+                {
+                  "name": "404 Customer Not Found",
+                  "originalRequest": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "x-api-key",
+                        "value": "{{adminApiKey}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/v2/admin/sasapay-kyc/customers/99999",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v2",
+                        "admin",
+                        "sasapay-kyc",
+                        "customers",
+                        "99999"
+                      ]
+                    }
+                  },
+                  "status": "Not Found",
+                  "code": 404,
+                  "_postman_previewlanguage": "json",
+                  "header": [
+                    {
+                      "key": "Content-Type",
+                      "value": "application/problem+json"
+                    }
+                  ],
+                  "cookie": [],
+                  "body": "{\n  \"success\": false,\n  \"message\": \"Customer not found.\",\n  \"code\": \"CUSTOMER_NOT_FOUND\",\n  \"traceId\": \"5cg03g4688c45eb7b4df030e1f1f5847\"\n}"
+                }
+              ]
             }
           ]
         }
