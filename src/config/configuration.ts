@@ -68,4 +68,15 @@ export default () => ({
     url: process.env.NOTIFICATION_SERVICE_URL,
     apiKey: process.env.NOTIFICATION_SERVICE_API_KEY,
   },
+  publicUrl: process.env.PUBLIC_URL || 'https://api.ambiapay.com',
+  adminApiKey: process.env.ADMIN_API_KEY || 'ambia_admin_secret_key_2026_x89a1c90f23b',
+  cors: {
+    allowedOrigins: process.env.CORS_ALLOWED_ORIGINS
+      ? process.env.CORS_ALLOWED_ORIGINS.split(',').map((origin) => origin.trim()).filter(Boolean)
+      : ['https://api.ambiapay.com', 'https://admin.ambiapay.com', 'http://localhost:3000', 'http://localhost:5173'],
+  },
+  rateLimit: {
+    ttl: parseInt(process.env.RATE_LIMIT_TTL || '60', 10),
+    limit: parseInt(process.env.RATE_LIMIT_LIMIT || '120', 10),
+  },
 });

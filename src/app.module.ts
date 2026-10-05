@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import configuration from './config/configuration';
 import { MessagesModule } from './core/messages/messages.module';
 import { DatabaseModule } from './core/database/database.module';
@@ -27,6 +29,16 @@ import { AppConfigModule } from './modules/app-config/app-config.module';
       load: [configuration],
       envFilePath: ['.env', '.env.local'],
     }),
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => [
+        {
+          ttl: (config.get<number>('rateLimit.ttl') || 60) * 1000,
+          limit: config.get<number>('rateLimit.limit') || 120,
+        },
+      ],
+    }),
     MessagesModule,
     DatabaseModule,
     CacheModule, // Global in-memory cache (swap with Redis later)
@@ -45,6 +57,12 @@ import { AppConfigModule } from './modules/app-config/app-config.module';
     HealthModule,
     WorkersModule,
     AppConfigModule,
+  ],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
   ],
 })
 export class AppModule {}
