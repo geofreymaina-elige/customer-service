@@ -1,10 +1,11 @@
-import { NestFactory } from '@nestjs/core';
+import { NestFactory, Reflector } from '@nestjs/core';
 import { ValidationPipe, HttpException, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { MessageService } from './core/messages/message.service';
 import { GlobalExceptionFilter } from './core/errors/global-exception.filter';
+import { ApiKeyGuard } from './core/auth/api-key.guard';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -87,6 +88,10 @@ async function bootstrap() {
   // Global Exception Filter with centralized messages
   app.useGlobalFilters(new GlobalExceptionFilter(messageService));
 
+  // Global API Key Guard (applies to all routes unless marked with @Public())
+  const reflector = app.get(Reflector);
+  app.useGlobalGuards(new ApiKeyGuard(configService, reflector));
+
   // Swagger API Documentation
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Ambia Pay Customer Management API')
@@ -130,8 +135,15 @@ Each requires
 
 ## 🔐 Authentication
 
+All API requests require an API key provided in one of these ways
+- **Header** \`X-API-Key: your_api_key_here\` (recommended)
+- **Query Parameter** \`?apiKey=your_api_key_here\` (for Swagger docs only)
+
+### API Key
+Required for all requests. Obtain from your Ambia Pay dashboard.
+
 ### ASTPP Token
-Most endpoints require \`X-Astpp-Token\` header for authentication.
+Most endpoints also require \`X-Astpp-Token\` header for customer authentication.
 
 ### Bearer Token
 Some endpoints use \`Authorization: Bearer {token}\` after device registration.
@@ -169,6 +181,15 @@ All responses follow this structure
     .addServer('https://api.ambiapay.com', 'Production')
     .addServer('https://dev-api.ambiapay.com', 'Staging')
     .addServer('http://localhost:5006', 'Local Development')
+    .addApiKey(
+      {
+        type: 'apiKey',
+        name: 'X-API-Key',
+        in: 'header',
+        description: 'API key required for all requests. Obtain from your Ambia Pay dashboard.'
+      },
+      'API-Key'
+    )
     .addBearerAuth(
       {
         type: 'http',

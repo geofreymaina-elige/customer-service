@@ -1,10 +1,12 @@
 import { Controller, Get } from '@nestjs/common';
 import { DatabaseService } from '../../core/database/database.service';
+import { Public } from '../../core/auth/public.decorator';
 
 @Controller('health')
 export class HealthController {
   constructor(private readonly db: DatabaseService) {}
 
+  @Public()
   @Get()
   async check() {
     let dbStatus = 'healthy';

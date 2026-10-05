@@ -70,6 +70,7 @@ export default () => ({
     apiKey: process.env.NOTIFICATION_SERVICE_API_KEY,
   },
   publicUrl: process.env.PUBLIC_URL || 'https://api.ambiapay.com',
+  apiKey: process.env.API_KEY,
   adminApiKey: process.env.ADMIN_API_KEY || 'ambia_admin_secret_key_2026_x89a1c90f23b',
   cors: {
     allowedOrigins: process.env.CORS_ALLOWED_ORIGINS

@@ -26,6 +26,7 @@ import { KafkaNotificationService } from '../../../core/notifications/kafka-noti
 import { DatabaseService } from '../../../core/database/database.service';
 import { JobService } from '../../../core/jobs/job.service';
 import { CurrentUser, AuthenticatedUser } from '../../../core/auth/current-user.decorator';
+import { Public } from '../../../core/auth/public.decorator';
 import { Logger } from '@nestjs/common';
 
 @Controller('')
@@ -321,6 +322,7 @@ export class OnboardingController {
   /**
    * SasaPay webhook callback (was POST api/v1/onboarding/callback/sasapay)
    */
+  @Public()
   @Post('webhooks/v1/sasapay')
   @HttpCode(HttpStatus.OK)
   async handleSasaPayCallback(
