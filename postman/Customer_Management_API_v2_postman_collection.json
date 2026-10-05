@@ -7214,6 +7214,197 @@
               ]
             }
           ]
+        },
+        {
+          "name": "SasaPay KYC",
+          "description": "Endpoints for customers undergoing SasaPay-specific KYC verification and document uploads (Front, Back, and Selfie).",
+          "item": [
+            {
+              "name": "Get active document requirements",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", () => pm.expect(pm.response.code).to.eql(200));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{appAccessToken}}",
+                    "description": "Customer App Access JWT"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v2/wallets/kyc/requirements",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v2",
+                    "wallets",
+                    "kyc",
+                    "requirements"
+                  ]
+                },
+                "description": "Returns the active SasaPay document requirements policy for the customer's identity document type (e.g. required sides, mandatory selfie, allowed mime types, max file size)."
+              }
+            },
+            {
+              "name": "Get current submission status",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", () => pm.expect(pm.response.code).to.eql(200));",
+                      "const res = pm.response.json();",
+                      "if (res.data && res.data.submissionId) {",
+                      "  pm.collectionVariables.set(\"submissionId\", res.data.submissionId);",
+                      "  pm.environment.set(\"submissionId\", res.data.submissionId);",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{appAccessToken}}",
+                    "description": "Customer App Access JWT"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v2/wallets/kyc/submissions/current",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v2",
+                    "wallets",
+                    "kyc",
+                    "submissions",
+                    "current"
+                  ]
+                },
+                "description": "Returns the customer's current SasaPay KYC submission, required outstanding documents, and verification progress."
+              }
+            },
+            {
+              "name": "Upload KYC document images",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200 or 201\", () => pm.expect([200, 201]).to.include(pm.response.code));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{appAccessToken}}",
+                    "description": "Customer App Access JWT"
+                  }
+                ],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "document_front",
+                      "type": "file",
+                      "src": [],
+                      "description": "Front side of National ID / Passport bio page"
+                    },
+                    {
+                      "key": "document_back",
+                      "type": "file",
+                      "src": [],
+                      "description": "Back side of National ID (if required by policy)"
+                    },
+                    {
+                      "key": "selfie",
+                      "type": "file",
+                      "src": [],
+                      "description": "Mandatory biometric live selfie photograph"
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v2/wallets/kyc/submissions/{{submissionId}}/images",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v2",
+                    "wallets",
+                    "kyc",
+                    "submissions",
+                    "{{submissionId}}",
+                    "images"
+                  ]
+                },
+                "description": "Multipart upload for KYC documents (document_front, document_back, selfie) attached to the active submission."
+              }
+            },
+            {
+              "name": "Submit completed KYC for review",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200 or 201\", () => pm.expect([200, 201]).to.include(pm.response.code));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{appAccessToken}}",
+                    "description": "Customer App Access JWT"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v2/wallets/kyc/submissions/{{submissionId}}/submit",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v2",
+                    "wallets",
+                    "kyc",
+                    "submissions",
+                    "{{submissionId}}",
+                    "submit"
+                  ]
+                },
+                "description": "Transitions the submission to 'submitted_for_review' and publishes the handoff event to the admin review queue."
+              }
+            }
+          ]
         }
       ]
     },
@@ -10864,6 +11055,268 @@
               ]
             }
           ]
+        },
+        {
+          "name": "SasaPay KYC Admin",
+          "description": "Backoffice and Admin APIs for compliance staff to inspect, approve, or reject customer SasaPay KYC submissions using API Key authentication.",
+          "item": [
+            {
+              "name": "List SasaPay KYC submissions queue",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", () => pm.expect(pm.response.code).to.eql(200));",
+                      "const res = pm.response.json();",
+                      "if (res.data && res.data.submissions && res.data.submissions.length > 0) {",
+                      "  pm.collectionVariables.set(\"submissionId\", res.data.submissions[0].submissionId);",
+                      "  pm.environment.set(\"submissionId\", res.data.submissions[0].submissionId);",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-api-key",
+                    "value": "{{adminApiKey}}",
+                    "description": "Machine-to-machine Admin API Key"
+                  },
+                  {
+                    "key": "x-admin-user-id",
+                    "value": "{{adminUserId}}",
+                    "description": "Admin officer email or ID for audit logging"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v2/admin/sasapay-kyc/submissions?status=submitted_for_review&limit=20&offset=0",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v2",
+                    "admin",
+                    "sasapay-kyc",
+                    "submissions"
+                  ],
+                  "query": [
+                    {
+                      "key": "status",
+                      "value": "submitted_for_review",
+                      "description": "Filter by status: awaiting_documents, submitted_for_review, approved_for_psp, rejected, psp_approved, psp_rejected"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    },
+                    {
+                      "key": "offset",
+                      "value": "0"
+                    },
+                    {
+                      "key": "query",
+                      "value": "",
+                      "disabled": true,
+                      "description": "Search by phone number, name, or document ID"
+                    }
+                  ]
+                },
+                "description": "Returns paginated list of KYC submissions in the compliance review queue."
+              }
+            },
+            {
+              "name": "Get submission dossier (Customer, App, KYC Status, Image URLs)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", () => pm.expect(pm.response.code).to.eql(200));",
+                      "const res = pm.response.json();",
+                      "if (res.data && res.data.documents && res.data.documents.length > 0) {",
+                      "  pm.collectionVariables.set(\"imageId\", res.data.documents[0].id);",
+                      "  pm.environment.set(\"imageId\", res.data.documents[0].id);",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-api-key",
+                    "value": "{{adminApiKey}}",
+                    "description": "Machine-to-machine Admin API Key"
+                  },
+                  {
+                    "key": "x-admin-user-id",
+                    "value": "{{adminUserId}}",
+                    "description": "Admin officer email or ID for audit logging"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v2/admin/sasapay-kyc/submissions/{{submissionId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v2",
+                    "admin",
+                    "sasapay-kyc",
+                    "submissions",
+                    "{{submissionId}}"
+                  ]
+                },
+                "description": "Returns full customer details, application details (including kyc_status), SasaPay submission metadata, and document image URLs pointing to https://api.ambiapay.com."
+              }
+            },
+            {
+              "name": "Get customer KYC profile by ASTPP ID",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", () => pm.expect(pm.response.code).to.eql(200));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-api-key",
+                    "value": "{{adminApiKey}}",
+                    "description": "Machine-to-machine Admin API Key"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v2/admin/sasapay-kyc/customers/{{astppId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v2",
+                    "admin",
+                    "sasapay-kyc",
+                    "customers",
+                    "{{astppId}}"
+                  ]
+                },
+                "description": "Fetches a customer's complete KYC profile, application status, and all submission documents by ASTPP account ID."
+              }
+            },
+            {
+              "name": "View / Download KYC document image",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", () => pm.expect(pm.response.code).to.eql(200));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-api-key",
+                    "value": "{{adminApiKey}}",
+                    "description": "Machine-to-machine Admin API Key"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v2/admin/sasapay-kyc/files/{{imageId}}?apiKey={{adminApiKey}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v2",
+                    "admin",
+                    "sasapay-kyc",
+                    "files",
+                    "{{imageId}}"
+                  ],
+                  "query": [
+                    {
+                      "key": "apiKey",
+                      "value": "{{adminApiKey}}",
+                      "description": "Allows direct browser rendering <img src=\"...\">"
+                    }
+                  ]
+                },
+                "description": "Streams binary KYC image directly with proper Content-Type and Cache-Control headers."
+              }
+            },
+            {
+              "name": "Submit review decision (Approve / Reject)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", () => pm.expect(pm.response.code).to.eql(200));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-api-key",
+                    "value": "{{adminApiKey}}",
+                    "description": "Machine-to-machine Admin API Key"
+                  },
+                  {
+                    "key": "x-admin-user-id",
+                    "value": "{{adminUserId}}",
+                    "description": "Admin officer email or ID for audit logging"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"decision\": \"approved\",\n  \"reviewerName\": \"Sarah Ochieng\",\n  \"notes\": \"Verified ID clear, selfie biometric match confirmed.\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v2/admin/sasapay-kyc/submissions/{{submissionId}}/review-decision",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v2",
+                    "admin",
+                    "sasapay-kyc",
+                    "submissions",
+                    "{{submissionId}}",
+                    "review-decision"
+                  ]
+                },
+                "description": "Submits internal compliance review decision (approved or rejected). If approved, triggers automated dispatch to SasaPay API."
+              }
+            }
+          ]
         }
       ]
     }
@@ -10982,6 +11435,31 @@
       "key": "webhookSecret",
       "value": "",
       "type": "secret"
+    },
+    {
+      "key": "adminApiKey",
+      "value": "ambia_admin_secret_key_2026_x89a1c90f23b",
+      "type": "string"
+    },
+    {
+      "key": "adminUserId",
+      "value": "compliance.officer@ambiapay.com",
+      "type": "string"
+    },
+    {
+      "key": "submissionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "imageId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "publicUrl",
+      "value": "https://api.ambiapay.com",
+      "type": "string"
     }
   ]
 }
