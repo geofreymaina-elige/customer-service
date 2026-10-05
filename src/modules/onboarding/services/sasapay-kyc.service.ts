@@ -104,13 +104,135 @@ export class SasaPayKycService {
     };
   }
 
+  async getAllKycStatus(customerId: number) {
+    console.log('[SASAPAY-KYC] getAllKycStatus called for customer:', customerId);
+
+    // Get the customer application
+    const application = await this.db.queryOne(
+      `SELECT id, kyc_status FROM customer_applications WHERE customer_id = $1`,
+      [customerId],
+    );
+    
+    if (!application) {
+      console.log('[SASAPAY-KYC] No customer application found for customer:', customerId);
+      return {
+        hasApplication: false,
+        overallKycStatus: null,
+        primaryKyc: null,
+        walletKyc: null,
+        sasapayKyc: null,
+      };
+    }
+
+    console.log('[SASAPAY-KYC] Application found:', { 
+      applicationId: application.id, 
+      kycStatus: application.kyc_status,
+      customerId 
+    });
+
+    // Get all applicant details (primary_kyc, wallet_kyc, sasapay_kyc)
+    const applicantDetails = await this.db.query(
+      `SELECT application_type, identity_document_type, name, created_at
+       FROM customer_applicant_details
+       WHERE customer_application_id = $1
+       ORDER BY created_at DESC`,
+      [application.id],
+    );
+
+    console.log('[SASAPAY-KYC] Applicant details found:', 
+      applicantDetails.rows.map(d => ({ type: d.application_type, docType: d.identity_document_type }))
+    );
+
+    // Get SasaPay KYC submission status
+    const sasapaySubmission = await this.db.queryOne(
+      `SELECT id, status, required_documents, system_reason, psp_reason,
+              customer_submitted_at, psp_result_at, created_at
+       FROM sasapay_kyc_submissions
+       WHERE customer_application_id = $1
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [application.id],
+    );
+
+    // Get uploaded documents for SasaPay submission if it exists
+    let sasapayUploadedDocs = [];
+    if (sasapaySubmission) {
+      const uploaded = await this.db.query(
+        `SELECT document_type FROM sasapay_kyc_submission_images WHERE submission_id = $1`,
+        [sasapaySubmission.id],
+      );
+      sasapayUploadedDocs = uploaded.rows.map(row => row.document_type);
+    }
+
+    // Build response
+    const primaryKycDetail = applicantDetails.rows.find(d => d.application_type === 'primary_kyc');
+    const walletKycDetail = applicantDetails.rows.find(d => d.application_type === 'wallet_kyc');
+    const sasapayKycDetail = applicantDetails.rows.find(d => d.application_type === 'sasapay_kyc');
+
+    const result = {
+      hasApplication: true,
+      overallKycStatus: application.kyc_status,
+      
+      primaryKyc: primaryKycDetail ? {
+        exists: true,
+        documentType: primaryKycDetail.identity_document_type,
+        name: primaryKycDetail.name,
+        submittedAt: primaryKycDetail.created_at,
+      } : {
+        exists: false,
+      },
+      
+      walletKyc: walletKycDetail ? {
+        exists: true,
+        documentType: walletKycDetail.identity_document_type,
+        name: walletKycDetail.name,
+        submittedAt: walletKycDetail.created_at,
+      } : {
+        exists: false,
+      },
+      
+      sasapayKyc: sasapaySubmission ? {
+        exists: true,
+        submissionId: sasapaySubmission.id,
+        status: sasapaySubmission.status,
+        requiredDocuments: this.withRequiredSelfie(sasapaySubmission.required_documents),
+        uploadedDocuments: sasapayUploadedDocs,
+        remainingDocuments: this.withRequiredSelfie(sasapaySubmission.required_documents)
+          .filter(doc => !sasapayUploadedDocs.includes(doc)),
+        reason: sasapaySubmission.psp_reason || sasapaySubmission.system_reason || null,
+        submittedAt: sasapaySubmission.customer_submitted_at,
+        resultAt: sasapaySubmission.psp_result_at,
+        createdAt: sasapaySubmission.created_at,
+      } : (sasapayKycDetail ? {
+        exists: true,
+        documentType: sasapayKycDetail.identity_document_type,
+        name: sasapayKycDetail.name,
+        submittedAt: sasapayKycDetail.created_at,
+        hasSubmission: false,
+        message: 'SasaPay KYC details exist but no submission workflow started',
+      } : {
+        exists: false,
+        message: 'SasaPay KYC not initiated',
+      }),
+    };
+
+    console.log('[SASAPAY-KYC] Final status:', {
+      overallStatus: result.overallKycStatus,
+      primaryExists: result.primaryKyc.exists,
+      walletExists: result.walletKyc.exists,
+      sasapayExists: result.sasapayKyc.exists,
+    });
+
+    return result;
+  }
+
   async getCurrentStatus(customerId: number) {
     console.log('[SASAPAY-KYC] getCurrentStatus called for customer:', customerId);
 
-    const application = await this.db.queryOne(
-      `SELECT id FROM customer_applications WHERE customer_id = $1`,
-      [customerId],
-    );
+    const applicationQuery = `SELECT id FROM customer_applications WHERE customer_id = $1`;
+    console.log('[SASAPAY-KYC] Executing query:', applicationQuery, 'with params:', [customerId]);
+    
+    const application = await this.db.queryOne(applicationQuery, [customerId]);
     
     if (!application) {
       console.log('[SASAPAY-KYC] No customer application found for customer:', customerId);
@@ -119,19 +241,22 @@ export class SasaPayKycService {
 
     console.log('[SASAPAY-KYC] Application found:', { applicationId: application.id, customerId });
 
-    const submission = await this.db.queryOne(
-      `SELECT id, status, required_documents, system_reason, psp_reason,
+    const submissionQuery = `SELECT id, status, required_documents, system_reason, psp_reason,
               customer_submitted_at, internal_reviewed_at, psp_submitted_at, psp_result_at,
               policy_version, created_at, updated_at
        FROM sasapay_kyc_submissions
        WHERE customer_application_id = $1
        ORDER BY created_at DESC
-       LIMIT 1`,
-      [application.id],
-    );
+       LIMIT 1`;
+    console.log('[SASAPAY-KYC] Executing query:', submissionQuery, 'with params:', [application.id]);
+    
+    const submission = await this.db.queryOne(submissionQuery, [application.id]);
     
     if (!submission) {
       console.log('[SASAPAY-KYC] No KYC submission found for application:', application.id);
+      console.log('[SASAPAY-KYC] This means the customer has not started a KYC submission yet.');
+      console.log('[SASAPAY-KYC] To check if any submissions exist, run:');
+      console.log(`  SELECT * FROM sasapay_kyc_submissions WHERE customer_application_id = ${application.id};`);
       return null;
     }
 
@@ -141,10 +266,10 @@ export class SasaPayKycService {
       requiredDocuments: submission.required_documents,
     });
 
-    const uploaded = await this.db.query(
-      `SELECT document_type FROM sasapay_kyc_submission_images WHERE submission_id = $1`,
-      [submission.id],
-    );
+    const uploadedQuery = `SELECT document_type FROM sasapay_kyc_submission_images WHERE submission_id = $1`;
+    console.log('[SASAPAY-KYC] Executing query:', uploadedQuery, 'with params:', [submission.id]);
+    
+    const uploaded = await this.db.query(uploadedQuery, [submission.id]);
     const uploadedTypes = new Set(uploaded.rows.map((row) => row.document_type));
     const requiredDocuments = this.withRequiredSelfie(submission.required_documents)
       .filter((documentType) => !uploadedTypes.has(documentType));

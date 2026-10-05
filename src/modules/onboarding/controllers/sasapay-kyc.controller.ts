@@ -28,7 +28,7 @@ export class SasaPayKycController {
   async getCurrentSubmission(@CurrentUser() user: AuthenticatedUser) {
     return {
       success: true,
-      data: await this.sasaPayKyc.getCurrentStatus(user.id),
+      data: await this.sasaPayKyc.getAllKycStatus(user.id),
     };
   }
 
