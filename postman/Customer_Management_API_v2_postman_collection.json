@@ -7265,12 +7265,7 @@
                   "script": {
                     "type": "text/javascript",
                     "exec": [
-                      "pm.test(\"Status code is 200\", () => pm.expect(pm.response.code).to.eql(200));",
-                      "const res = pm.response.json();",
-                      "if (res.data && res.data.submissionId) {",
-                      "  pm.collectionVariables.set(\"submissionId\", res.data.submissionId);",
-                      "  pm.environment.set(\"submissionId\", res.data.submissionId);",
-                      "}"
+                      "pm.test(\"Status code is 200\", () => pm.expect(pm.response.code).to.eql(200));"
                     ]
                   }
                 }
@@ -7347,7 +7342,7 @@
                   ]
                 },
                 "url": {
-                  "raw": "{{baseUrl}}/api/v2/wallets/kyc/submissions/{{submissionId}}/images",
+                  "raw": "{{baseUrl}}/api/v2/wallets/kyc/submissions/images",
                   "host": [
                     "{{baseUrl}}"
                   ],
@@ -7357,51 +7352,10 @@
                     "wallets",
                     "kyc",
                     "submissions",
-                    "{{submissionId}}",
                     "images"
                   ]
                 },
-                "description": "Multipart upload for KYC documents (document_front, document_back, selfie) attached to the active submission."
-              }
-            },
-            {
-              "name": "Submit completed KYC for review",
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "pm.test(\"Status code is 200 or 201\", () => pm.expect([200, 201]).to.include(pm.response.code));"
-                    ]
-                  }
-                }
-              ],
-              "request": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Authorization",
-                    "value": "Bearer {{appAccessToken}}",
-                    "description": "Customer App Access JWT"
-                  }
-                ],
-                "url": {
-                  "raw": "{{baseUrl}}/api/v2/wallets/kyc/submissions/{{submissionId}}/submit",
-                  "host": [
-                    "{{baseUrl}}"
-                  ],
-                  "path": [
-                    "api",
-                    "v2",
-                    "wallets",
-                    "kyc",
-                    "submissions",
-                    "{{submissionId}}",
-                    "submit"
-                  ]
-                },
-                "description": "Transitions the submission to 'submitted_for_review' and publishes the handoff event to the admin review queue."
+                "description": "Multipart upload for KYC documents (document_front, document_back, selfie). The backend resolves the active submission for the authenticated customer. When the last required document is uploaded, the submission is automatically transitioned to 'submitted_for_review' — no separate submit call is needed."
               }
             }
           ]

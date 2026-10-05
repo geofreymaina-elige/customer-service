@@ -346,7 +346,7 @@ export class SasaPayKycService {
     });
   }
 
-  async uploadImages(customerId: number, submissionId: string, files: UploadedKycFile[]) {
+  async uploadImages(customerId: number, files: UploadedKycFile[]) {
     this.ensureEnabled();
     if (!files.length) throw new BadRequestException('At least one required image must be provided.');
 
@@ -356,13 +356,13 @@ export class SasaPayKycService {
        FROM sasapay_kyc_submissions s
        JOIN customer_applications ca ON ca.id = s.customer_application_id
        JOIN sasapay_kyc_document_policies p ON p.id = s.policy_id
-       WHERE s.id = $1 AND ca.customer_id = $2`,
-      [submissionId, customerId],
+       WHERE ca.customer_id = $1
+         AND s.status = 'awaiting_documents'
+       ORDER BY s.created_at DESC
+       LIMIT 1`,
+      [customerId],
     );
-    if (!submission) throw new NotFoundException('KYC submission was not found.');
-    if (submission.status !== 'awaiting_documents') {
-      throw new ConflictException('Images can only be uploaded while documents are requested.');
-    }
+    if (!submission) throw new NotFoundException('No active KYC submission awaiting documents was found.');
 
     const requiredDocuments = this.withRequiredSelfie(submission.required_documents);
     const acceptedMimeTypes = new Set<string>(submission.accepted_mime_types);
@@ -388,7 +388,7 @@ export class SasaPayKycService {
     const existing = await this.db.query(
       `SELECT document_type FROM sasapay_kyc_submission_images
        WHERE submission_id = $1 AND document_type = ANY($2::text[])`,
-      [submissionId, files.map((file) => file.fieldname)],
+      [submission.id, files.map((file) => file.fieldname)],
     );
     if (existing.rowCount) {
       throw new ConflictException('An image of this type is already stored for this submission.');
@@ -423,7 +423,7 @@ export class SasaPayKycService {
                mime_type, file_size_bytes, original_filename
              ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
             [
-              submissionId,
+              submission.id,
               submission.customer_application_id,
               saved.file.fieldname,
               saved.relativePath,
@@ -439,11 +439,17 @@ export class SasaPayKycService {
       throw error;
     }
 
+    // Auto-submit when all required documents have been uploaded
     const status = await this.getCurrentStatus(customerId);
+    if (status && status.requiredDocuments.length === 0) {
+      await this.submitForReview(customerId, status.submissionId);
+      return { uploadedDocuments: files.map((file) => file.fieldname), submission: await this.getCurrentStatus(customerId) };
+    }
+
     return { uploadedDocuments: files.map((file) => file.fieldname), submission: status };
   }
 
-  async submitForReview(customerId: number, submissionId: string) {
+  private async submitForReview(customerId: number, submissionId: string) {
     this.ensureEnabled();
     const submission = await this.db.queryOne(
       `SELECT s.id, s.required_documents, s.status, s.policy_version

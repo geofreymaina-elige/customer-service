@@ -2,7 +2,6 @@ import {
   Controller,
   Get,
   Post,
-  Param,
   UploadedFiles,
   UseGuards,
   UseInterceptors,
@@ -33,7 +32,7 @@ export class SasaPayKycController {
     };
   }
 
-  @Post('submissions/:submissionId/images')
+  @Post('submissions/images')
   @UseInterceptors(AnyFilesInterceptor({
     limits: {
       files: 3,
@@ -42,23 +41,11 @@ export class SasaPayKycController {
   }))
   async uploadImages(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('submissionId') submissionId: string,
     @UploadedFiles() files: UploadedKycFile[],
   ) {
     return {
       success: true,
-      data: await this.sasaPayKyc.uploadImages(user.id, submissionId, files || []),
-    };
-  }
-
-  @Post('submissions/:submissionId/submit')
-  async submitForReview(
-    @CurrentUser() user: AuthenticatedUser,
-    @Param('submissionId') submissionId: string,
-  ) {
-    return {
-      success: true,
-      data: await this.sasaPayKyc.submitForReview(user.id, submissionId),
+      data: await this.sasaPayKyc.uploadImages(user.id, files || []),
     };
   }
 }

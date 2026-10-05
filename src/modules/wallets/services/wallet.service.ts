@@ -139,13 +139,7 @@ export class WalletService {
       nextAction = {
         type: 'upload_required_documents',
         method: 'POST',
-        endpoint: `/api/v2/wallets/kyc/submissions/${kycSubmission.submissionId}/images`,
-      };
-    } else if (kycSubmission?.status === 'awaiting_documents') {
-      nextAction = {
-        type: 'submit_kyc_for_review',
-        method: 'POST',
-        endpoint: `/api/v2/wallets/kyc/submissions/${kycSubmission.submissionId}/submit`,
+        endpoint: `/api/v2/wallets/kyc/submissions/images`,
       };
     } else if (kycSubmission?.status === 'psp_upload_failed') {
       nextAction = { type: 'contact_support' };
