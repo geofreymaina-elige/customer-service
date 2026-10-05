@@ -29,6 +29,7 @@ export default () => ({
     database: process.env.ASTPP_DATABASE,
     user: process.env.ASTPP_USER,
     password: process.env.ASTPP_PASSWORD,
+    baseUrl: process.env.ASTPP_BASE_URL || 'https://msa-portal.elige-africa.com',
     tokenKeyHex: process.env.ASTPP_TOKEN_KEY_HEX,
     ivHex: process.env.ASTPP_IV_HEX,
     ssh: {

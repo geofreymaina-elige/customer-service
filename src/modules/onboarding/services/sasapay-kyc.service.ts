@@ -32,7 +32,10 @@ export class SasaPayKycService {
     private readonly db: DatabaseService,
     private readonly config: ConfigService,
     private readonly sasaPayLogger: SasaPayLogger,
-  ) {}
+  ) {
+    this.imageRoot = path.resolve(process.cwd(), 'uploads', 'images');
+    this.maxUploadBytes = 20 * 1024 * 1024;
+  }
 
   async getAllDocumentRequirements() {
     const policies = await this.db.query(
@@ -208,12 +211,43 @@ export class SasaPayKycService {
       }
     }
 
-    // Determine image source
+    // Determine image source and build URLs
     let imagesSource;
+    let imageUrls = null;
+    const astppBaseUrl = this.config.get<string>('astpp.baseUrl') || 'https://msa-portal.elige-africa.com';
+    const publicUrl = this.config.get<string>('publicUrl') || 'https://api.ambiapay.com';
+    
     if (application.kyc_source === 'sasapay_kyc' && sasapaySubmission) {
       imagesSource = 'local_filesystem'; // SasaPay images stored locally
+      // Get image URLs from local filesystem
+      if (sasapaySubmission.uploadedDocuments && sasapaySubmission.uploadedDocuments.length > 0) {
+        const images = await this.db.query(
+          `SELECT document_type, relative_path FROM sasapay_kyc_submission_images 
+           WHERE submission_id = $1`,
+          [sasapaySubmission.submissionId],
+        );
+        imageUrls = {};
+        images.rows.forEach(img => {
+          const fileName = img.relative_path.split('/').pop(); // Extract filename
+          // Build full URL: https://api.ambiapay.com/uploads/images/{applicationId}/{filename}
+          const fullUrl = `${publicUrl}/uploads/images/${application.id}/${fileName}`;
+          if (img.document_type === 'document_front') imageUrls.docFront = fullUrl;
+          if (img.document_type === 'document_back') imageUrls.docBack = fullUrl;
+          if (img.document_type === 'selfie') imageUrls.passportPhoto = fullUrl;
+        });
+      }
     } else if (application.kyc_source === 'wallet_kyc' || application.kyc_source === 'primary_kyc') {
       imagesSource = 'astpp_external'; // Wallet/Primary KYC images from ASTPP
+      // Build ASTPP URLs: https://msa-portal.elige-africa.com/application_images/{astppId}/{filename}
+      const astppId = application.astpp_id;
+      imageUrls = {
+        docFront: application.doc_front_url ? 
+          `${astppBaseUrl}/application_images/${astppId}/${application.doc_front_url}` : null,
+        docBack: application.doc_back_url ? 
+          `${astppBaseUrl}/application_images/${astppId}/${application.doc_back_url}` : null,
+        passportPhoto: application.passport_photo_url ? 
+          `${astppBaseUrl}/application_images/${astppId}/${application.passport_photo_url}` : null,
+      };
     } else {
       imagesSource = null;
     }
@@ -226,19 +260,13 @@ export class SasaPayKycService {
       name: application.name,
       identityDocumentNumber: application.identity_document_number,
       submittedAt: application.submitted_at,
-      imagesSource, // 'local_filesystem' for sasapay, 'astpp_external' for wallet/primary
+      imagesSource, // 'local_filesystem' or 'astpp_external'
       
       // Only included if using sasapay_kyc AND has submission
       sasapaySubmission,
       
-      // Image URLs (only available for wallet_kyc and primary_kyc)
-      ...(imagesSource === 'astpp_external' && {
-        externalImageUrls: {
-          docFront: application.doc_front_url,
-          docBack: application.doc_back_url,
-          passportPhoto: application.passport_photo_url,
-        },
-      }),
+      // Image URLs (full URLs ready to display)
+      imageUrls,
     };
 
     console.log('[SASAPAY-KYC] Final status:', {

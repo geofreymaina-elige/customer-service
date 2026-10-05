@@ -95,16 +95,13 @@ export class AdminSasaPayKycService {
     );
 
     const publicUrl = this.getPublicUrl();
-    const apiKey = this.getAdminApiKey();
 
     const formattedDocuments = submissionImages.rows.map((img) => {
-      // Secure authenticated download endpoint
-      const secureFileUrl = `${publicUrl}/api/v2/admin/sasapay-kyc/files/${img.id}?apiKey=${encodeURIComponent(apiKey)}`;
-      // Normalized relative path URL
+      // Direct static file URL (e.g., https://api.ambiapay.com/uploads/images/4652/abc123.jpg)
       const normalizedPath = img.relative_path.startsWith('/')
         ? img.relative_path
         : `/${img.relative_path}`;
-      const staticFileUrl = `${publicUrl}${normalizedPath}`;
+      const imageUrl = `${publicUrl}${normalizedPath}`;
 
       return {
         id: img.id,
@@ -113,8 +110,7 @@ export class AdminSasaPayKycService {
         mimeType: img.mime_type,
         fileSizeBytes: img.file_size_bytes,
         uploadedAt: img.uploaded_at,
-        url: secureFileUrl,
-        staticUrl: staticFileUrl,
+        url: imageUrl,
       };
     });
 
@@ -422,6 +418,13 @@ export class AdminSasaPayKycService {
         : null,
       submissionHistory: [],
     };
+  }
+
+  /**
+   * Alias for getCustomerKycByAstppId - used by admin controller
+   */
+  async getSubmissionDetailsByAstppId(astppId: string) {
+    return this.getCustomerKycByAstppId(parseInt(astppId, 10));
   }
 
   /**
