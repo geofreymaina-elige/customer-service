@@ -107,9 +107,36 @@ export class SasaPayKycService {
   async getAllKycStatus(customerId: number) {
     console.log('[SASAPAY-KYC] getAllKycStatus called for customer:', customerId);
 
-    // Get the customer application
+    // Get the customer application with prioritized KYC data (sasapay > wallet > primary)
     const application = await this.db.queryOne(
-      `SELECT id, kyc_status FROM customer_applications WHERE customer_id = $1`,
+      `SELECT ca.id, ca.customer_id, ca.astpp_id, ca.kyc_status,
+              -- Determine which KYC source is being used (priority: sasapay > wallet > primary)
+              CASE 
+                WHEN sasapay.id IS NOT NULL THEN 'sasapay_kyc'
+                WHEN wallet.id IS NOT NULL THEN 'wallet_kyc'
+                WHEN primary_kyc.id IS NOT NULL THEN 'primary_kyc'
+                ELSE NULL
+              END AS kyc_source,
+              -- Get data from highest priority source available
+              COALESCE(sasapay.identity_document_type, wallet.identity_document_type, primary_kyc.identity_document_type) AS identity_document_type,
+              COALESCE(sasapay.name, wallet.name, primary_kyc.name) AS name,
+              COALESCE(sasapay.identity_document_number, wallet.identity_document_number, primary_kyc.identity_document_number) AS identity_document_number,
+              COALESCE(sasapay.created_at, wallet.created_at, primary_kyc.created_at) AS submitted_at,
+              -- Image URLs (only for wallet_kyc and primary_kyc - sasapay uses local filesystem)
+              COALESCE(sasapay.doc_front_url, wallet.doc_front_url, primary_kyc.doc_front_url) AS doc_front_url,
+              COALESCE(sasapay.doc_back_url, wallet.doc_back_url, primary_kyc.doc_back_url) AS doc_back_url,
+              COALESCE(sasapay.passport_photo_url, wallet.passport_photo_url, primary_kyc.passport_photo_url) AS passport_photo_url,
+              -- Check if sasapay has submission with local images
+              CASE WHEN sasapay.id IS NOT NULL THEN TRUE ELSE FALSE END AS has_sasapay_kyc
+       FROM customer_applications ca
+       LEFT JOIN customer_applicant_details sasapay
+         ON sasapay.customer_application_id = ca.id AND sasapay.application_type = 'sasapay_kyc'
+       LEFT JOIN customer_applicant_details wallet
+         ON wallet.customer_application_id = ca.id AND wallet.application_type = 'wallet_kyc'
+       LEFT JOIN customer_applicant_details primary_kyc
+         ON primary_kyc.customer_application_id = ca.id AND primary_kyc.application_type = 'primary_kyc'
+       WHERE ca.customer_id = $1
+       LIMIT 1`,
       [customerId],
     );
     
@@ -117,110 +144,108 @@ export class SasaPayKycService {
       console.log('[SASAPAY-KYC] No customer application found for customer:', customerId);
       return {
         hasApplication: false,
+        kycSource: null,
         overallKycStatus: null,
-        primaryKyc: null,
-        walletKyc: null,
-        sasapayKyc: null,
+        documentType: null,
+        name: null,
+        submittedAt: null,
+        imagesSource: null,
+        sasapaySubmission: null,
       };
     }
 
     console.log('[SASAPAY-KYC] Application found:', { 
-      applicationId: application.id, 
+      applicationId: application.id,
+      kycSource: application.kyc_source,
       kycStatus: application.kyc_status,
+      hasSasapayKyc: application.has_sasapay_kyc,
       customerId 
     });
 
-    // Get all applicant details (primary_kyc, wallet_kyc, sasapay_kyc)
-    const applicantDetails = await this.db.query(
-      `SELECT application_type, identity_document_type, name, created_at
-       FROM customer_applicant_details
-       WHERE customer_application_id = $1
-       ORDER BY created_at DESC`,
-      [application.id],
-    );
-
-    console.log('[SASAPAY-KYC] Applicant details found:', 
-      applicantDetails.rows.map(d => ({ type: d.application_type, docType: d.identity_document_type }))
-    );
-
-    // Get SasaPay KYC submission status
-    const sasapaySubmission = await this.db.queryOne(
-      `SELECT id, status, required_documents, system_reason, psp_reason,
-              customer_submitted_at, psp_result_at, created_at
-       FROM sasapay_kyc_submissions
-       WHERE customer_application_id = $1
-       ORDER BY created_at DESC
-       LIMIT 1`,
-      [application.id],
-    );
-
-    // Get uploaded documents for SasaPay submission if it exists
-    let sasapayUploadedDocs = [];
-    if (sasapaySubmission) {
-      const uploaded = await this.db.query(
-        `SELECT document_type FROM sasapay_kyc_submission_images WHERE submission_id = $1`,
-        [sasapaySubmission.id],
+    // If using sasapay_kyc, check for submission and local images
+    let sasapaySubmission = null;
+    if (application.has_sasapay_kyc) {
+      const submission = await this.db.queryOne(
+        `SELECT id, status, required_documents, system_reason, psp_reason,
+                customer_submitted_at, psp_result_at, created_at
+         FROM sasapay_kyc_submissions
+         WHERE customer_application_id = $1
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [application.id],
       );
-      sasapayUploadedDocs = uploaded.rows.map(row => row.document_type);
+
+      if (submission) {
+        // Get uploaded documents from local filesystem
+        const uploaded = await this.db.query(
+          `SELECT document_type, relative_path FROM sasapay_kyc_submission_images WHERE submission_id = $1`,
+          [submission.id],
+        );
+        const uploadedDocs = uploaded.rows.map(row => row.document_type);
+        const remainingDocs = this.withRequiredSelfie(submission.required_documents)
+          .filter(doc => !uploadedDocs.includes(doc));
+
+        sasapaySubmission = {
+          submissionId: submission.id,
+          status: submission.status,
+          requiredDocuments: this.withRequiredSelfie(submission.required_documents),
+          uploadedDocuments: uploadedDocs,
+          remainingDocuments: remainingDocs,
+          reason: submission.psp_reason || submission.system_reason || null,
+          customerSubmittedAt: submission.customer_submitted_at,
+          pspResultAt: submission.psp_result_at,
+          createdAt: submission.created_at,
+        };
+
+        console.log('[SASAPAY-KYC] SasaPay submission found:', {
+          submissionId: submission.id,
+          status: submission.status,
+          uploaded: uploadedDocs.length,
+          remaining: remainingDocs.length,
+        });
+      } else {
+        console.log('[SASAPAY-KYC] SasaPay KYC details exist but no submission workflow started');
+      }
     }
 
-    // Build response
-    const primaryKycDetail = applicantDetails.rows.find(d => d.application_type === 'primary_kyc');
-    const walletKycDetail = applicantDetails.rows.find(d => d.application_type === 'wallet_kyc');
-    const sasapayKycDetail = applicantDetails.rows.find(d => d.application_type === 'sasapay_kyc');
+    // Determine image source
+    let imagesSource;
+    if (application.kyc_source === 'sasapay_kyc' && sasapaySubmission) {
+      imagesSource = 'local_filesystem'; // SasaPay images stored locally
+    } else if (application.kyc_source === 'wallet_kyc' || application.kyc_source === 'primary_kyc') {
+      imagesSource = 'astpp_external'; // Wallet/Primary KYC images from ASTPP
+    } else {
+      imagesSource = null;
+    }
 
     const result = {
       hasApplication: true,
+      kycSource: application.kyc_source, // 'sasapay_kyc', 'wallet_kyc', or 'primary_kyc'
       overallKycStatus: application.kyc_status,
+      documentType: application.identity_document_type,
+      name: application.name,
+      identityDocumentNumber: application.identity_document_number,
+      submittedAt: application.submitted_at,
+      imagesSource, // 'local_filesystem' for sasapay, 'astpp_external' for wallet/primary
       
-      primaryKyc: primaryKycDetail ? {
-        exists: true,
-        documentType: primaryKycDetail.identity_document_type,
-        name: primaryKycDetail.name,
-        submittedAt: primaryKycDetail.created_at,
-      } : {
-        exists: false,
-      },
+      // Only included if using sasapay_kyc AND has submission
+      sasapaySubmission,
       
-      walletKyc: walletKycDetail ? {
-        exists: true,
-        documentType: walletKycDetail.identity_document_type,
-        name: walletKycDetail.name,
-        submittedAt: walletKycDetail.created_at,
-      } : {
-        exists: false,
-      },
-      
-      sasapayKyc: sasapaySubmission ? {
-        exists: true,
-        submissionId: sasapaySubmission.id,
-        status: sasapaySubmission.status,
-        requiredDocuments: this.withRequiredSelfie(sasapaySubmission.required_documents),
-        uploadedDocuments: sasapayUploadedDocs,
-        remainingDocuments: this.withRequiredSelfie(sasapaySubmission.required_documents)
-          .filter(doc => !sasapayUploadedDocs.includes(doc)),
-        reason: sasapaySubmission.psp_reason || sasapaySubmission.system_reason || null,
-        submittedAt: sasapaySubmission.customer_submitted_at,
-        resultAt: sasapaySubmission.psp_result_at,
-        createdAt: sasapaySubmission.created_at,
-      } : (sasapayKycDetail ? {
-        exists: true,
-        documentType: sasapayKycDetail.identity_document_type,
-        name: sasapayKycDetail.name,
-        submittedAt: sasapayKycDetail.created_at,
-        hasSubmission: false,
-        message: 'SasaPay KYC details exist but no submission workflow started',
-      } : {
-        exists: false,
-        message: 'SasaPay KYC not initiated',
+      // Image URLs (only available for wallet_kyc and primary_kyc)
+      ...(imagesSource === 'astpp_external' && {
+        externalImageUrls: {
+          docFront: application.doc_front_url,
+          docBack: application.doc_back_url,
+          passportPhoto: application.passport_photo_url,
+        },
       }),
     };
 
     console.log('[SASAPAY-KYC] Final status:', {
+      kycSource: result.kycSource,
+      imagesSource: result.imagesSource,
       overallStatus: result.overallKycStatus,
-      primaryExists: result.primaryKyc.exists,
-      walletExists: result.walletKyc.exists,
-      sasapayExists: result.sasapayKyc.exists,
+      hasSasapaySubmission: !!sasapaySubmission,
     });
 
     return result;
