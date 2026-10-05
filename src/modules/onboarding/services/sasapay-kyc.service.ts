@@ -58,7 +58,7 @@ export class SasaPayKycService {
     const policy = await this.db.queryOne(
       `SELECT document_type, version, required_documents, accepted_mime_types, max_file_size_bytes
        FROM sasapay_kyc_document_policies
-       WHERE document_type = $1 AND is_active = TRUE`,
+       WHERE LOWER(document_type) = LOWER($1) AND is_active = TRUE`,
       [source.identity_document_type],
     );
     
@@ -138,7 +138,7 @@ export class SasaPayKycService {
     const policy = await this.db.queryOne(
       `SELECT id, version, required_documents
        FROM sasapay_kyc_document_policies
-       WHERE document_type = $1 AND is_active = TRUE`,
+       WHERE LOWER(document_type) = LOWER($1) AND is_active = TRUE`,
       [application.identity_document_type],
     );
     if (!policy) return null;
