@@ -98,15 +98,15 @@ Complete API documentation for mobile app developers to implement customer onboa
 ## 🚀 Getting Started
 
 ### Authentication Flow
-1. **Check Onboarding Status** → \`GET /api/v2/wallets/onboarding-status\`
+1. **Check Onboarding Status** → \`GET /api/v2/customers/onboarding-status\`
 2. **Register Device** → \`POST /api/v2/auth/sessions\` (starts wallet creation)
 3. **Verify OTP** → \`POST /api/v2/auth/wallet-verifications\`
 4. **Set PIN** → \`POST /api/v2/customers/me/pin\`
 
 ### KYC Upload Flow (if required)
-1. **Check KYC Status** → \`GET /api/v2/wallets/kyc/submissions/status\`
-2. **Get Requirements** → \`GET /api/v2/wallets/kyc/requirements/me\`
-3. **Upload Documents** → \`POST /api/v2/wallets/kyc/submissions/images\`
+1. **Check KYC Status** → \`GET /api/v2/customers/kyc/submissions/status\`
+2. **Get Requirements** → \`GET /api/v2/customers/kyc/requirements\`
+3. **Upload Documents** → \`POST /api/v2/customers/kyc/submissions/images\`
 4. **Check Status Again** → Auto-submitted when all docs uploaded
 
 ## 📋 KYC Document Types

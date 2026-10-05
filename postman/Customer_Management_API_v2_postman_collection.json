@@ -40,14 +40,14 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{baseUrl}}/api/v2/wallets/onboarding-status?astppId={{astppId}}",
+                  "raw": "{{baseUrl}}/api/v2/customers/onboarding-status?astppId={{astppId}}",
                   "host": [
                     "{{baseUrl}}"
                   ],
                   "path": [
                     "api",
                     "v2",
-                    "wallets",
+                    "customers",
                     "onboarding-status"
                   ],
                   "query": [
@@ -66,14 +66,14 @@
                     "method": "GET",
                     "header": [],
                     "url": {
-                      "raw": "{{baseUrl}}/api/v2/wallets/onboarding-status?astppId={{astppId}}",
+                      "raw": "{{baseUrl}}/api/v2/customers/onboarding-status?astppId={{astppId}}",
                       "host": [
                         "{{baseUrl}}"
                       ],
                       "path": [
                         "api",
                         "v2",
-                        "wallets",
+                        "customers",
                         "onboarding-status"
                       ],
                       "query": [
@@ -103,14 +103,14 @@
                     "method": "GET",
                     "header": [],
                     "url": {
-                      "raw": "{{baseUrl}}/api/v2/wallets/onboarding-status?astppId={{astppId}}",
+                      "raw": "{{baseUrl}}/api/v2/customers/onboarding-status?astppId={{astppId}}",
                       "host": [
                         "{{baseUrl}}"
                       ],
                       "path": [
                         "api",
                         "v2",
-                        "wallets",
+                        "customers",
                         "onboarding-status"
                       ],
                       "query": [
@@ -140,14 +140,14 @@
                     "method": "GET",
                     "header": [],
                     "url": {
-                      "raw": "{{baseUrl}}/api/v2/wallets/onboarding-status?astppId={{astppId}}",
+                      "raw": "{{baseUrl}}/api/v2/customers/onboarding-status?astppId={{astppId}}",
                       "host": [
                         "{{baseUrl}}"
                       ],
                       "path": [
                         "api",
                         "v2",
-                        "wallets",
+                        "customers",
                         "onboarding-status"
                       ],
                       "query": [
@@ -177,14 +177,14 @@
                     "method": "GET",
                     "header": [],
                     "url": {
-                      "raw": "{{baseUrl}}/api/v2/wallets/onboarding-status?astppId={{astppId}}",
+                      "raw": "{{baseUrl}}/api/v2/customers/onboarding-status?astppId={{astppId}}",
                       "host": [
                         "{{baseUrl}}"
                       ],
                       "path": [
                         "api",
                         "v2",
-                        "wallets",
+                        "customers",
                         "onboarding-status"
                       ],
                       "query": [
@@ -214,14 +214,14 @@
                     "method": "GET",
                     "header": [],
                     "url": {
-                      "raw": "{{baseUrl}}/api/v2/wallets/onboarding-status?astppId={{astppId}}",
+                      "raw": "{{baseUrl}}/api/v2/customers/onboarding-status?astppId={{astppId}}",
                       "host": [
                         "{{baseUrl}}"
                       ],
                       "path": [
                         "api",
                         "v2",
-                        "wallets",
+                        "customers",
                         "onboarding-status"
                       ],
                       "query": [
@@ -264,14 +264,14 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{baseUrl}}/api/v2/wallets/me",
+                  "raw": "{{baseUrl}}/api/v2/customers/me",
                   "host": [
                     "{{baseUrl}}"
                   ],
                   "path": [
                     "api",
                     "v2",
-                    "wallets",
+                    "customers",
                     "me"
                   ]
                 },
@@ -294,14 +294,14 @@
                     "method": "GET",
                     "header": [],
                     "url": {
-                      "raw": "{{baseUrl}}/api/v2/wallets/me",
+                      "raw": "{{baseUrl}}/api/v2/customers/me",
                       "host": [
                         "{{baseUrl}}"
                       ],
                       "path": [
                         "api",
                         "v2",
-                        "wallets",
+                        "customers",
                         "me"
                       ]
                     },
@@ -325,14 +325,14 @@
                     "method": "GET",
                     "header": [],
                     "url": {
-                      "raw": "{{baseUrl}}/api/v2/wallets/me",
+                      "raw": "{{baseUrl}}/api/v2/customers/me",
                       "host": [
                         "{{baseUrl}}"
                       ],
                       "path": [
                         "api",
                         "v2",
-                        "wallets",
+                        "customers",
                         "me"
                       ]
                     },
@@ -356,14 +356,14 @@
                     "method": "GET",
                     "header": [],
                     "url": {
-                      "raw": "{{baseUrl}}/api/v2/wallets/me",
+                      "raw": "{{baseUrl}}/api/v2/customers/me",
                       "host": [
                         "{{baseUrl}}"
                       ],
                       "path": [
                         "api",
                         "v2",
-                        "wallets",
+                        "customers",
                         "me"
                       ]
                     },
@@ -387,14 +387,14 @@
                     "method": "GET",
                     "header": [],
                     "url": {
-                      "raw": "{{baseUrl}}/api/v2/wallets/me",
+                      "raw": "{{baseUrl}}/api/v2/customers/me",
                       "host": [
                         "{{baseUrl}}"
                       ],
                       "path": [
                         "api",
                         "v2",
-                        "wallets",
+                        "customers",
                         "me"
                       ]
                     },
@@ -418,14 +418,14 @@
                     "method": "GET",
                     "header": [],
                     "url": {
-                      "raw": "{{baseUrl}}/api/v2/wallets/me",
+                      "raw": "{{baseUrl}}/api/v2/customers/me",
                       "host": [
                         "{{baseUrl}}"
                       ],
                       "path": [
                         "api",
                         "v2",
-                        "wallets",
+                        "customers",
                         "me"
                       ]
                     },
@@ -449,14 +449,14 @@
                     "method": "GET",
                     "header": [],
                     "url": {
-                      "raw": "{{baseUrl}}/api/v2/wallets/me",
+                      "raw": "{{baseUrl}}/api/v2/customers/me",
                       "host": [
                         "{{baseUrl}}"
                       ],
                       "path": [
                         "api",
                         "v2",
-                        "wallets",
+                        "customers",
                         "me"
                       ]
                     },
@@ -480,14 +480,14 @@
                     "method": "GET",
                     "header": [],
                     "url": {
-                      "raw": "{{baseUrl}}/api/v2/wallets/me",
+                      "raw": "{{baseUrl}}/api/v2/customers/me",
                       "host": [
                         "{{baseUrl}}"
                       ],
                       "path": [
                         "api",
                         "v2",
-                        "wallets",
+                        "customers",
                         "me"
                       ]
                     },
@@ -524,14 +524,14 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{baseUrl}}/api/v2/wallets/me/balance",
+                  "raw": "{{baseUrl}}/api/v2/customers/me/balance",
                   "host": [
                     "{{baseUrl}}"
                   ],
                   "path": [
                     "api",
                     "v2",
-                    "wallets",
+                    "customers",
                     "me",
                     "balance"
                   ]
@@ -555,14 +555,14 @@
                     "method": "GET",
                     "header": [],
                     "url": {
-                      "raw": "{{baseUrl}}/api/v2/wallets/me/balance",
+                      "raw": "{{baseUrl}}/api/v2/customers/me/balance",
                       "host": [
                         "{{baseUrl}}"
                       ],
                       "path": [
                         "api",
                         "v2",
-                        "wallets",
+                        "customers",
                         "me",
                         "balance"
                       ]
@@ -587,14 +587,14 @@
                     "method": "GET",
                     "header": [],
                     "url": {
-                      "raw": "{{baseUrl}}/api/v2/wallets/me/balance",
+                      "raw": "{{baseUrl}}/api/v2/customers/me/balance",
                       "host": [
                         "{{baseUrl}}"
                       ],
                       "path": [
                         "api",
                         "v2",
-                        "wallets",
+                        "customers",
                         "me",
                         "balance"
                       ]
@@ -619,14 +619,14 @@
                     "method": "GET",
                     "header": [],
                     "url": {
-                      "raw": "{{baseUrl}}/api/v2/wallets/me/balance",
+                      "raw": "{{baseUrl}}/api/v2/customers/me/balance",
                       "host": [
                         "{{baseUrl}}"
                       ],
                       "path": [
                         "api",
                         "v2",
-                        "wallets",
+                        "customers",
                         "me",
                         "balance"
                       ]
@@ -651,14 +651,14 @@
                     "method": "GET",
                     "header": [],
                     "url": {
-                      "raw": "{{baseUrl}}/api/v2/wallets/me/balance",
+                      "raw": "{{baseUrl}}/api/v2/customers/me/balance",
                       "host": [
                         "{{baseUrl}}"
                       ],
                       "path": [
                         "api",
                         "v2",
-                        "wallets",
+                        "customers",
                         "me",
                         "balance"
                       ]
@@ -683,14 +683,14 @@
                     "method": "GET",
                     "header": [],
                     "url": {
-                      "raw": "{{baseUrl}}/api/v2/wallets/me/balance",
+                      "raw": "{{baseUrl}}/api/v2/customers/me/balance",
                       "host": [
                         "{{baseUrl}}"
                       ],
                       "path": [
                         "api",
                         "v2",
-                        "wallets",
+                        "customers",
                         "me",
                         "balance"
                       ]
@@ -715,14 +715,14 @@
                     "method": "GET",
                     "header": [],
                     "url": {
-                      "raw": "{{baseUrl}}/api/v2/wallets/me/balance",
+                      "raw": "{{baseUrl}}/api/v2/customers/me/balance",
                       "host": [
                         "{{baseUrl}}"
                       ],
                       "path": [
                         "api",
                         "v2",
-                        "wallets",
+                        "customers",
                         "me",
                         "balance"
                       ]
@@ -747,14 +747,14 @@
                     "method": "GET",
                     "header": [],
                     "url": {
-                      "raw": "{{baseUrl}}/api/v2/wallets/me/balance",
+                      "raw": "{{baseUrl}}/api/v2/customers/me/balance",
                       "host": [
                         "{{baseUrl}}"
                       ],
                       "path": [
                         "api",
                         "v2",
-                        "wallets",
+                        "customers",
                         "me",
                         "balance"
                       ]
@@ -779,14 +779,14 @@
                     "method": "GET",
                     "header": [],
                     "url": {
-                      "raw": "{{baseUrl}}/api/v2/wallets/me/balance",
+                      "raw": "{{baseUrl}}/api/v2/customers/me/balance",
                       "host": [
                         "{{baseUrl}}"
                       ],
                       "path": [
                         "api",
                         "v2",
-                        "wallets",
+                        "customers",
                         "me",
                         "balance"
                       ]
@@ -811,14 +811,14 @@
                     "method": "GET",
                     "header": [],
                     "url": {
-                      "raw": "{{baseUrl}}/api/v2/wallets/me/balance",
+                      "raw": "{{baseUrl}}/api/v2/customers/me/balance",
                       "host": [
                         "{{baseUrl}}"
                       ],
                       "path": [
                         "api",
                         "v2",
-                        "wallets",
+                        "customers",
                         "me",
                         "balance"
                       ]
@@ -7242,14 +7242,14 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{baseUrl}}/api/v2/wallets/kyc/requirements",
+                  "raw": "{{baseUrl}}/api/v2/customers/kyc/requirements",
                   "host": [
                     "{{baseUrl}}"
                   ],
                   "path": [
                     "api",
                     "v2",
-                    "wallets",
+                    "customers",
                     "kyc",
                     "requirements"
                   ]
@@ -7280,14 +7280,14 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{baseUrl}}/api/v2/wallets/kyc/submissions/current",
+                  "raw": "{{baseUrl}}/api/v2/customers/kyc/submissions/current",
                   "host": [
                     "{{baseUrl}}"
                   ],
                   "path": [
                     "api",
                     "v2",
-                    "wallets",
+                    "customers",
                     "kyc",
                     "submissions",
                     "current"
@@ -7342,14 +7342,14 @@
                   ]
                 },
                 "url": {
-                  "raw": "{{baseUrl}}/api/v2/wallets/kyc/submissions/images",
+                  "raw": "{{baseUrl}}/api/v2/customers/kyc/submissions/images",
                   "host": [
                     "{{baseUrl}}"
                   ],
                   "path": [
                     "api",
                     "v2",
-                    "wallets",
+                    "customers",
                     "kyc",
                     "submissions",
                     "images"

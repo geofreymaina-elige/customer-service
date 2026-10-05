@@ -6,7 +6,7 @@ import { RequireScopes } from '../../../core/auth/scopes.decorator';
 import { AstppTokenGuard } from '../../../core/auth/astpp-token.guard';
 import { CurrentUser, AuthenticatedUser } from '../../../core/auth/current-user.decorator';
 
-@Controller('api/v2/wallets')
+@Controller('api/v2/customers')
 export class WalletController {
   constructor(
     private readonly walletService: WalletService,

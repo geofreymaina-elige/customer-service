@@ -20,7 +20,7 @@ import { CurrentUser, AuthenticatedUser } from '../../../core/auth/current-user.
 import { SasaPayKycService, UploadedKycFile } from '../services/sasapay-kyc.service';
 
 @ApiTags('KYC')
-@Controller('api/v2/wallets/kyc')
+@Controller('api/v2/customers/kyc')
 @UseGuards(AuthGuard)
 @ApiBearerAuth('JWT')
 export class SasaPayKycController {
@@ -181,10 +181,10 @@ Upload KYC document images for verification.
 - Once all documents are uploaded, the submission is **automatically submitted for review**
 
 **Upload Flow**:
-1. Get requirements from \`GET /api/v2/wallets/kyc/requirements\`
+1. Get requirements from \`GET /api/v2/customers/kyc/requirements\`
 2. Capture/select images from device
 3. Upload images with correct field names
-4. Check status with \`GET /api/v2/wallets/kyc/submissions/status\`
+4. Check status with \`GET /api/v2/customers/kyc/submissions/status\`
 5. System auto-submits when all docs uploaded
 
 **Image Requirements**:
@@ -206,7 +206,7 @@ formData.append('document_front', frontImage, 'id_front.jpg');
 formData.append('document_back', backImage, 'id_back.jpg');
 formData.append('selfie', selfieImage, 'selfie.jpg');
 
-fetch('/api/v2/wallets/kyc/submissions/images', {
+fetch('/api/v2/customers/kyc/submissions/images', {
   method: 'POST',
   headers: {
     'Authorization': 'Bearer YOUR_JWT_TOKEN'
