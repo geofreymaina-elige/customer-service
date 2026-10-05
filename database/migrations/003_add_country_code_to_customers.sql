@@ -1,4 +1,4 @@
-﻿-- ============================================================================
+-- ============================================================================
 -- Migration 003: Ensure country_code column on customers
 -- ============================================================================
 -- country_code stores the ISO 2-letter code (e.g. 'KE', 'US') looked up from
@@ -9,4 +9,3 @@
 
 ALTER TABLE customers
   ADD COLUMN IF NOT EXISTS country_code VARCHAR(10);
-

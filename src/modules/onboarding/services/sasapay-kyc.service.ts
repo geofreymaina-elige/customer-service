@@ -37,8 +37,23 @@ export class SasaPayKycService {
   async getActiveRequirements(customerId: number) {
     const source = await this.getCustomerApplicationAndDocument(customerId);
     if (!source) {
+      console.error('[SASAPAY-KYC] Customer application not found for customer ID:', customerId);
       throw new NotFoundException('Customer application was not found.');
     }
+
+    console.log('[SASAPAY-KYC] Looking up policy for customer:', {
+      customerId,
+      applicationId: source.id,
+      documentType: source.identity_document_type,
+    });
+
+    // Debug: Check all available policies
+    const allPolicies = await this.db.query(
+      `SELECT document_type, version, is_active FROM sasapay_kyc_document_policies ORDER BY document_type`,
+    );
+    console.log('[SASAPAY-KYC] Available policies in database:', 
+      allPolicies.rows.map(p => ({ type: p.document_type, version: p.version, active: p.is_active }))
+    );
 
     const policy = await this.db.queryOne(
       `SELECT document_type, version, required_documents, accepted_mime_types, max_file_size_bytes
@@ -46,9 +61,22 @@ export class SasaPayKycService {
        WHERE document_type = $1 AND is_active = TRUE`,
       [source.identity_document_type],
     );
+    
     if (!policy) {
+      console.error('[SASAPAY-KYC] No policy found for document type:', {
+        requestedType: source.identity_document_type,
+        customerId,
+        applicationId: source.id,
+        availablePolicies: allPolicies.rows.map(p => p.document_type),
+      });
       throw new ConflictException('SasaPay document requirements have not been configured for this document type.');
     }
+
+    console.log('[SASAPAY-KYC] Policy found:', {
+      documentType: policy.document_type,
+      version: policy.version,
+      requiredDocs: policy.required_documents,
+    });
 
     return {
       documentType: policy.document_type,
