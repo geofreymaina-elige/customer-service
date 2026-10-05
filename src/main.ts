@@ -111,22 +111,22 @@ Complete API documentation for mobile app developers to implement customer onboa
 
 ## 📋 KYC Document Types
 
-Supported document types:
+Supported document types
 - **NATIONAL_ID** - Kenya National ID Card
 - **PASSPORT** - International Passport
 - **ALIEN_ID** - Alien Registration Card
 
-Each requires:
+Each requires
 - \`document_front\` - Front of document (required)
 - \`document_back\` - Back of document (required)
 - \`selfie\` - Passport photo/selfie (required)
 
 ## 📸 Image Requirements
 
-- **Formats**: JPEG, PNG, WebP
-- **Max Size**: 20MB per image
-- **Quality**: Clear, readable, well-lit
-- **Content**: Full document visible, no glare
+- **Formats** JPEG, PNG, WebP
+- **Max Size** 20MB per image
+- **Quality** Clear, readable, well-lit
+- **Content** Full document visible, no glare
 
 ## 🔐 Authentication
 
@@ -138,7 +138,7 @@ Some endpoints use \`Authorization: Bearer {token}\` after device registration.
 
 ## 📊 Response Format
 
-All responses follow this structure:
+All responses follow this structure
 
 \`\`\`json
 {
@@ -167,7 +167,7 @@ All responses follow this structure:
       'support@ambiapay.com'
     )
     .addServer('https://api.ambiapay.com', 'Production')
-    .addServer('https://staging-api.ambiapay.com', 'Staging')
+    .addServer('https://dev-api.ambiapay.com', 'Staging')
     .addServer('http://localhost:5006', 'Local Development')
     .addBearerAuth(
       {

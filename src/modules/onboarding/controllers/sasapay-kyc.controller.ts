@@ -32,23 +32,23 @@ export class SasaPayKycController {
     description: `
 Returns all available KYC document types and their requirements.
 
-**Use this to**:
+**Use this to**
 - Show customer which document types they can submit
 - Display requirements for each document type
 - Build document selection UI
 
-**Document Types**:
+**Document Types**
 - \`national_id\` - Kenya National ID Card
 - \`passport\` - International Passport
 - \`alien_id\` - Alien Registration Card
 
-**Each document type requires**:
+**Each document type requires**
 - document_front (front of ID/passport)
 - document_back (back of ID/passport)
 - selfie (passport photo/selfie)
 
-**Accepted Formats**: JPEG, PNG, WebP  
-**Max File Size**: 20MB per image
+**Accepted Formats** JPEG, PNG, WebP  
+**Max File Size** 20MB per image
     `,
   })
   @ApiResponse({
@@ -99,18 +99,18 @@ Returns all available KYC document types and their requirements.
     description: `
 Returns the customer's current KYC status with prioritized data.
 
-**KYC Source Priority** (highest to lowest):
+**KYC Source Priority** (highest to lowest)
 1. \`sasapay_kyc\` - SasaPay KYC submission (if exists)
 2. \`wallet_kyc\` - Wallet KYC from secondary verification
 3. \`primary_kyc\` - Initial onboarding KYC from ASTPP
 
-**Use this to**:
+**Use this to**
 - Check if customer needs to submit KYC
 - Show which documents are still required
 - Display current submission status
 - Show uploaded document previews
 
-**Submission Status Values**:
+**Submission Status Values**
 - \`awaiting_documents\` - Waiting for customer to upload documents
 - \`submitted_for_review\` - All docs uploaded, pending admin review
 - \`approved_for_psp\` - Admin approved, ready to send to SasaPay
@@ -118,7 +118,7 @@ Returns the customer's current KYC status with prioritized data.
 - \`psp_approved\` - SasaPay approved the KYC
 - \`psp_rejected\` - SasaPay rejected the KYC
 
-**Image URLs**: Full URLs ready to display in app
+**Image URLs** Full URLs ready to display in app
     `,
   })
   @ApiResponse({
@@ -174,32 +174,32 @@ Returns the customer's current KYC status with prioritized data.
     description: `
 Upload KYC document images for verification.
 
-**Important**:
+**Important**
 - Use \`multipart/form-data\` encoding
-- Field names MUST match document types: \`document_front\`, \`document_back\`, \`selfie\`
+- Field names MUST match document types \`document_front\`, \`document_back\`, \`selfie\`
 - Upload all required documents for your document type
 - Once all documents are uploaded, the submission is **automatically submitted for review**
 
-**Upload Flow**:
+**Upload Flow**
 1. Get requirements from \`GET /api/v2/customers/kyc/requirements\`
 2. Capture/select images from device
 3. Upload images with correct field names
 4. Check status with \`GET /api/v2/customers/kyc/submissions/status\`
 5. System auto-submits when all docs uploaded
 
-**Image Requirements**:
-- **Formats**: JPEG, PNG, WebP
-- **Max Size**: 20MB per image
-- **Max Files**: 3 files per request
-- **Quality**: Clear, readable, well-lit photos
-- **Content**: Full document visible, no glare or blur
+**Image Requirements**
+- **Formats** JPEG, PNG, WebP
+- **Max Size** 20MB per image
+- **Max Files** 3 files per request
+- **Quality** Clear, readable, well-lit photos
+- **Content** Full document visible, no glare or blur
 
-**Field Names** (use these as form field names):
+**Field Names** (use these as form field names)
 - \`document_front\` - Front of ID/passport
 - \`document_back\` - Back of ID/passport
 - \`selfie\` - Passport photo/selfie
 
-**Example** (using FormData in JavaScript):
+**Example** (using FormData in JavaScript)
 \`\`\`javascript
 const formData = new FormData();
 formData.append('document_front', frontImage, 'id_front.jpg');
