@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "aa62b577-2792-5b86-ba06-f809bce2b787",
     "name": "Customer Management API v2",
-    "description": "Two APIs in one collection.\n\n**Mobile App API**: the only endpoints the mobile app may call.\n**Internal API (not for mobile)**: health probes, staff operations, sync jobs and provider webhooks.\n\nSet `baseUrl`, `internalUrl`, `astppToken` and `astppId`. Each request's Tests tab captures tokens and ids into collection variables, so later requests just work. First-time order: Wallet > Get wallet onboarding status, Authentication > Sign in: New device (registers device, starts wallet creation), Authentication > Confirm wallet verification code, PIN > Set the initial PIN (optional -- balance/transactions need it, everything else doesn't).",
+    "description": "Two APIs in one collection.\n\n**Mobile App API**: the only endpoints the mobile app may call.\n**Internal API (not for mobile)**: health probes, staff operations, sync jobs and provider webhooks.\n\n**IMPORTANT**: All requests require X-API-Key header. Set `apiKey` variable in the collection.\n\nSet `baseUrl`, `internalUrl`, `apiKey`, `astppToken` and `astppId`. Each request's Tests tab captures tokens and ids into collection variables, so later requests just work. First-time order: Wallet > Get wallet onboarding status, Authentication > Sign in: New device (registers device, starts wallet creation), Authentication > Confirm wallet verification code, PIN > Set the initial PIN (optional -- balance/transactions need it, everything else doesn't).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -34,6 +34,12 @@
                 "method": "GET",
                 "header": [
                   {
+                    "key": "X-API-Key",
+                    "value": "{{apiKey}}",
+                    "type": "text",
+                    "description": "API key required for all requests"
+                  },
+                  {
                     "key": "X-Astpp-Token",
                     "value": "{{astppToken}}",
                     "description": "Required ASTPP encrypted token for this account"
@@ -64,7 +70,14 @@
                   "name": "200 Current onboarding status",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v2/customers/onboarding-status?astppId={{astppId}}",
                       "host": [
@@ -101,7 +114,14 @@
                   "name": "401 ASTPP_TOKEN_INVALID",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v2/customers/onboarding-status?astppId={{astppId}}",
                       "host": [
@@ -138,7 +158,14 @@
                   "name": "404 CUSTOMER_NOT_FOUND",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v2/customers/onboarding-status?astppId={{astppId}}",
                       "host": [
@@ -175,7 +202,14 @@
                   "name": "429 RATE_LIMITED",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v2/customers/onboarding-status?astppId={{astppId}}",
                       "host": [
@@ -212,7 +246,14 @@
                   "name": "500 INTERNAL_ERROR",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v2/customers/onboarding-status?astppId={{astppId}}",
                       "host": [
@@ -262,7 +303,14 @@
               ],
               "request": {
                 "method": "GET",
-                "header": [],
+                "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "{{apiKey}}",
+                    "type": "text",
+                    "description": "API key required for all requests"
+                  }
+                ],
                 "url": {
                   "raw": "{{baseUrl}}/api/v2/customers/me",
                   "host": [
@@ -292,7 +340,14 @@
                   "name": "200 The customer's wallet",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v2/customers/me",
                       "host": [
@@ -323,7 +378,14 @@
                   "name": "401 TOKEN_EXPIRED",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v2/customers/me",
                       "host": [
@@ -354,7 +416,14 @@
                   "name": "401 TOKEN_INVALID",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v2/customers/me",
                       "host": [
@@ -385,7 +454,14 @@
                   "name": "401 SESSION_REVOKED",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v2/customers/me",
                       "host": [
@@ -416,7 +492,14 @@
                   "name": "404 WALLET_NOT_FOUND",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v2/customers/me",
                       "host": [
@@ -447,7 +530,14 @@
                   "name": "429 RATE_LIMITED",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v2/customers/me",
                       "host": [
@@ -478,7 +568,14 @@
                   "name": "500 INTERNAL_ERROR",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v2/customers/me",
                       "host": [
@@ -522,7 +619,14 @@
               ],
               "request": {
                 "method": "GET",
-                "header": [],
+                "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "{{apiKey}}",
+                    "type": "text",
+                    "description": "API key required for all requests"
+                  }
+                ],
                 "url": {
                   "raw": "{{baseUrl}}/api/v2/customers/me/balance",
                   "host": [
@@ -553,7 +657,14 @@
                   "name": "200 Current balance",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v2/customers/me/balance",
                       "host": [
@@ -585,7 +696,14 @@
                   "name": "401 TOKEN_EXPIRED",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v2/customers/me/balance",
                       "host": [
@@ -617,7 +735,14 @@
                   "name": "401 TOKEN_INVALID",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v2/customers/me/balance",
                       "host": [
@@ -649,7 +774,14 @@
                   "name": "401 SESSION_REVOKED",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v2/customers/me/balance",
                       "host": [
@@ -681,7 +813,14 @@
                   "name": "403 INSUFFICIENT_SCOPE",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v2/customers/me/balance",
                       "host": [
@@ -713,7 +852,14 @@
                   "name": "404 WALLET_NOT_FOUND",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v2/customers/me/balance",
                       "host": [
@@ -745,7 +891,14 @@
                   "name": "409 WALLET_NOT_ACTIVE",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v2/customers/me/balance",
                       "host": [
@@ -777,7 +930,14 @@
                   "name": "429 RATE_LIMITED",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v2/customers/me/balance",
                       "host": [
@@ -809,7 +969,14 @@
                   "name": "500 INTERNAL_ERROR",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v2/customers/me/balance",
                       "host": [
@@ -873,6 +1040,12 @@
                 "method": "POST",
                 "header": [
                   {
+                    "key": "X-API-Key",
+                    "value": "{{apiKey}}",
+                    "type": "text",
+                    "description": "API key required for all requests"
+                  },
+                  {
                     "key": "Content-Type",
                     "value": "application/json",
                     "type": "text"
@@ -913,6 +1086,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -960,6 +1139,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -1005,6 +1190,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -1052,6 +1243,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -1097,6 +1294,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -1144,6 +1347,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -1189,6 +1398,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -1236,6 +1451,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -1281,6 +1502,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -1328,6 +1555,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -1373,6 +1606,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -1436,6 +1675,12 @@
                 "method": "POST",
                 "header": [
                   {
+                    "key": "X-API-Key",
+                    "value": "{{apiKey}}",
+                    "type": "text",
+                    "description": "API key required for all requests"
+                  },
+                  {
                     "key": "Authorization",
                     "value": "Bearer {{appAccessToken}}",
                     "type": "text",
@@ -1476,6 +1721,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -1529,6 +1780,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -1580,6 +1837,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -1633,6 +1896,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -1684,6 +1953,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -1737,6 +2012,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -1788,6 +2069,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -1841,6 +2128,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -1892,6 +2185,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -1945,6 +2244,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -1997,6 +2302,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -2048,6 +2359,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -2124,6 +2441,12 @@
                 "method": "POST",
                 "header": [
                   {
+                    "key": "X-API-Key",
+                    "value": "{{apiKey}}",
+                    "type": "text",
+                    "description": "API key required for all requests"
+                  },
+                  {
                     "key": "Content-Type",
                     "value": "application/json",
                     "type": "text"
@@ -2164,6 +2487,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -2211,6 +2540,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -2256,6 +2591,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -2303,6 +2644,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -2348,6 +2695,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -2395,6 +2748,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -2440,6 +2799,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -2487,6 +2852,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -2532,6 +2903,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -2579,6 +2956,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -2624,6 +3007,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -2694,6 +3083,12 @@
                 "method": "POST",
                 "header": [
                   {
+                    "key": "X-API-Key",
+                    "value": "{{apiKey}}",
+                    "type": "text",
+                    "description": "API key required for all requests"
+                  },
+                  {
                     "key": "Content-Type",
                     "value": "application/json",
                     "type": "text"
@@ -2734,6 +3129,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -2781,6 +3182,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -2826,6 +3233,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -2873,6 +3286,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -2918,6 +3337,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -2965,6 +3390,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -3010,6 +3441,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -3057,6 +3494,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -3102,6 +3545,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -3149,6 +3598,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -3194,6 +3649,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -3260,6 +3721,12 @@
                 "method": "POST",
                 "header": [
                   {
+                    "key": "X-API-Key",
+                    "value": "{{apiKey}}",
+                    "type": "text",
+                    "description": "API key required for all requests"
+                  },
+                  {
                     "key": "Content-Type",
                     "value": "application/json",
                     "type": "text"
@@ -3300,6 +3767,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -3353,6 +3826,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -3404,6 +3883,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -3457,6 +3942,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -3508,6 +3999,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -3561,6 +4058,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -3612,6 +4115,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -3665,6 +4174,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -3717,6 +4232,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -3768,6 +4289,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -3836,7 +4363,14 @@
               ],
               "request": {
                 "method": "DELETE",
-                "header": [],
+                "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "{{apiKey}}",
+                    "type": "text",
+                    "description": "API key required for all requests"
+                  }
+                ],
                 "url": {
                   "raw": "{{baseUrl}}/api/v2/auth/sessions/current",
                   "host": [
@@ -3867,7 +4401,14 @@
                   "name": "204 No Content",
                   "originalRequest": {
                     "method": "DELETE",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v2/auth/sessions/current",
                       "host": [
@@ -3894,7 +4435,14 @@
                   "name": "401 TOKEN_EXPIRED",
                   "originalRequest": {
                     "method": "DELETE",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v2/auth/sessions/current",
                       "host": [
@@ -3926,7 +4474,14 @@
                   "name": "401 TOKEN_INVALID",
                   "originalRequest": {
                     "method": "DELETE",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v2/auth/sessions/current",
                       "host": [
@@ -3958,7 +4513,14 @@
                   "name": "401 SESSION_REVOKED",
                   "originalRequest": {
                     "method": "DELETE",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v2/auth/sessions/current",
                       "host": [
@@ -3990,7 +4552,14 @@
                   "name": "429 RATE_LIMITED",
                   "originalRequest": {
                     "method": "DELETE",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v2/auth/sessions/current",
                       "host": [
@@ -4022,7 +4591,14 @@
                   "name": "500 INTERNAL_ERROR",
                   "originalRequest": {
                     "method": "DELETE",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v2/auth/sessions/current",
                       "host": [
@@ -4075,6 +4651,12 @@
                 "method": "POST",
                 "header": [
                   {
+                    "key": "X-API-Key",
+                    "value": "{{apiKey}}",
+                    "type": "text",
+                    "description": "API key required for all requests"
+                  },
+                  {
                     "key": "Content-Type",
                     "value": "application/json",
                     "type": "text"
@@ -4121,6 +4703,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -4162,6 +4750,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -4210,6 +4804,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -4256,6 +4856,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -4304,6 +4910,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -4350,6 +4962,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -4398,6 +5016,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -4444,6 +5068,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -4492,6 +5122,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -4538,6 +5174,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -4599,6 +5241,12 @@
                 "method": "PUT",
                 "header": [
                   {
+                    "key": "X-API-Key",
+                    "value": "{{apiKey}}",
+                    "type": "text",
+                    "description": "API key required for all requests"
+                  },
+                  {
                     "key": "Content-Type",
                     "value": "application/json",
                     "type": "text"
@@ -4645,6 +5293,12 @@
                     "method": "PUT",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -4686,6 +5340,12 @@
                   "originalRequest": {
                     "method": "PUT",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -4734,6 +5394,12 @@
                     "method": "PUT",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -4780,6 +5446,12 @@
                   "originalRequest": {
                     "method": "PUT",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -4828,6 +5500,12 @@
                     "method": "PUT",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -4874,6 +5552,12 @@
                   "originalRequest": {
                     "method": "PUT",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -4922,6 +5606,12 @@
                     "method": "PUT",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -4968,6 +5658,12 @@
                   "originalRequest": {
                     "method": "PUT",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -5016,6 +5712,12 @@
                     "method": "PUT",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -5062,6 +5764,12 @@
                   "originalRequest": {
                     "method": "PUT",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -5110,6 +5818,12 @@
                     "method": "PUT",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -5156,6 +5870,12 @@
                   "originalRequest": {
                     "method": "PUT",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -5220,6 +5940,12 @@
                 "method": "POST",
                 "header": [
                   {
+                    "key": "X-API-Key",
+                    "value": "{{apiKey}}",
+                    "type": "text",
+                    "description": "API key required for all requests"
+                  },
+                  {
                     "key": "Content-Type",
                     "value": "application/json",
                     "type": "text"
@@ -5258,6 +5984,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -5304,6 +6036,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -5348,6 +6086,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -5394,6 +6138,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -5439,6 +6189,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -5483,6 +6239,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -5542,6 +6304,12 @@
                 "method": "POST",
                 "header": [
                   {
+                    "key": "X-API-Key",
+                    "value": "{{apiKey}}",
+                    "type": "text",
+                    "description": "API key required for all requests"
+                  },
+                  {
                     "key": "Content-Type",
                     "value": "application/json",
                     "type": "text"
@@ -5587,6 +6355,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -5640,6 +6414,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -5691,6 +6471,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -5744,6 +6530,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -5795,6 +6587,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -5848,6 +6646,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -5899,6 +6703,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -5952,6 +6762,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -6004,6 +6820,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -6055,6 +6877,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -6121,6 +6949,12 @@
                 "method": "PUT",
                 "header": [
                   {
+                    "key": "X-API-Key",
+                    "value": "{{apiKey}}",
+                    "type": "text",
+                    "description": "API key required for all requests"
+                  },
+                  {
                     "key": "Content-Type",
                     "value": "application/json",
                     "type": "text"
@@ -6166,6 +7000,12 @@
                   "originalRequest": {
                     "method": "PUT",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -6213,6 +7053,12 @@
                   "originalRequest": {
                     "method": "PUT",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -6266,6 +7112,12 @@
                     "method": "PUT",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -6317,6 +7169,12 @@
                   "originalRequest": {
                     "method": "PUT",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -6370,6 +7228,12 @@
                     "method": "PUT",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -6421,6 +7285,12 @@
                   "originalRequest": {
                     "method": "PUT",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -6474,6 +7344,12 @@
                     "method": "PUT",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -6525,6 +7401,12 @@
                   "originalRequest": {
                     "method": "PUT",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -6578,6 +7460,12 @@
                     "method": "PUT",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -6629,6 +7517,12 @@
                   "originalRequest": {
                     "method": "PUT",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -6704,7 +7598,14 @@
               ],
               "request": {
                 "method": "GET",
-                "header": [],
+                "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "{{apiKey}}",
+                    "type": "text",
+                    "description": "API key required for all requests"
+                  }
+                ],
                 "url": {
                   "raw": "{{baseUrl}}/api/v2/customers/me/sessions",
                   "host": [
@@ -6735,7 +7636,14 @@
                   "name": "200 Active sessions, newest first",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v2/customers/me/sessions",
                       "host": [
@@ -6767,7 +7675,14 @@
                   "name": "401 TOKEN_EXPIRED",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v2/customers/me/sessions",
                       "host": [
@@ -6799,7 +7714,14 @@
                   "name": "401 TOKEN_INVALID",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v2/customers/me/sessions",
                       "host": [
@@ -6831,7 +7753,14 @@
                   "name": "401 SESSION_REVOKED",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v2/customers/me/sessions",
                       "host": [
@@ -6863,7 +7792,14 @@
                   "name": "429 RATE_LIMITED",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v2/customers/me/sessions",
                       "host": [
@@ -6895,7 +7831,14 @@
                   "name": "500 INTERNAL_ERROR",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v2/customers/me/sessions",
                       "host": [
@@ -6946,7 +7889,14 @@
               ],
               "request": {
                 "method": "GET",
-                "header": [],
+                "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "{{apiKey}}",
+                    "type": "text",
+                    "description": "API key required for all requests"
+                  }
+                ],
                 "url": {
                   "raw": "{{baseUrl}}/api/v1/app-config",
                   "host": [
@@ -6975,7 +7925,14 @@
                   "name": "200 App config",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v1/app-config",
                       "host": [
@@ -7005,7 +7962,14 @@
                   "name": "401 TOKEN_EXPIRED",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v1/app-config",
                       "host": [
@@ -7035,7 +7999,14 @@
                   "name": "401 TOKEN_INVALID",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v1/app-config",
                       "host": [
@@ -7065,7 +8036,14 @@
                   "name": "401 SESSION_REVOKED",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v1/app-config",
                       "host": [
@@ -7095,7 +8073,14 @@
                   "name": "403 INSUFFICIENT_SCOPE",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v1/app-config",
                       "host": [
@@ -7125,7 +8110,14 @@
                   "name": "404 NO_ACTIVE_ASSETS",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v1/app-config",
                       "host": [
@@ -7155,7 +8147,14 @@
                   "name": "429 RATE_LIMITED",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v1/app-config",
                       "host": [
@@ -7185,7 +8184,14 @@
                   "name": "500 INTERNAL_ERROR",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{baseUrl}}/api/v1/app-config",
                       "host": [
@@ -7236,6 +8242,12 @@
                 "method": "GET",
                 "header": [
                   {
+                    "key": "X-API-Key",
+                    "value": "{{apiKey}}",
+                    "type": "text",
+                    "description": "API key required for all requests"
+                  },
+                  {
                     "key": "Authorization",
                     "value": "Bearer {{appAccessToken}}",
                     "description": "Customer App Access JWT"
@@ -7273,6 +8285,12 @@
               "request": {
                 "method": "GET",
                 "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "{{apiKey}}",
+                    "type": "text",
+                    "description": "API key required for all requests"
+                  },
                   {
                     "key": "Authorization",
                     "value": "Bearer {{appAccessToken}}",
@@ -7312,6 +8330,12 @@
               "request": {
                 "method": "POST",
                 "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "{{apiKey}}",
+                    "type": "text",
+                    "description": "API key required for all requests"
+                  },
                   {
                     "key": "Authorization",
                     "value": "Bearer {{appAccessToken}}",
@@ -7385,7 +8409,14 @@
               ],
               "request": {
                 "method": "GET",
-                "header": [],
+                "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "{{apiKey}}",
+                    "type": "text",
+                    "description": "API key required for all requests"
+                  }
+                ],
                 "url": {
                   "raw": "{{internalUrl}}/health",
                   "host": [
@@ -7405,7 +8436,14 @@
                   "name": "200 Healthy",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{internalUrl}}/health",
                       "host": [
@@ -7452,7 +8490,14 @@
               ],
               "request": {
                 "method": "GET",
-                "header": [],
+                "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "{{apiKey}}",
+                    "type": "text",
+                    "description": "API key required for all requests"
+                  }
+                ],
                 "url": {
                   "raw": "{{internalUrl}}/internal/v2/customers?astppId=10001&limit=25",
                   "host": [
@@ -7503,7 +8548,14 @@
                   "name": "200 Matching customers",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{internalUrl}}/internal/v2/customers?astppId=10001&limit=25",
                       "host": [
@@ -7555,7 +8607,14 @@
                   "name": "401 SERVICE_TOKEN_INVALID",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{internalUrl}}/internal/v2/customers?astppId=10001&limit=25",
                       "host": [
@@ -7607,7 +8666,14 @@
                   "name": "403 FORBIDDEN",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{internalUrl}}/internal/v2/customers?astppId=10001&limit=25",
                       "host": [
@@ -7659,7 +8725,14 @@
                   "name": "500 INTERNAL_ERROR",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{internalUrl}}/internal/v2/customers?astppId=10001&limit=25",
                       "host": [
@@ -7724,7 +8797,14 @@
               ],
               "request": {
                 "method": "GET",
-                "header": [],
+                "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "{{apiKey}}",
+                    "type": "text",
+                    "description": "API key required for all requests"
+                  }
+                ],
                 "url": {
                   "raw": "{{internalUrl}}/internal/v2/customers/:customerId",
                   "host": [
@@ -7760,7 +8840,14 @@
                   "name": "200 The customer",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{internalUrl}}/internal/v2/customers/:customerId",
                       "host": [
@@ -7797,7 +8884,14 @@
                   "name": "401 SERVICE_TOKEN_INVALID",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{internalUrl}}/internal/v2/customers/:customerId",
                       "host": [
@@ -7834,7 +8928,14 @@
                   "name": "403 FORBIDDEN",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{internalUrl}}/internal/v2/customers/:customerId",
                       "host": [
@@ -7871,7 +8972,14 @@
                   "name": "404 CUSTOMER_NOT_FOUND",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{internalUrl}}/internal/v2/customers/:customerId",
                       "host": [
@@ -7908,7 +9016,14 @@
                   "name": "500 INTERNAL_ERROR",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{internalUrl}}/internal/v2/customers/:customerId",
                       "host": [
@@ -7959,6 +9074,12 @@
               "request": {
                 "method": "PATCH",
                 "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "{{apiKey}}",
+                    "type": "text",
+                    "description": "API key required for all requests"
+                  },
                   {
                     "key": "Content-Type",
                     "value": "application/json",
@@ -8016,6 +9137,12 @@
                   "originalRequest": {
                     "method": "PATCH",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -8075,6 +9202,12 @@
                     "method": "PATCH",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -8132,6 +9265,12 @@
                   "originalRequest": {
                     "method": "PATCH",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -8191,6 +9330,12 @@
                     "method": "PATCH",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -8248,6 +9393,12 @@
                   "originalRequest": {
                     "method": "PATCH",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -8307,6 +9458,12 @@
                     "method": "PATCH",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -8365,6 +9522,12 @@
                     "method": "PATCH",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -8422,6 +9585,12 @@
                   "originalRequest": {
                     "method": "PATCH",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -8494,6 +9663,12 @@
                 "method": "PUT",
                 "header": [
                   {
+                    "key": "X-API-Key",
+                    "value": "{{apiKey}}",
+                    "type": "text",
+                    "description": "API key required for all requests"
+                  },
+                  {
                     "key": "Content-Type",
                     "value": "application/json",
                     "type": "text"
@@ -8545,6 +9720,12 @@
                   "originalRequest": {
                     "method": "PUT",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -8599,6 +9780,12 @@
                     "method": "PUT",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -8651,6 +9838,12 @@
                   "originalRequest": {
                     "method": "PUT",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -8705,6 +9898,12 @@
                     "method": "PUT",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -8757,6 +9956,12 @@
                   "originalRequest": {
                     "method": "PUT",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -8811,6 +10016,12 @@
                     "method": "PUT",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -8864,6 +10075,12 @@
                     "method": "PUT",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -8916,6 +10133,12 @@
                   "originalRequest": {
                     "method": "PUT",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -8981,7 +10204,14 @@
               ],
               "request": {
                 "method": "GET",
-                "header": [],
+                "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "{{apiKey}}",
+                    "type": "text",
+                    "description": "API key required for all requests"
+                  }
+                ],
                 "url": {
                   "raw": "{{internalUrl}}/internal/v2/customers/:customerId/wallet",
                   "host": [
@@ -9018,7 +10248,14 @@
                   "name": "200 The wallet",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{internalUrl}}/internal/v2/customers/:customerId/wallet",
                       "host": [
@@ -9056,7 +10293,14 @@
                   "name": "401 SERVICE_TOKEN_INVALID",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{internalUrl}}/internal/v2/customers/:customerId/wallet",
                       "host": [
@@ -9094,7 +10338,14 @@
                   "name": "403 FORBIDDEN",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{internalUrl}}/internal/v2/customers/:customerId/wallet",
                       "host": [
@@ -9132,7 +10383,14 @@
                   "name": "404 CUSTOMER_NOT_FOUND",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{internalUrl}}/internal/v2/customers/:customerId/wallet",
                       "host": [
@@ -9170,7 +10428,14 @@
                   "name": "404 WALLET_NOT_FOUND",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{internalUrl}}/internal/v2/customers/:customerId/wallet",
                       "host": [
@@ -9208,7 +10473,14 @@
                   "name": "500 INTERNAL_ERROR",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{internalUrl}}/internal/v2/customers/:customerId/wallet",
                       "host": [
@@ -9265,7 +10537,14 @@
               ],
               "request": {
                 "method": "DELETE",
-                "header": [],
+                "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "{{apiKey}}",
+                    "type": "text",
+                    "description": "API key required for all requests"
+                  }
+                ],
                 "url": {
                   "raw": "{{internalUrl}}/internal/v2/customers/:customerId/sessions",
                   "host": [
@@ -9302,7 +10581,14 @@
                   "name": "204 No Content",
                   "originalRequest": {
                     "method": "DELETE",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{internalUrl}}/internal/v2/customers/:customerId/sessions",
                       "host": [
@@ -9335,7 +10621,14 @@
                   "name": "401 SERVICE_TOKEN_INVALID",
                   "originalRequest": {
                     "method": "DELETE",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{internalUrl}}/internal/v2/customers/:customerId/sessions",
                       "host": [
@@ -9373,7 +10666,14 @@
                   "name": "403 FORBIDDEN",
                   "originalRequest": {
                     "method": "DELETE",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{internalUrl}}/internal/v2/customers/:customerId/sessions",
                       "host": [
@@ -9411,7 +10711,14 @@
                   "name": "404 CUSTOMER_NOT_FOUND",
                   "originalRequest": {
                     "method": "DELETE",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{internalUrl}}/internal/v2/customers/:customerId/sessions",
                       "host": [
@@ -9449,7 +10756,14 @@
                   "name": "500 INTERNAL_ERROR",
                   "originalRequest": {
                     "method": "DELETE",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{internalUrl}}/internal/v2/customers/:customerId/sessions",
                       "host": [
@@ -9500,7 +10814,14 @@
               ],
               "request": {
                 "method": "DELETE",
-                "header": [],
+                "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "{{apiKey}}",
+                    "type": "text",
+                    "description": "API key required for all requests"
+                  }
+                ],
                 "url": {
                   "raw": "{{internalUrl}}/internal/v2/customers/:customerId/pin-lock",
                   "host": [
@@ -9537,7 +10858,14 @@
                   "name": "204 No Content",
                   "originalRequest": {
                     "method": "DELETE",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{internalUrl}}/internal/v2/customers/:customerId/pin-lock",
                       "host": [
@@ -9570,7 +10898,14 @@
                   "name": "401 SERVICE_TOKEN_INVALID",
                   "originalRequest": {
                     "method": "DELETE",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{internalUrl}}/internal/v2/customers/:customerId/pin-lock",
                       "host": [
@@ -9608,7 +10943,14 @@
                   "name": "403 FORBIDDEN",
                   "originalRequest": {
                     "method": "DELETE",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{internalUrl}}/internal/v2/customers/:customerId/pin-lock",
                       "host": [
@@ -9646,7 +10988,14 @@
                   "name": "404 CUSTOMER_NOT_FOUND",
                   "originalRequest": {
                     "method": "DELETE",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{internalUrl}}/internal/v2/customers/:customerId/pin-lock",
                       "host": [
@@ -9684,7 +11033,14 @@
                   "name": "500 INTERNAL_ERROR",
                   "originalRequest": {
                     "method": "DELETE",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{internalUrl}}/internal/v2/customers/:customerId/pin-lock",
                       "host": [
@@ -9746,6 +11102,12 @@
                 "method": "POST",
                 "header": [
                   {
+                    "key": "X-API-Key",
+                    "value": "{{apiKey}}",
+                    "type": "text",
+                    "description": "API key required for all requests"
+                  },
+                  {
                     "key": "Content-Type",
                     "value": "application/json",
                     "type": "text"
@@ -9795,6 +11157,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -9839,6 +11207,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -9885,6 +11259,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -9929,6 +11309,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -9975,6 +11361,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -10020,6 +11412,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -10064,6 +11462,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -10126,6 +11530,12 @@
                 "method": "POST",
                 "header": [
                   {
+                    "key": "X-API-Key",
+                    "value": "{{apiKey}}",
+                    "type": "text",
+                    "description": "API key required for all requests"
+                  },
+                  {
                     "key": "Content-Type",
                     "value": "application/json",
                     "type": "text"
@@ -10175,6 +11585,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -10219,6 +11635,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -10265,6 +11687,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -10309,6 +11737,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -10355,6 +11789,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -10400,6 +11840,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -10444,6 +11890,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -10501,7 +11953,14 @@
               ],
               "request": {
                 "method": "GET",
-                "header": [],
+                "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "{{apiKey}}",
+                    "type": "text",
+                    "description": "API key required for all requests"
+                  }
+                ],
                 "url": {
                   "raw": "{{internalUrl}}/internal/v2/wallet-kyc-sync-jobs/:jobId",
                   "host": [
@@ -10537,7 +11996,14 @@
                   "name": "200 The job",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{internalUrl}}/internal/v2/wallet-kyc-sync-jobs/:jobId",
                       "host": [
@@ -10574,7 +12040,14 @@
                   "name": "401 SERVICE_TOKEN_INVALID",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{internalUrl}}/internal/v2/wallet-kyc-sync-jobs/:jobId",
                       "host": [
@@ -10611,7 +12084,14 @@
                   "name": "403 FORBIDDEN",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{internalUrl}}/internal/v2/wallet-kyc-sync-jobs/:jobId",
                       "host": [
@@ -10648,7 +12128,14 @@
                   "name": "404 JOB_NOT_FOUND",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{internalUrl}}/internal/v2/wallet-kyc-sync-jobs/:jobId",
                       "host": [
@@ -10685,7 +12172,14 @@
                   "name": "500 INTERNAL_ERROR",
                   "originalRequest": {
                     "method": "GET",
-                    "header": [],
+                    "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      }
+                    ],
                     "url": {
                       "raw": "{{internalUrl}}/internal/v2/wallet-kyc-sync-jobs/:jobId",
                       "host": [
@@ -10755,6 +12249,12 @@
                 "method": "POST",
                 "header": [
                   {
+                    "key": "X-API-Key",
+                    "value": "{{apiKey}}",
+                    "type": "text",
+                    "description": "API key required for all requests"
+                  },
+                  {
                     "key": "Content-Type",
                     "value": "application/json",
                     "type": "text"
@@ -10791,6 +12291,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -10831,6 +12337,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -10877,6 +12389,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -10922,6 +12440,12 @@
                     "method": "POST",
                     "header": [
                       {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
+                      {
                         "key": "Content-Type",
                         "value": "application/json",
                         "type": "text"
@@ -10966,6 +12490,12 @@
                   "originalRequest": {
                     "method": "POST",
                     "header": [
+                      {
+                        "key": "X-API-Key",
+                        "value": "{{apiKey}}",
+                        "type": "text",
+                        "description": "API key required for all requests"
+                      },
                       {
                         "key": "Content-Type",
                         "value": "application/json",
@@ -11352,6 +12882,11 @@
     {
       "key": "publicUrl",
       "value": "https://api.ambiapay.com",
+      "type": "string"
+    },
+    {
+      "key": "apiKey",
+      "value": "your_api_key_here",
       "type": "string"
     }
   ]
