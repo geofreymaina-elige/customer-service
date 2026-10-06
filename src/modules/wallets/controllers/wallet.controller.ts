@@ -7,7 +7,7 @@ import { RequireScopes } from '../../../core/auth/scopes.decorator';
 import { AstppTokenGuard } from '../../../core/auth/astpp-token.guard';
 import { CurrentUser, AuthenticatedUser } from '../../../core/auth/current-user.decorator';
 
-@ApiTags('1. Onboarding')
+@ApiTags('Onboarding')
 @Controller('api/v2/customers')
 export class WalletController {
   constructor(
@@ -15,7 +15,7 @@ export class WalletController {
   ) {}
 
   @Get('me')
-  @ApiTags('5. Wallet')
+  @ApiTags('Wallet Balance')
   @ApiOperation({
     summary: 'Get wallet information',
     description: `Get detailed wallet information for the authenticated customer.
@@ -194,7 +194,7 @@ Determines the customer's current onboarding state and returns the next action t
   }
 
   @Get('me/balance')
-  @ApiTags('5. Wallet')
+  @ApiTags('Wallet Balance')
   @ApiOperation({
     summary: 'Get wallet balance',
     description: `Get current wallet balance for the authenticated customer.

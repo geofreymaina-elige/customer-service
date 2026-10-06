@@ -1,7 +1,9 @@
 import { Controller, Get } from '@nestjs/common';
+import { ApiExcludeController } from '@nestjs/swagger';
 import { DatabaseService } from '../../core/database/database.service';
 import { Public } from '../../core/auth/public.decorator';
 
+@ApiExcludeController()
 @Controller('health')
 export class HealthController {
   constructor(private readonly db: DatabaseService) {}

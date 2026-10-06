@@ -52,7 +52,7 @@ export class OnboardingController {
   /**
    * Register new device + start wallet (was POST api/v1/onboarding/user-device)
    */
-  @ApiTags('2. Authentication')
+  @ApiTags('Onboarding')
   @ApiOperation({
     summary: 'Register device and start wallet creation',
     description: `Register a new device and initiate wallet creation process.
@@ -151,7 +151,7 @@ It registers the device and triggers SasaPay wallet creation which sends an OTP 
    * Exchange PIN for a transaction token (with registered phone)
    * Uses Bearer token authentication from an existing session
    */
-  @ApiTags('4. PIN')
+  @ApiTags('Onboarding')
   @ApiOperation({
     summary: 'Verify PIN and get transaction token',
     description: `Verify customer's PIN and receive a short-lived transaction token.
@@ -381,7 +381,7 @@ Returns a 10-minute transaction token that grants access to sensitive endpoints.
    * Confirm wallet OTP (was POST api/v1/onboarding/personal/confirm)
    * Now uses Bearer token authentication
    */
-  @ApiTags('2. Authentication')
+  @ApiTags('Onboarding')
   @ApiOperation({
     summary: 'Verify OTP and activate wallet',
     description: `Verify the OTP code sent to customer's phone after device registration.

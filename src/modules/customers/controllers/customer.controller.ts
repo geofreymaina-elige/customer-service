@@ -1,14 +1,16 @@
 import { Controller, Get, Patch, Body, UseGuards } from '@nestjs/common';
-import { ApiExcludeEndpoint } from '@nestjs/swagger';
+import { ApiExcludeEndpoint, ApiTags } from '@nestjs/swagger';
 import { CustomerService } from '../services/customer.service';
 import { UpdateCustomerProfileDto } from '../dto/customer.dto';
 import { AuthGuard } from '../../../core/auth/auth.guard';
 import { CurrentUser, AuthenticatedUser } from '../../../core/auth/current-user.decorator';
 
+@ApiTags('Wallet Balance')
 @Controller('api/v2/customers')
 export class CustomerController {
   constructor(private readonly customerService: CustomerService) {}
 
+  @ApiExcludeEndpoint()
   @Get('me')
   @UseGuards(AuthGuard)
   async getMyProfile(@CurrentUser() user: AuthenticatedUser) {

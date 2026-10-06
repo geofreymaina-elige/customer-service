@@ -320,11 +320,10 @@ nextAction?
       },
       'TransactionToken'
     )
-    .addTag('Onboarding', 'Customer onboarding and wallet status check')
-    .addTag('Authentication', 'Device registration and session management')
+    .addTag('Onboarding', 'Customer onboarding, device registration, and authentication')
     .addTag('KYC', 'Document submission for compliance')
     .addTag('PIN Management', 'PIN management and verification')
-    .addTag('Wallet', 'Wallet information and balance')
+    .addTag('Wallet Balance', 'Wallet balance and information')
     .addTag('Configuration', 'App configuration and settings')
     .build();
 
