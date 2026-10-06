@@ -325,12 +325,12 @@ nextAction?
       },
       'TransactionToken'
     )
-    .addTag('1. Onboarding', '🚀 Customer onboarding and wallet status check')
-    .addTag('2. Authentication', '🔐 Device registration and session management')
-    .addTag('3. KYC', '📄 Document submission for compliance')
-    .addTag('4. PIN', '🔢 PIN management and verification')
-    .addTag('5. Wallet', '💰 Wallet information and balance')
-    .addTag('6. Configuration', '⚙️ App configuration and settings')
+    .addTag('1. Onboarding', 'Customer onboarding and wallet status check')
+    .addTag('2. Authentication', 'Device registration and session management')
+    .addTag('3. KYC', 'Document submission for compliance')
+    .addTag('4. PIN', 'PIN management and verification')
+    .addTag('5. Wallet', 'Wallet information and balance')
+    .addTag('6. Configuration', 'App configuration and settings')
     .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);

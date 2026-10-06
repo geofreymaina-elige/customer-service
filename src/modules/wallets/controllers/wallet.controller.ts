@@ -56,18 +56,18 @@ export class WalletController {
 
   @Get('onboarding-status')
   @ApiOperation({
-    summary: '🚀 Check customer onboarding status (CALL THIS FIRST)',
-    description: `**CRITICAL:** Call this endpoint EVERY TIME the app launches to determine what screen to show.
+    summary: 'Check customer onboarding status',
+    description: `CRITICAL: Call this endpoint EVERY TIME the app launches to determine what screen to show.
 
 **Purpose** 
 Determines the customer's current onboarding state and returns the next action they need to take.
 
 **Workflow Decision Tree**
-- \`nextAction: "start_onboarding"\` → Customer has no wallet, call POST /sessions/device
-- \`nextAction: "verify_otp"\` → Wallet creation initiated, show OTP verification screen
-- \`nextAction: "upload_kyc_documents"\` → Wallet active but pending KYC approval
-- \`nextAction: "set_pin"\` → Wallet approved but PIN not set
-- \`nextAction: "make_transaction"\` → Fully onboarded, show home screen
+- nextAction: "start_onboarding" → Customer has no wallet, call POST /sessions/device
+- nextAction: "verify_otp" → Wallet creation initiated, show OTP verification screen
+- nextAction: "upload_kyc_documents" → Wallet active but pending KYC approval
+- nextAction: "set_pin" → Wallet approved but PIN not set
+- nextAction: "make_transaction" → Fully onboarded, show home screen
 
 **Authentication** X-API-Key + X-Astpp-Token
 
@@ -196,7 +196,7 @@ Determines the customer's current onboarding state and returns the next action t
   @Get('me/balance')
   @ApiTags('5. Wallet')
   @ApiOperation({
-    summary: '💰 Get wallet balance',
+    summary: 'Get wallet balance',
     description: `Get current wallet balance for the authenticated customer.
 
 **Purpose** Display current balance in the wallet.

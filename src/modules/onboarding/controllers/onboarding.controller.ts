@@ -1,4 +1,5 @@
 import { Controller, Post, Body, Req, HttpCode, HttpStatus, UseGuards, UnauthorizedException, Delete } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiSecurity, ApiBody } from '@nestjs/swagger';
 import { Request } from 'express';
 import * as crypto from 'crypto';
 import { ConfigService } from '@nestjs/config';
@@ -51,6 +52,83 @@ export class OnboardingController {
   /**
    * Register new device + start wallet (was POST api/v1/onboarding/user-device)
    */
+  @ApiTags('2. Authentication')
+  @ApiOperation({
+    summary: 'Register device and start wallet creation',
+    description: `Register a new device and initiate wallet creation process.
+
+**Purpose**
+This endpoint is called after checking onboarding status when nextAction is "start_onboarding".
+It registers the device and triggers SasaPay wallet creation which sends an OTP to the customer's phone.
+
+**Authentication** X-API-Key + X-Astpp-Token
+
+**Response Fields**
+- otpPending: true → OTP has been sent, redirect to OTP verification screen
+- otpPending: false → Wallet already exists, check isWalletPinSet
+  - isWalletPinSet: false → Redirect to PIN setup screen  
+  - isWalletPinSet: true → Proceed to home screen
+- token.accessToken → 30-day app access token for subsequent API calls
+
+**Flow**
+1. Call this endpoint with device details
+2. System creates wallet and sends OTP (if no wallet exists)
+3. Store the accessToken for future API calls
+4. If otpPending=true, show OTP screen
+5. If otpPending=false and isWalletPinSet=false, show PIN setup screen`
+  })
+  @ApiSecurity('API-Key')
+  @ApiSecurity('ASTPP-Token')
+  @ApiBody({
+    description: 'Device registration details',
+    schema: {
+      example: {
+        astpp_id: '31553',
+        device_identifier: 'SAM-S23-DEVICE-UUID-10492',
+        mobile_type: 'android',
+        device_model: 'Samsung Galaxy S23',
+        device_os: 'Android 14',
+        app_version: '2.4.1'
+      }
+    }
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Device registered successfully',
+    schema: {
+      example: {
+        success: true,
+        message: 'Welcome! Your customer profile and account have been created.',
+        data: {
+          user: {
+            userId: 'b286d010-8e02-4e3a-aa23-993354f1a2ca',
+            astppId: 557,
+            phoneNumber: '254711470771',
+            firstName: 'Jeff',
+            lastName: 'Jeff',
+            isWalletPinSet: true
+          },
+          token: {
+            accessToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+            tokenType: 'Bearer',
+            expiresInSeconds: 2592000
+          },
+          otpPending: false
+        }
+      }
+    }
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid ASTPP token',
+    schema: {
+      example: {
+        success: false,
+        message: 'Invalid ASTPP token.',
+        code: 'UNAUTHORIZED'
+      }
+    }
+  })
   @Post('api/v2/auth/sessions/device')
   @UseGuards(AstppTokenGuard)
   @HttpCode(HttpStatus.OK)
