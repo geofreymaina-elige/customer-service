@@ -96,9 +96,6 @@ async function bootstrap() {
   const swaggerConfig = new DocumentBuilder()
     .setTitle('AmbiaPay Customer Service API')
     .setDescription(`
-# Mobile App Customer Service API
-
-Complete API documentation for mobile app developers to integrate AmbiaPay wallet services.
 
 ---
 
@@ -749,6 +746,143 @@ nextAction?
         outline: none;
         box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
       }
+      
+      /* curl Command Section */
+      .swagger-ui .curl-command {
+        background: #1f2937;
+        border: 2px solid #10b981;
+        border-radius: 8px;
+        padding: 20px;
+        margin: 20px 0;
+        position: relative;
+      }
+      
+      .swagger-ui .curl-command::before {
+        content: "cURL Command";
+        position: absolute;
+        top: -12px;
+        left: 16px;
+        background: #10b981;
+        color: white;
+        padding: 4px 12px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+      }
+      
+      .swagger-ui .curl-command pre {
+        margin: 0;
+        background: transparent;
+        padding: 8px 0 0 0;
+      }
+      
+      .swagger-ui .curl-command code {
+        color: #e5e7eb;
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        font-size: 13px;
+        line-height: 1.6;
+        word-break: break-all;
+      }
+      
+      /* Request URL Section */
+      .swagger-ui .request-url {
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        padding: 16px;
+        margin: 16px 0;
+      }
+      
+      .swagger-ui .request-url pre {
+        margin: 0;
+        background: transparent;
+        padding: 0;
+      }
+      
+      .swagger-ui .request-url code {
+        color: #1f2937;
+        font-size: 14px;
+        font-weight: 500;
+      }
+      
+      /* Copy to clipboard button styling */
+      .swagger-ui .copy-to-clipboard {
+        position: absolute;
+        top: 16px;
+        right: 16px;
+      }
+      
+      .swagger-ui .copy-to-clipboard button {
+        background: #374151;
+        border: 1px solid #4b5563;
+        color: #e5e7eb;
+        padding: 6px 12px;
+        border-radius: 4px;
+        font-size: 12px;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      
+      .swagger-ui .copy-to-clipboard button:hover {
+        background: #4b5563;
+        border-color: #6b7280;
+      }
+      
+      /* Responses section - ensure curl appears above */
+      .swagger-ui .responses-wrapper {
+        margin-top: 24px;
+      }
+      
+      .swagger-ui .responses-wrapper .responses-inner {
+        padding-top: 16px;
+        border-top: 2px solid #e5e7eb;
+      }
+      
+      /* Live Response section */
+      .swagger-ui .live-responses-table {
+        margin-top: 20px;
+      }
+      
+      /* Request snippet section */
+      .swagger-ui .request-snippet {
+        margin: 20px 0;
+        border: 2px solid #3b82f6;
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      
+      .swagger-ui .request-snippet .snippet__title {
+        background: #3b82f6;
+        color: white;
+        padding: 10px 16px;
+        font-weight: 600;
+        font-size: 13px;
+        letter-spacing: 0.5px;
+      }
+      
+      .swagger-ui .request-snippet select {
+        margin-left: 12px;
+        background: rgba(255, 255, 255, 0.2);
+        color: white;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+      }
+      
+      .swagger-ui .request-snippet pre {
+        margin: 0;
+        background: #1f2937;
+        padding: 20px;
+      }
+      
+      .swagger-ui .request-snippet code {
+        color: #e5e7eb;
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        font-size: 13px;
+        line-height: 1.6;
+      }
     `,
     swaggerOptions: {
       persistAuthorization: true,
@@ -756,6 +890,11 @@ nextAction?
       filter: true,
       showRequestDuration: true,
       tryItOutEnabled: true,
+      displayRequestDuration: true,
+      syntaxHighlight: {
+        activate: true,
+        theme: 'monokai'
+      },
     },
   });
 
