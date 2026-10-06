@@ -279,17 +279,11 @@ nextAction?
 
 ---
 
-## Support and Resources
-
-**Need Help?**
-- Email: support@ambiapay.com
-- Documentation: https://docs.ambiapay.com
-- Status Page: https://status.ambiapay.com
-
 **API Information**
-- Version: 2.0
-- Last Updated: October 2026
-- Base URL: https://api.ambiapay.com
+
+Version: 2.0  
+Last Updated: October 2026  
+Base URL: https://api.ambiapay.com
 
 © 2026 AmbiaPay. All rights reserved.
     `)
