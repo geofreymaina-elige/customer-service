@@ -151,6 +151,69 @@ It registers the device and triggers SasaPay wallet creation which sends an OTP 
    * Exchange PIN for a transaction token (with registered phone)
    * Uses Bearer token authentication from an existing session
    */
+  @ApiTags('4. PIN')
+  @ApiOperation({
+    summary: 'Verify PIN and get transaction token',
+    description: `Verify customer's PIN and receive a short-lived transaction token.
+
+**Purpose**
+This endpoint must be called before performing sensitive operations like checking balance or making transfers.
+
+**Authentication** X-API-Key + Bearer (App Access Token)
+
+**Response**
+Returns a 10-minute transaction token that grants access to sensitive endpoints.
+
+**Flow**
+1. Customer enters PIN
+2. Call this endpoint with PIN and device details
+3. Receive transaction token
+4. Use transaction token for GET /customers/me/balance
+5. Token expires after 10 minutes, must re-verify PIN`
+  })
+  @ApiSecurity('API-Key')
+  @ApiSecurity('AppAccessToken')
+  @ApiBody({
+    description: 'PIN and device details',
+    schema: {
+      example: {
+        pin: '1234',
+        device: {
+          device_identifier: 'SAM-S23-DEVICE-UUID-10492',
+          mobile_type: 'android',
+          device_model: 'Samsung Galaxy S23',
+          device_os: 'Android 14',
+          app_version: '2.4.1'
+        }
+      }
+    }
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'PIN verified successfully, transaction token issued',
+    schema: {
+      example: {
+        success: true,
+        message: 'PIN verified successfully.',
+        data: {
+          transactionToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+          tokenType: 'Bearer',
+          expiresInSeconds: 600
+        }
+      }
+    }
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Invalid PIN or too many attempts',
+    schema: {
+      example: {
+        success: false,
+        message: 'Invalid PIN. 2 attempts remaining.',
+        code: 'INVALID_PIN'
+      }
+    }
+  })
   @Post('api/v2/auth/transaction-tokens')
   @UseGuards(AuthGuard)
   @HttpCode(HttpStatus.OK)
@@ -315,6 +378,75 @@ It registers the device and triggers SasaPay wallet creation which sends an OTP 
    * Confirm wallet OTP (was POST api/v1/onboarding/personal/confirm)
    * Now uses Bearer token authentication
    */
+  @ApiTags('2. Authentication')
+  @ApiOperation({
+    summary: 'Verify OTP and activate wallet',
+    description: `Verify the OTP code sent to customer's phone after device registration.
+
+**Purpose**
+After POST /sessions/device returns otpPending=true, customer receives an OTP via SMS.
+This endpoint verifies that OTP and activates the wallet.
+
+**Authentication** X-API-Key + Bearer (App Access Token from device registration)
+
+**Response**
+Success indicates wallet activation is being processed. Customer should wait briefly then check onboarding status.
+
+**Flow**
+1. Customer receives OTP via SMS
+2. Customer enters OTP in app
+3. Call this endpoint with OTP
+4. System processes wallet activation (async)
+5. After a few seconds, call GET /onboarding-status to check if wallet is active`
+  })
+  @ApiSecurity('API-Key')
+  @ApiSecurity('AppAccessToken')
+  @ApiBody({
+    description: 'OTP code received via SMS',
+    schema: {
+      example: {
+        otp: '123456'
+      }
+    }
+  })
+  @ApiResponse({
+    status: 202,
+    description: 'OTP verification in progress',
+    schema: {
+      example: {
+        success: true,
+        message: 'OTP confirmation is being processed. Your wallet will be ready shortly.',
+        data: {
+          jobId: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+          status: 'processing'
+        }
+      }
+    }
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Wallet already exists (idempotent response)',
+    schema: {
+      example: {
+        success: true,
+        message: 'Your wallet has already been created.',
+        data: {
+          accountNumber: '1881181',
+          alreadyExists: true
+        }
+      }
+    }
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'No pending onboarding found',
+    schema: {
+      example: {
+        success: false,
+        message: 'No pending onboarding found for this customer. Please initiate onboarding first.'
+      }
+    }
+  })
   @Post('api/v2/auth/wallet-verifications')
   @UseGuards(AuthGuard)
   @HttpCode(HttpStatus.ACCEPTED)

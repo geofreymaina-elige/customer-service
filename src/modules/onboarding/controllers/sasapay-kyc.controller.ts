@@ -11,7 +11,7 @@ import {
   ApiTags,
   ApiOperation,
   ApiResponse,
-  ApiBearerAuth,
+  ApiSecurity,
   ApiConsumes,
   ApiBody,
 } from '@nestjs/swagger';
@@ -20,9 +20,9 @@ import { CurrentUser, AuthenticatedUser } from '../../../core/auth/current-user.
 import { SasaPayKycService, UploadedKycFile } from '../services/sasapay-kyc.service';
 
 @ApiTags('KYC')
+@ApiSecurity('API-Key')
 @Controller('api/v2/customers/kyc')
 @UseGuards(AuthGuard)
-@ApiBearerAuth('JWT')
 export class SasaPayKycController {
   constructor(private readonly sasaPayKyc: SasaPayKycService) {}
 
