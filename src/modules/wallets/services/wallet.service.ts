@@ -150,20 +150,26 @@ export class WalletService {
       'awaiting_psp_result',
     ].includes(kycSubmission?.status)) {
       nextAction = { type: 'wait_for_kyc_review' };
-    } else if (applicationStatus === 'pending') {
-      nextAction = { type: 'verify_otp' };
-    } else if (applicationStatus === 'requires_kyc_upload') {
-      nextAction = { type: 'wait_for_kyc_requirements' };
-    } else if (applicationStatus === 'rejected' && (!wallet || wallet.status !== 'active')) {
-      nextAction = { type: 'contact_support' };
     } else if (!wallet) {
+      // No wallet means we need to start onboarding (which includes OTP verification)
       nextAction = {
         type: 'start_onboarding',
         method: 'POST',
         endpoint: '/api/v2/auth/sessions/device',
       };
     } else if (wallet.status !== 'active') {
+      // Wallet exists but not active - waiting for activation
       nextAction = { type: 'wait_for_wallet_activation' };
+    } else if (applicationStatus === 'pending') {
+      // Wallet is active but application pending - need KYC upload
+      nextAction = {
+        type: 'upload_kyc_documents',
+        message: 'Wallet created. Please upload KYC documents for approval.',
+      };
+    } else if (applicationStatus === 'requires_kyc_upload') {
+      nextAction = { type: 'wait_for_kyc_requirements' };
+    } else if (applicationStatus === 'rejected') {
+      nextAction = { type: 'contact_support' };
     } else if (!pin) {
       nextAction = { type: 'set_pin' };
     } else if (!device) {
