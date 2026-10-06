@@ -102,7 +102,7 @@ Complete API documentation for mobile app developers to integrate AmbiaPay walle
 
 ---
 
-## 🔐 Authentication
+## Authentication
 
 All API requests require multiple authentication layers:
 
@@ -130,7 +130,7 @@ Authorization: Bearer transaction_token
 
 ---
 
-## 🚀 Mobile App Integration Workflow
+## Mobile App Integration Workflow
 
 ### Step 1: Check Onboarding Status
 **Endpoint** \`GET /api/v2/customers/onboarding-status?astppId={astppId}\`
@@ -209,7 +209,7 @@ Authorization: Bearer transaction_token
 
 ---
 
-## 📊 Response Format
+## Response Format
 
 All responses follow this structure
 
@@ -224,7 +224,7 @@ All responses follow this structure
 
 ---
 
-## 🚦 Common Status Codes
+## Common Status Codes
 
 - **200** - Success
 - **400** - Bad Request (validation error)
@@ -237,7 +237,7 @@ All responses follow this structure
 
 ---
 
-## 📱 Token Lifecycle
+## Token Lifecycle
 
 ### App Access Token
 - **Validity** 30 days
@@ -253,7 +253,7 @@ All responses follow this structure
 
 ---
 
-## 🔄 Workflow Decision Tree
+## Workflow Decision Tree
 
 \`\`\`
 Start App
@@ -325,18 +325,399 @@ nextAction?
       },
       'TransactionToken'
     )
-    .addTag('1. Onboarding', 'Customer onboarding and wallet status check')
-    .addTag('2. Authentication', 'Device registration and session management')
-    .addTag('3. KYC', 'Document submission for compliance')
-    .addTag('4. PIN', 'PIN management and verification')
-    .addTag('5. Wallet', 'Wallet information and balance')
-    .addTag('6. Configuration', 'App configuration and settings')
+    .addTag('Onboarding', 'Customer onboarding and wallet status check')
+    .addTag('Authentication', 'Device registration and session management')
+    .addTag('KYC', 'Document submission for compliance')
+    .addTag('PIN Management', 'PIN management and verification')
+    .addTag('Wallet', 'Wallet information and balance')
+    .addTag('Configuration', 'App configuration and settings')
     .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api/docs', app, document, {
-    customSiteTitle: 'Ambia Pay API Documentation',
-    customCss: '.swagger-ui .topbar { display: none }',
+    customSiteTitle: 'AmbiaPay Customer Service API Documentation',
+    customCss: `
+      .swagger-ui .topbar { display: none; }
+      
+      /* Color scheme from AmbiaPay branding */
+      .swagger-ui { 
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      }
+      
+      /* Header styling */
+      .swagger-ui .info { 
+        margin: 30px 0;
+      }
+      
+      .swagger-ui .info .title { 
+        font-size: 36px;
+        color: #1a1a1a;
+        font-weight: 700;
+        margin-bottom: 10px;
+      }
+      
+      .swagger-ui .info .title small { 
+        background: #10b981;
+        color: white;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 14px;
+        font-weight: 600;
+        margin-left: 12px;
+        vertical-align: middle;
+      }
+      
+      .swagger-ui .info .description { 
+        color: #4b5563;
+        font-size: 15px;
+        line-height: 1.7;
+      }
+      
+      /* Scheme container */
+      .swagger-ui .scheme-container { 
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 20px;
+        margin: 20px 0;
+      }
+      
+      /* Operations and tags */
+      .swagger-ui .opblock-tag { 
+        font-size: 20px;
+        font-weight: 600;
+        color: #1f2937;
+        border-bottom: 2px solid #e5e7eb;
+        padding: 15px 0;
+        margin: 30px 0 15px 0;
+      }
+      
+      .swagger-ui .opblock { 
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        margin: 0 0 15px 0;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      }
+      
+      /* HTTP method colors */
+      .swagger-ui .opblock.opblock-get { 
+        border-color: #3b82f6;
+        background: rgba(59, 130, 246, 0.02);
+      }
+      
+      .swagger-ui .opblock.opblock-get .opblock-summary-method { 
+        background: #3b82f6;
+      }
+      
+      .swagger-ui .opblock.opblock-post { 
+        border-color: #10b981;
+        background: rgba(16, 185, 129, 0.02);
+      }
+      
+      .swagger-ui .opblock.opblock-post .opblock-summary-method { 
+        background: #10b981;
+      }
+      
+      .swagger-ui .opblock.opblock-put { 
+        border-color: #f59e0b;
+        background: rgba(245, 158, 11, 0.02);
+      }
+      
+      .swagger-ui .opblock.opblock-put .opblock-summary-method { 
+        background: #f59e0b;
+      }
+      
+      .swagger-ui .opblock.opblock-delete { 
+        border-color: #ef4444;
+        background: rgba(239, 68, 68, 0.02);
+      }
+      
+      .swagger-ui .opblock.opblock-delete .opblock-summary-method { 
+        background: #ef4444;
+      }
+      
+      /* Operation summary */
+      .swagger-ui .opblock-summary { 
+        padding: 12px 20px;
+        cursor: pointer;
+      }
+      
+      .swagger-ui .opblock-summary-method { 
+        border-radius: 6px;
+        font-weight: 700;
+        min-width: 80px;
+        text-align: center;
+        font-size: 13px;
+      }
+      
+      .swagger-ui .opblock-summary-path { 
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        font-size: 14px;
+        color: #1f2937;
+        font-weight: 600;
+      }
+      
+      .swagger-ui .opblock-summary-description { 
+        font-size: 14px;
+        color: #6b7280;
+      }
+      
+      /* Buttons */
+      .swagger-ui .btn { 
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 14px;
+        padding: 8px 16px;
+      }
+      
+      .swagger-ui .btn.execute { 
+        background: #10b981;
+        border-color: #10b981;
+      }
+      
+      .swagger-ui .btn.execute:hover { 
+        background: #059669;
+        border-color: #059669;
+      }
+      
+      .swagger-ui .btn.try-out__btn { 
+        background: #3b82f6;
+        border-color: #3b82f6;
+        color: white;
+      }
+      
+      .swagger-ui .btn.try-out__btn:hover { 
+        background: #2563eb;
+        border-color: #2563eb;
+      }
+      
+      /* Authorization button */
+      .swagger-ui .btn.authorize { 
+        background: #8b5cf6;
+        border-color: #8b5cf6;
+      }
+      
+      .swagger-ui .btn.authorize svg { 
+        fill: white;
+      }
+      
+      .swagger-ui .btn.authorize:hover { 
+        background: #7c3aed;
+        border-color: #7c3aed;
+      }
+      
+      /* Parameters and responses */
+      .swagger-ui .parameters-col_description { 
+        color: #4b5563;
+        font-size: 14px;
+      }
+      
+      .swagger-ui .parameter__name { 
+        font-weight: 600;
+        color: #1f2937;
+      }
+      
+      .swagger-ui .parameter__type { 
+        color: #6b7280;
+        font-size: 12px;
+      }
+      
+      .swagger-ui .response-col_status { 
+        font-weight: 700;
+        font-size: 14px;
+      }
+      
+      .swagger-ui .response-col_status .response-col_status__inner { 
+        padding: 4px 12px;
+        border-radius: 6px;
+      }
+      
+      /* Response codes */
+      .swagger-ui .responses-inner h4, .swagger-ui .responses-inner h5 { 
+        font-size: 14px;
+        font-weight: 600;
+        color: #1f2937;
+        margin: 20px 0 10px 0;
+      }
+      
+      /* Code blocks */
+      .swagger-ui .highlight-code { 
+        background: #1f2937;
+        border-radius: 6px;
+      }
+      
+      .swagger-ui .highlight-code .microlight { 
+        color: #e5e7eb;
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        font-size: 13px;
+        padding: 16px;
+      }
+      
+      /* Models */
+      .swagger-ui .model-box { 
+        background: #f9fafb;
+        border-radius: 6px;
+        padding: 16px;
+      }
+      
+      .swagger-ui .model-title { 
+        color: #1f2937;
+        font-weight: 600;
+      }
+      
+      .swagger-ui .model { 
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        font-size: 13px;
+      }
+      
+      /* Tables */
+      .swagger-ui table { 
+        border-collapse: collapse;
+      }
+      
+      .swagger-ui table thead tr th { 
+        background: #f9fafb;
+        color: #1f2937;
+        font-weight: 600;
+        font-size: 13px;
+        padding: 12px;
+        border-bottom: 2px solid #e5e7eb;
+      }
+      
+      .swagger-ui table tbody tr td { 
+        padding: 12px;
+        border-bottom: 1px solid #e5e7eb;
+        color: #4b5563;
+        font-size: 14px;
+      }
+      
+      /* Authorization modal */
+      .swagger-ui .dialog-ux { 
+        border-radius: 8px;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+      }
+      
+      .swagger-ui .modal-ux-header { 
+        background: #f9fafb;
+        border-bottom: 2px solid #e5e7eb;
+        padding: 20px;
+      }
+      
+      .swagger-ui .modal-ux-header h3 { 
+        color: #1f2937;
+        font-weight: 600;
+      }
+      
+      .swagger-ui .modal-ux-content { 
+        padding: 20px;
+      }
+      
+      /* Links */
+      .swagger-ui a { 
+        color: #3b82f6;
+        text-decoration: none;
+      }
+      
+      .swagger-ui a:hover { 
+        color: #2563eb;
+        text-decoration: underline;
+      }
+      
+      /* Markdown content */
+      .swagger-ui .markdown p { 
+        margin: 0 0 12px 0;
+        line-height: 1.7;
+      }
+      
+      .swagger-ui .markdown code { 
+        background: #f3f4f6;
+        color: #ef4444;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 0.9em;
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+      }
+      
+      .swagger-ui .markdown pre { 
+        background: #1f2937;
+        padding: 16px;
+        border-radius: 6px;
+        overflow-x: auto;
+      }
+      
+      .swagger-ui .markdown pre code { 
+        background: transparent;
+        color: #e5e7eb;
+        padding: 0;
+      }
+      
+      .swagger-ui .markdown h1 { 
+        font-size: 28px;
+        font-weight: 700;
+        color: #1a1a1a;
+        margin: 30px 0 15px 0;
+        border-bottom: 2px solid #e5e7eb;
+        padding-bottom: 10px;
+      }
+      
+      .swagger-ui .markdown h2 { 
+        font-size: 22px;
+        font-weight: 600;
+        color: #1f2937;
+        margin: 25px 0 12px 0;
+      }
+      
+      .swagger-ui .markdown h3 { 
+        font-size: 18px;
+        font-weight: 600;
+        color: #374151;
+        margin: 20px 0 10px 0;
+      }
+      
+      .swagger-ui .markdown ul, .swagger-ui .markdown ol { 
+        margin: 0 0 12px 20px;
+        padding-left: 20px;
+      }
+      
+      .swagger-ui .markdown li { 
+        margin: 6px 0;
+        line-height: 1.6;
+      }
+      
+      .swagger-ui .markdown hr { 
+        border: none;
+        border-top: 2px solid #e5e7eb;
+        margin: 30px 0;
+      }
+      
+      /* Server selection */
+      .swagger-ui select { 
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        padding: 8px 12px;
+        font-size: 14px;
+        color: #1f2937;
+      }
+      
+      /* Input fields */
+      .swagger-ui input[type=text], 
+      .swagger-ui input[type=password], 
+      .swagger-ui textarea { 
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        padding: 8px 12px;
+        font-size: 14px;
+        color: #1f2937;
+      }
+      
+      .swagger-ui input[type=text]:focus, 
+      .swagger-ui input[type=password]:focus, 
+      .swagger-ui textarea:focus { 
+        border-color: #3b82f6;
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+      }
+    `,
     swaggerOptions: {
       persistAuthorization: true,
       docExpansion: 'none',
