@@ -1,5 +1,5 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiSecurity, ApiQuery } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiSecurity, ApiQuery, ApiExcludeEndpoint } from '@nestjs/swagger';
 import { WalletService } from '../services/wallet.service';
 import { AuthGuard } from '../../../core/auth/auth.guard';
 import { JwtScopes } from '../../../core/auth/jwt.service';
@@ -14,6 +14,7 @@ export class WalletController {
     private readonly walletService: WalletService,
   ) {}
 
+  @ApiExcludeEndpoint()
   @Get('me')
   @ApiTags('Wallet Balance')
   @ApiOperation({

@@ -279,6 +279,22 @@ nextAction?
            ↓
        GET /customers/me/balance
 \`\`\`
+
+---
+
+## Support and Resources
+
+**Need Help?**
+- Email: support@ambiapay.com
+- Documentation: https://docs.ambiapay.com
+- Status Page: https://status.ambiapay.com
+
+**API Information**
+- Version: 2.0
+- Last Updated: October 2026
+- Base URL: https://api.ambiapay.com
+
+© 2026 AmbiaPay. All rights reserved.
     `)
     .setVersion('2.0')
     .addServer('https://api.ambiapay.com', 'Production')
@@ -324,7 +340,7 @@ nextAction?
     .addTag('KYC', 'Document submission for compliance')
     .addTag('PIN Management', 'PIN management and verification')
     .addTag('Wallet Balance', 'Wallet balance and information')
-    .addTag('Configuration', 'App configuration and settings')
+    .addTag('Configuration and Banners', 'App configuration and banner images')
     .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);

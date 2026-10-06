@@ -5,7 +5,7 @@ import { AuthGuard } from '../../../core/auth/auth.guard';
 import { RequireScopes } from '../../../core/auth/scopes.decorator';
 import { JwtScopes } from '../../../core/auth/jwt.service';
 
-@ApiTags('Configuration')
+@ApiTags('Configuration and Banners')
 @ApiSecurity('API-Key')
 @Controller('api/v1')
 export class AppConfigController {
