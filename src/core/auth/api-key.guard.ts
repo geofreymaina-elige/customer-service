@@ -12,8 +12,12 @@ import { timingSafeEqual } from 'crypto';
  * Guard to validate API key for all API requests.
  * API key should be provided in X-API-Key header.
  * 
+ * Excluded paths (no API key required):
+ * - /api/docs (Swagger documentation)
+ * - Routes marked with @Public() decorator
+ * 
  * Usage:
- * - Apply globally in main.ts for all routes
+ * - Applied globally in main.ts for all routes
  * - Or apply to specific controllers/routes with @UseGuards(ApiKeyGuard)
  * - Use @Public() decorator to skip API key validation for specific endpoints
  */
@@ -25,6 +29,13 @@ export class ApiKeyGuard implements CanActivate {
   ) {}
 
   canActivate(context: ExecutionContext): boolean {
+    const request = context.switchToHttp().getRequest();
+    
+    // Skip API key validation for Swagger docs endpoints
+    if (request.path?.startsWith('/api/docs')) {
+      return true;
+    }
+
     // Check if route is marked as public
     const isPublic = this.reflector.getAllAndOverride<boolean>('isPublic', [
       context.getHandler(),
@@ -35,7 +46,6 @@ export class ApiKeyGuard implements CanActivate {
       return true;
     }
 
-    const request = context.switchToHttp().getRequest();
     const configuredApiKey =
       this.configService.get<string>('apiKey') || process.env.API_KEY;
 
@@ -44,10 +54,9 @@ export class ApiKeyGuard implements CanActivate {
       return true;
     }
 
-    // Check X-API-Key header, Authorization: ApiKey <key>, or query parameter
+    // Check X-API-Key header or Authorization: ApiKey <key>
     const headerKey = request.headers['x-api-key'];
     const authHeader = request.headers['authorization'];
-    const queryKey = request.query?.apiKey || request.query?.api_key;
     let providedApiKey = typeof headerKey === 'string' ? headerKey : undefined;
 
     if (!providedApiKey && typeof authHeader === 'string') {
@@ -56,15 +65,10 @@ export class ApiKeyGuard implements CanActivate {
       }
     }
 
-    // Allow API key in query parameter (useful for docs endpoint)
-    if (!providedApiKey && typeof queryKey === 'string') {
-      providedApiKey = queryKey;
-    }
-
     if (!providedApiKey) {
       throw new UnauthorizedException({
         success: false,
-        message: 'Missing required X-API-Key header or apiKey query parameter.',
+        message: 'Missing required X-API-Key header.',
         code: 'MISSING_API_KEY',
       });
     }

@@ -135,9 +135,7 @@ Each requires
 
 ## 🔐 Authentication
 
-All API requests require an API key provided in one of these ways
-- **Header** \`X-API-Key: your_api_key_here\` (recommended)
-- **Query Parameter** \`?apiKey=your_api_key_here\` (for Swagger docs only)
+All API requests require an API key in the \`X-API-Key\` header.
 
 ### API Key
 Required for all requests. Obtain from your Ambia Pay dashboard.
