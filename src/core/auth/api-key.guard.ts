@@ -10,7 +10,10 @@ import { timingSafeEqual } from 'crypto';
 
 /**
  * Guard to validate API key for all API requests.
- * API key should be provided in X-API-Key header.
+ * API key must be provided in X-API-Key header.
+ * 
+ * IMPORTANT: API_KEY must be set in environment variables.
+ * The application will reject all requests if API_KEY is not configured.
  * 
  * Excluded paths (no API key required):
  * - /api/docs (Swagger documentation)
@@ -50,8 +53,12 @@ export class ApiKeyGuard implements CanActivate {
       this.configService.get<string>('apiKey') || process.env.API_KEY;
 
     if (!configuredApiKey) {
-      // If API key is not configured, allow request (backward compatibility)
-      return true;
+      // API key is required - throw error if not configured
+      throw new UnauthorizedException({
+        success: false,
+        message: 'API key is not configured on the server. Please contact support.',
+        code: 'API_KEY_NOT_CONFIGURED',
+      });
     }
 
     // Check X-API-Key header or Authorization: ApiKey <key>
