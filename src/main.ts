@@ -118,12 +118,12 @@ X-API-Key: your_api_key_here
 X-Astpp-Token: encrypted_astpp_token
 \`\`\`
 
-**App Access Token** - For general wallet operations (30-day validity)
+**App Access Token** - For general wallet operations (24-hour validity)
 \`\`\`
 Authorization: Bearer app_access_token
 \`\`\`
 
-**Transaction Token** - For sensitive operations like balance checks (10-minute validity)
+**Transaction Token** - For sensitive operations like balance checks (5-minute validity)
 \`\`\`
 Authorization: Bearer transaction_token
 \`\`\`
@@ -161,7 +161,7 @@ Authorization: Bearer transaction_token
   - If false → Redirect to PIN setup screen
   - If true → Proceed to home screen
 
-**Returns** App access token (30-day validity) for subsequent API calls
+**Returns** App access token (24-hour validity) for subsequent API calls
 
 ---
 
@@ -240,13 +240,13 @@ All responses follow this structure
 ## Token Lifecycle
 
 ### App Access Token
-- **Validity** 30 days
+- **Validity** 24 hours
 - **Purpose** General wallet operations
 - **Obtained from** Device registration endpoint
 - **Scopes** \`app:access\`
 
 ### Transaction Token  
-- **Validity** 10 minutes
+- **Validity** 5 minutes
 - **Purpose** Sensitive operations (balance, transfers)
 - **Obtained from** PIN verification endpoint
 - **Scopes** \`wallet:transact\`
@@ -307,7 +307,7 @@ nextAction?
         type: 'http',
         scheme: 'bearer',
         bearerFormat: 'JWT',
-        description: '**App Access Token** - 30-day validity JWT for general wallet operations. Obtained from device registration.'
+        description: '**App Access Token** - 24-hour validity JWT for general wallet operations. Obtained from device registration.'
       },
       'AppAccessToken'
     )
@@ -316,7 +316,7 @@ nextAction?
         type: 'http',
         scheme: 'bearer',
         bearerFormat: 'JWT',
-        description: '**Transaction Token** - 10-minute validity JWT for sensitive operations (balance, transfers). Obtained from PIN verification.'
+        description: '**Transaction Token** - 5-minute validity JWT for sensitive operations (balance, transfers). Obtained from PIN verification.'
       },
       'TransactionToken'
     )
