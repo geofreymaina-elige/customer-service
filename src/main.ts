@@ -94,57 +94,120 @@ async function bootstrap() {
 
   // Swagger API Documentation
   const swaggerConfig = new DocumentBuilder()
-    .setTitle('Ambia Pay Customer Management API')
+    .setTitle('AmbiaPay Customer Service API')
     .setDescription(`
-# Customer Management & KYC API
+# Mobile App Customer Service API
 
-Complete API documentation for mobile app developers to implement customer onboarding and KYC workflows.
+Complete API documentation for mobile app developers to integrate AmbiaPay wallet services.
 
-## 🚀 Getting Started
-
-### Authentication Flow
-1. **Check Onboarding Status** → \`GET /api/v2/customers/onboarding-status\`
-2. **Register Device** → \`POST /api/v2/auth/sessions\` (starts wallet creation)
-3. **Verify OTP** → \`POST /api/v2/auth/wallet-verifications\`
-4. **Set PIN** → \`POST /api/v2/customers/me/pin\`
-
-### KYC Upload Flow (if required)
-1. **Check KYC Status** → \`GET /api/v2/customers/kyc/submissions/status\`
-2. **Get Requirements** → \`GET /api/v2/customers/kyc/requirements\`
-3. **Upload Documents** → \`POST /api/v2/customers/kyc/submissions/images\`
-4. **Check Status Again** → Auto-submitted when all docs uploaded
-
-## 📋 KYC Document Types
-
-Supported document types
-- **NATIONAL_ID** - Kenya National ID Card
-- **PASSPORT** - International Passport
-- **ALIEN_ID** - Alien Registration Card
-
-Each requires
-- \`document_front\` - Front of document (required)
-- \`document_back\` - Back of document (required)
-- \`selfie\` - Passport photo/selfie (required)
-
-## 📸 Image Requirements
-
-- **Formats** JPEG, PNG, WebP
-- **Max Size** 20MB per image
-- **Quality** Clear, readable, well-lit
-- **Content** Full document visible, no glare
+---
 
 ## 🔐 Authentication
 
-All API requests require an API key in the \`X-API-Key\` header.
+All API requests require multiple authentication layers:
 
-### API Key
-Required for all requests. Obtain from your Ambia Pay dashboard.
+### 1. API Key (Required for ALL requests)
+\`\`\`
+X-API-Key: your_api_key_here
+\`\`\`
 
-### ASTPP Token
-Most endpoints also require \`X-Astpp-Token\` header for customer authentication.
+### 2. Customer Authentication (varies by endpoint)
 
-### Bearer Token
-Some endpoints use \`Authorization: Bearer {token}\` after device registration.
+**ASTPP Token** - For initial customer identification
+\`\`\`
+X-Astpp-Token: encrypted_astpp_token
+\`\`\`
+
+**App Access Token** - For general wallet operations (30-day validity)
+\`\`\`
+Authorization: Bearer app_access_token
+\`\`\`
+
+**Transaction Token** - For sensitive operations like balance checks (10-minute validity)
+\`\`\`
+Authorization: Bearer transaction_token
+\`\`\`
+
+---
+
+## 🚀 Mobile App Integration Workflow
+
+### Step 1: Check Onboarding Status
+**Endpoint** \`GET /api/v2/customers/onboarding-status?astppId={astppId}\`
+
+**Purpose** Call this FIRST every time the app launches to determine what screen to show.
+
+**Authentication** X-API-Key + X-Astpp-Token
+
+**Response determines next action**
+- \`nextAction.type: "start_onboarding"\` → No wallet, proceed to device registration
+- \`nextAction.type: "verify_otp"\` → Wallet creation pending, show OTP screen
+- \`nextAction.type: "upload_kyc_documents"\` → Wallet active, need KYC upload
+- \`nextAction.type: "set_pin"\` → Wallet approved, need PIN setup
+- \`nextAction.type: "make_transaction"\` → Fully onboarded, show home screen
+
+---
+
+### Step 2: Device Registration
+**Endpoint** \`POST /api/v2/auth/sessions/device\`
+
+**Purpose** Register device and start wallet creation process. This triggers SasaPay wallet creation and OTP sending.
+
+**Authentication** X-API-Key + X-Astpp-Token
+
+**Response**
+- \`otpPending: true\` → Redirect to OTP verification screen
+- \`otpPending: false\` → Check \`isWalletPinSet\`
+  - If false → Redirect to PIN setup screen
+  - If true → Proceed to home screen
+
+**Returns** App access token (30-day validity) for subsequent API calls
+
+---
+
+### Step 3: OTP Verification (if otpPending=true)
+**Endpoint** \`POST /api/v2/auth/wallet-verifications\`
+
+**Purpose** Verify OTP sent to customer's phone to activate wallet
+
+**Authentication** X-API-Key + Bearer (app access token)
+
+**After Success** Wallet becomes active. Check \`isWalletPinSet\` to determine next step.
+
+---
+
+### Step 4: KYC Document Upload (if nextAction=upload_kyc_documents)
+**Endpoint** \`GET /api/v2/customers/kyc/requirements\` - Get required documents
+
+**Endpoint** \`POST /api/v2/customers/kyc/submissions/images\` - Upload documents
+
+**Purpose** Submit KYC documents for compliance approval
+
+**Authentication** X-API-Key + Bearer (app access token)
+
+---
+
+### Step 5: PIN Management
+
+**Set Initial PIN** \`POST /api/v2/customers/me/pin\`
+
+**Verify PIN for Transactions** \`POST /api/v2/auth/transaction-tokens\`
+
+**Purpose** Secure wallet with PIN. Transaction token required for sensitive operations.
+
+**Authentication** X-API-Key + Bearer (app access token)
+
+---
+
+### Step 6: Wallet Operations
+
+**Get Balance** \`GET /api/v2/customers/me/balance\`
+- Requires transaction token (get via PIN verification)
+
+**Get Wallet Info** \`GET /api/v2/customers/me\`
+- Uses app access token
+
+---
 
 ## 📊 Response Format
 
@@ -152,27 +215,74 @@ All responses follow this structure
 
 \`\`\`json
 {
-  "success": true,
+  "success": true | false,
   "message": "Human-readable message",
   "data": { /* response data */ },
-  "code": "SUCCESS_CODE"  // Only on errors
+  "code": "ERROR_CODE"  // Only on errors
 }
 \`\`\`
 
-## 🚦 Status Codes
+---
+
+## 🚦 Common Status Codes
 
 - **200** - Success
 - **400** - Bad Request (validation error)
-- **401** - Unauthorized (invalid/missing token)
-- **403** - Forbidden (feature disabled)
+- **401** - Unauthorized (invalid/missing token or API key)
+- **403** - Forbidden (feature disabled or insufficient permissions)
 - **404** - Not Found
-- **409** - Conflict (already exists)
+- **409** - Conflict (duplicate resource)
 - **429** - Too Many Requests (rate limited)
 - **500** - Internal Server Error
+
+---
+
+## 📱 Token Lifecycle
+
+### App Access Token
+- **Validity** 30 days
+- **Purpose** General wallet operations
+- **Obtained from** Device registration endpoint
+- **Scopes** \`app:access\`
+
+### Transaction Token  
+- **Validity** 10 minutes
+- **Purpose** Sensitive operations (balance, transfers)
+- **Obtained from** PIN verification endpoint
+- **Scopes** \`wallet:transact\`
+
+---
+
+## 🔄 Workflow Decision Tree
+
+\`\`\`
+Start App
+    ↓
+GET /onboarding-status
+    ↓
+nextAction?
+    ├─ start_onboarding → POST /sessions/device
+    │                        ↓
+    │                     otpPending?
+    │                        ├─ true → POST /wallet-verifications
+    │                        └─ false → Check isWalletPinSet
+    │
+    ├─ upload_kyc_documents → POST /kyc/submissions/images
+    │
+    ├─ set_pin → POST /customers/me/pin
+    │
+    └─ make_transaction → Home Screen
+           ↓
+       Need Balance?
+           ↓
+       POST /transaction-tokens (verify PIN)
+           ↓
+       GET /customers/me/balance
+\`\`\`
     `)
     .setVersion('2.0')
     .setContact(
-      'Ambia Pay Support',
+      'AmbiaPay Support',
       'https://ambiapay.com',
       'support@ambiapay.com'
     )
@@ -184,34 +294,43 @@ All responses follow this structure
         type: 'apiKey',
         name: 'X-API-Key',
         in: 'header',
-        description: 'API key required for all requests. Obtain from your Ambia Pay dashboard.'
+        description: '**[REQUIRED]** API key for all requests. Obtain from AmbiaPay dashboard.'
       },
       'API-Key'
-    )
-    .addBearerAuth(
-      {
-        type: 'http',
-        scheme: 'bearer',
-        bearerFormat: 'JWT',
-        description: 'JWT token obtained from authentication endpoints'
-      },
-      'JWT'
     )
     .addApiKey(
       {
         type: 'apiKey',
         name: 'X-Astpp-Token',
         in: 'header',
-        description: 'ASTPP encrypted token for the customer account'
+        description: '**[REQUIRED for initial calls]** ASTPP encrypted token for customer identification. Provided by ASTPP system.'
       },
-      'X-Astpp-Token'
+      'ASTPP-Token'
     )
-    .addTag('Onboarding', 'Customer onboarding and wallet status')
-    .addTag('Authentication', 'Device registration and session management')
-    .addTag('KYC', 'Know Your Customer document submission')
-    .addTag('PIN', 'PIN management and verification')
-    .addTag('Wallet', 'Wallet information and balance')
-    .addTag('Transactions', 'Transaction history')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        description: '**App Access Token** - 30-day validity JWT for general wallet operations. Obtained from device registration.'
+      },
+      'AppAccessToken'
+    )
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        description: '**Transaction Token** - 10-minute validity JWT for sensitive operations (balance, transfers). Obtained from PIN verification.'
+      },
+      'TransactionToken'
+    )
+    .addTag('1. Onboarding', '🚀 Customer onboarding and wallet status check')
+    .addTag('2. Authentication', '🔐 Device registration and session management')
+    .addTag('3. KYC', '📄 Document submission for compliance')
+    .addTag('4. PIN', '🔢 PIN management and verification')
+    .addTag('5. Wallet', '💰 Wallet information and balance')
+    .addTag('6. Configuration', '⚙️ App configuration and settings')
     .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);
