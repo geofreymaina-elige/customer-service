@@ -1,4 +1,91 @@
-import { DocumentBuilder } from '@nestjs/swagger';
+import { INestApplication } from '@nestjs/common';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { swaggerCustomStyles } from './swagger.styles';
+
+/**
+ * Injected into the Swagger page (customJsStr).
+ *  1. "Test variables" panel (astpp_id, phone_number) saved in localStorage
+ *  2. "API Information" footer below the last API section
+ * Edit FOOTER to change the footer content.
+ */
+const swaggerCustomScript = `
+(function () {
+  /* ---------------- 1. Test variables panel ---------------- */
+  var FIELDS = [
+    ['astpp_id', 'ASTPP ID', '31553'],
+    ['phone_number', 'Phone number', '254711470771']
+  ];
+
+  function get(k, d) {
+    try { return localStorage.getItem('swg_' + k) || d; } catch (e) { return d; }
+  }
+  function set(k, v) {
+    try { localStorage.setItem('swg_' + k, v); } catch (e) {}
+  }
+
+  function buildVarsPanel() {
+    if (document.querySelector('.swg-vars')) return;
+    var box = document.createElement('div');
+    box.className = 'swg-vars';
+    box.innerHTML = '<b>Test variables</b>';
+    FIELDS.forEach(function (f) {
+      var l = document.createElement('label');
+      l.textContent = f[1];
+      var i = document.createElement('input');
+      i.type = 'text';
+      i.value = get(f[0], f[2]);
+      i.oninput = function () { set(f[0], i.value); };
+      l.appendChild(i);
+      box.appendChild(l);
+    });
+    document.body.appendChild(box);
+  }
+
+  /* ---------------- 2. API Information footer ---------------- */
+  var FOOTER = {
+    title: 'API Information',
+    rows: [
+      ['Version', '2.0'],
+      ['Last Updated', 'October 2026'],
+      ['Base URL', '<a href="https://api.ambiapay.com" target="_blank" rel="noopener">https://api.ambiapay.com</a>']
+    ],
+    copyright: '\\u00A9 2026 AmbiaPay. All rights reserved.'
+  };
+
+  function buildFooter() {
+    if (document.querySelector('.api-footer')) return;
+    var wrap = document.createElement('div');
+    wrap.className = 'api-footer';
+
+    var rows = FOOTER.rows.map(function (r) {
+      return '<div class="api-footer-row"><span class="label">' + r[0] +
+             '</span><span class="value">' + r[1] + '</span></div>';
+    }).join('');
+
+    wrap.innerHTML =
+      '<div class="api-footer-card">' +
+        '<h2>' + FOOTER.title + '</h2>' +
+        rows +
+        '<div class="api-footer-copy">' + FOOTER.copyright + '</div>' +
+      '</div>';
+
+    // Appended to <body>, after the #swagger-ui root, so Swagger's React
+    // re-renders never remove it and it always sits below the last API.
+    document.body.appendChild(wrap);
+  }
+
+  function init() {
+    buildVarsPanel();
+    buildFooter();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+`;
 
 export function createSwaggerConfig() {
   return new DocumentBuilder()
@@ -153,7 +240,7 @@ All responses follow this structure
 - **Obtained from** Device registration endpoint
 - **Scopes** \`app:access\`
 
-### Transaction Token  
+### Transaction Token
 - **Validity** 5 minutes
 - **Purpose** Sensitive operations (balance, transfers)
 - **Obtained from** PIN verification endpoint
@@ -187,16 +274,6 @@ nextAction?
            ↓
        GET /customers/me/balance
 \`\`\`
-
----
-
-**API Information**
-
-Version: 2.0  
-Last Updated: October 2026  
-Base URL: https://api.ambiapay.com
-
-© 2026 AmbiaPay. All rights reserved.
     `)
     .setVersion('2.0')
     .addServer('https://api.ambiapay.com', 'Production')
@@ -207,36 +284,36 @@ Base URL: https://api.ambiapay.com
         type: 'apiKey',
         name: 'X-API-Key',
         in: 'header',
-        description: '**[REQUIRED]** API key for all requests. Obtain from AmbiaPay dashboard.'
+        description: '**[REQUIRED]** API key for all requests. Obtain from AmbiaPay dashboard.',
       },
-      'API-Key'
+      'API-Key',
     )
     .addApiKey(
       {
         type: 'apiKey',
         name: 'X-Astpp-Token',
         in: 'header',
-        description: '**[REQUIRED for initial calls]** ASTPP encrypted token for customer identification. Provided by ASTPP system.'
+        description: '**[REQUIRED for initial calls]** ASTPP encrypted token for customer identification. Provided by ASTPP system.',
       },
-      'ASTPP-Token'
+      'ASTPP-Token',
     )
     .addBearerAuth(
       {
         type: 'http',
         scheme: 'bearer',
         bearerFormat: 'JWT',
-        description: '**App Access Token** - 24-hour validity JWT for general wallet operations. Obtained from device registration.'
+        description: '**App Access Token** - 24-hour validity JWT for general wallet operations. Obtained from device registration.',
       },
-      'AppAccessToken'
+      'AppAccessToken',
     )
     .addBearerAuth(
       {
         type: 'http',
         scheme: 'bearer',
         bearerFormat: 'JWT',
-        description: '**Transaction Token** - 5-minute validity JWT for sensitive operations (balance, transfers). Obtained from PIN verification.'
+        description: '**Transaction Token** - 5-minute validity JWT for sensitive operations (balance, transfers). Obtained from PIN verification.',
       },
-      'TransactionToken'
+      'TransactionToken',
     )
     .addTag('Onboarding', 'Customer onboarding, device registration, and authentication')
     .addTag('KYC', 'Document submission for compliance')
@@ -244,4 +321,38 @@ Base URL: https://api.ambiapay.com
     .addTag('Wallet Balance', 'Wallet balance and information')
     .addTag('Configuration and Banners', 'App configuration and banner images')
     .build();
+}
+
+/**
+ * Call this from main.ts:  setupSwagger(app);
+ */
+export function setupSwagger(app: INestApplication, path = 'docs') {
+  const document = SwaggerModule.createDocument(app, createSwaggerConfig());
+
+  SwaggerModule.setup(path, app, document, {
+    customSiteTitle: 'AmbiaPay Customer Service API',
+    customCss: swaggerCustomStyles,
+    customJsStr: swaggerCustomScript,
+    swaggerOptions: {
+      persistAuthorization: true, // keep API key / tokens after a page refresh
+      displayRequestDuration: true,
+      tryItOutEnabled: true,
+
+      // NOTE: Nest serialises this function into the page, so it must be
+      // self-contained (no imports, no outer variables).
+      requestInterceptor: (req: any) => {
+        var vars: any = {
+          '{{astpp_id}}': localStorage.getItem('swg_astpp_id') || '',
+          '{{phone_number}}': localStorage.getItem('swg_phone_number') || '',
+        };
+        Object.keys(vars).forEach(function (k) {
+          req.url = req.url.split(encodeURIComponent(k)).join(vars[k]).split(k).join(vars[k]);
+          if (typeof req.body === 'string') {
+            req.body = req.body.split(k).join(vars[k]);
+          }
+        });
+        return req;
+      },
+    },
+  });
 }
