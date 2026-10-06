@@ -12,8 +12,8 @@ const swaggerCustomScript = `
 (function () {
   /* ---------------- 1. Test variables panel ---------------- */
   var FIELDS = [
-    ['astpp_id', 'ASTPP ID', '31553'],
-    ['phone_number', 'Phone number', '254711470771']
+    ['astpp_id', 'ASTPP ID', '0000'],
+    ['phone_number', 'Phone number', '254711xxx771']
   ];
 
   function get(k, d) {

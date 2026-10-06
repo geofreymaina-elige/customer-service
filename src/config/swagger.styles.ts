@@ -3,8 +3,8 @@ export const swaggerCustomStyles = `
      AmbiaPay Swagger theme - dark / green
      ============================================================ */
   :root {
-    --bg: #1b1f23;
-    --surface: #22272b;
+    --bg: #f5f7fa;
+    --surface: #f5f7fa;
     --panel: #14291f;
     --panel-head: #1a3b2f;
     --border: #2d4a3e;
