@@ -4,9 +4,11 @@ import {
   Param,
   UseGuards,
 } from '@nestjs/common';
+import { ApiExcludeController } from '@nestjs/swagger';
 import { AdminApiKeyGuard } from '../../../core/auth/admin-api-key.guard';
 import { AdminSasaPayKycService } from '../services/admin-sasapay-kyc.service';
 
+@ApiExcludeController()
 @Controller('api/v2/admin/sasapay-kyc')
 @UseGuards(AdminApiKeyGuard)
 export class AdminSasaPayKycController {

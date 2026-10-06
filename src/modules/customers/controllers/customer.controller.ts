@@ -1,4 +1,5 @@
 import { Controller, Get, Patch, Body, UseGuards } from '@nestjs/common';
+import { ApiExcludeEndpoint } from '@nestjs/swagger';
 import { CustomerService } from '../services/customer.service';
 import { UpdateCustomerProfileDto } from '../dto/customer.dto';
 import { AuthGuard } from '../../../core/auth/auth.guard';
@@ -18,6 +19,7 @@ export class CustomerController {
     };
   }
 
+  @ApiExcludeEndpoint()
   @Patch('me')
   @UseGuards(AuthGuard)
   async updateMyProfile(@CurrentUser() user: AuthenticatedUser, @Body() dto: UpdateCustomerProfileDto) {

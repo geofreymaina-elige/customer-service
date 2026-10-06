@@ -1,5 +1,5 @@
 import { Controller, Post, Body, Req, HttpCode, HttpStatus, UseGuards, UnauthorizedException, Delete } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiSecurity, ApiBody } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiSecurity, ApiBody, ApiExcludeEndpoint } from '@nestjs/swagger';
 import { Request } from 'express';
 import * as crypto from 'crypto';
 import { ConfigService } from '@nestjs/config';
@@ -257,6 +257,7 @@ Returns a 10-minute transaction token that grants access to sensitive endpoints.
    * Sign in new phone (recovery, start OTP) - moved from DeviceController
    * Requires astpp_id in body and X-Astpp-Token header
    */
+  @ApiExcludeEndpoint()
   @Post('api/v2/auth/sessions/recovery')
   @UseGuards(AstppTokenGuard)
   @HttpCode(HttpStatus.OK)
@@ -273,6 +274,7 @@ Returns a 10-minute transaction token that grants access to sensitive endpoints.
   /**
    * Recovery OTP verify + new device register - moved from DeviceController
    */
+  @ApiExcludeEndpoint()
   @Post('api/v2/auth/sessions/recovery-otp')
   @HttpCode(HttpStatus.OK)
   async verifyLogout(@Body() dto: VerifyDeviceLogoutDto, @Req() req: Request) {
@@ -290,6 +292,7 @@ Returns a 10-minute transaction token that grants access to sensitive endpoints.
    * Sign out all devices (revokes all active sessions for this customer)
    * Idempotent - succeeds even if session is already revoked
    */
+  @ApiExcludeEndpoint()
   @Delete('api/v2/auth/sessions/current')
   @HttpCode(HttpStatus.OK)
   async revokeAllSessions(@Req() req: Request) {
@@ -532,6 +535,7 @@ Success indicates wallet activation is being processed. Customer should wait bri
   /**
    * SasaPay webhook callback (was POST api/v1/onboarding/callback/sasapay)
    */
+  @ApiExcludeEndpoint()
   @Public()
   @Post('webhooks/v1/sasapay')
   @HttpCode(HttpStatus.OK)

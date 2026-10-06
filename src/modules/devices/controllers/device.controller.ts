@@ -1,10 +1,12 @@
 import { Controller, Get, Delete, Body, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import { ApiExcludeController } from '@nestjs/swagger';
 import { DeviceGatekeeperService } from '../services/device-gatekeeper.service';
 import { RevokeDeviceDto } from '../dto/device.dto';
 import { MessageService } from '../../../core/messages/message.service';
 import { AuthGuard } from '../../../core/auth/auth.guard';
 import { CurrentUser, AuthenticatedUser } from '../../../core/auth/current-user.decorator';
 
+@ApiExcludeController()
 @Controller('')
 export class DeviceController {
   constructor(

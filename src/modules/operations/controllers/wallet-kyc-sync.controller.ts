@@ -1,4 +1,5 @@
 import { Controller, Post, Param, ParseIntPipe, Body, UseGuards } from '@nestjs/common';
+import { ApiExcludeController } from '@nestjs/swagger';
 import { WalletKycSyncService } from '../services/wallet-kyc-sync.service';
 
 /**
@@ -11,6 +12,7 @@ import { WalletKycSyncService } from '../services/wallet-kyc-sync.service';
  * IMPORTANT: These are internal endpoints - should be protected with API key
  * or internal network firewall in production.
  */
+@ApiExcludeController()
 @Controller('internal/wallet-kyc')
 export class WalletKycSyncController {
   constructor(private readonly walletKycSyncService: WalletKycSyncService) {}

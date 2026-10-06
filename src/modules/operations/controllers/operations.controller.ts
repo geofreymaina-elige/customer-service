@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Body, Param, Query, HttpCode, HttpStatus } from '@nestjs/common';
+import { ApiExcludeController } from '@nestjs/swagger';
 import { CustomerOperationsService } from '../services/customer-operations.service';
 import {
   CustomerQueryDto,
@@ -8,6 +9,7 @@ import {
   AdminFreezeWalletDto,
 } from '../dto/customer-operations.dto';
 
+@ApiExcludeController()
 @Controller('api/v1/operations')
 export class OperationsController {
   constructor(private readonly operationsService: CustomerOperationsService) {}

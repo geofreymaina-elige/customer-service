@@ -281,11 +281,6 @@ nextAction?
 \`\`\`
     `)
     .setVersion('2.0')
-    .setContact(
-      'AmbiaPay Support',
-      'https://ambiapay.com',
-      'support@ambiapay.com'
-    )
     .addServer('https://api.ambiapay.com', 'Production')
     .addServer('https://dev-api.ambiapay.com', 'Staging')
     .addServer('http://localhost:5006', 'Local Development')
@@ -339,9 +334,31 @@ nextAction?
     customCss: `
       .swagger-ui .topbar { display: none; }
       
+      /* Background color matching the first image */
+      body {
+        background-color: #f5f7fa;
+      }
+      
+      .swagger-ui {
+        background-color: #f5f7fa;
+      }
+      
       /* Color scheme from AmbiaPay branding */
       .swagger-ui { 
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      }
+      
+      /* Main content wrapper */
+      .swagger-ui .wrapper {
+        background-color: #f5f7fa;
+      }
+      
+      .swagger-ui .information-container {
+        background: white;
+        padding: 30px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
       }
       
       /* Header styling */
