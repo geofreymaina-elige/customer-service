@@ -6,10 +6,12 @@ import {
 } from '@nestjs/common';
 import { ApiExcludeController } from '@nestjs/swagger';
 import { AdminApiKeyGuard } from '../../../core/auth/admin-api-key.guard';
+import { Public } from '../../../core/auth/public.decorator';
 import { AdminSasaPayKycService } from '../services/admin-sasapay-kyc.service';
 
 @ApiExcludeController()
 @Controller('api/v2/admin/sasapay-kyc')
+@Public()
 @UseGuards(AdminApiKeyGuard)
 export class AdminSasaPayKycController {
   constructor(private readonly adminKycService: AdminSasaPayKycService) {}
