@@ -10,7 +10,7 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 -- ============================================================================
 
 DO $$ BEGIN
-    CREATE TYPE customer_status_enum AS ENUM ('active', 'suspended', 'pending_verification', 'closed');
+    CREATE TYPE customer_status_enum AS ENUM ('active', 'suspended');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 
 DO $$ BEGIN
@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS customers (
     timezone VARCHAR(50) DEFAULT 'Africa/Nairobi',
     
     -- Status
-    status customer_status_enum NOT NULL DEFAULT 'pending_verification',
+    status customer_status_enum NOT NULL DEFAULT 'active',
     
     -- Soft Delete
     deleted_at TIMESTAMPTZ,

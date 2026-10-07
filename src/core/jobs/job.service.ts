@@ -112,4 +112,20 @@ export class JobService {
       this.logger.warn(`Job ID ${jobId} retrying in ${retryDelaySeconds}s: ${error}`);
     }
   }
+
+  async markPermanentlyFailed(jobId: number, error: string): Promise<void> {
+    const result = await this.db.query(
+      `UPDATE jobs
+       SET status = 'FAILED', last_error = $1, locked_at = NULL, locked_by = NULL, updated_at = NOW()
+       WHERE id = $2 AND status = 'RUNNING'
+       RETURNING id`,
+      [error, jobId],
+    );
+
+    if (result.rowCount === 0) {
+      throw new Error(`Job ${jobId} could not be marked failed because it is not RUNNING`);
+    }
+
+    this.logger.error(`Job ID ${jobId} failed permanently: ${error}`);
+  }
 }

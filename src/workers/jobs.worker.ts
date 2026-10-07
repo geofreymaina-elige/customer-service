@@ -2,6 +2,8 @@ import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/commo
 import { JobService } from '../core/jobs/job.service';
 import { WaasOnboardingJobService, OnboardingJobPayload } from '../modules/onboarding/services/waas-onboarding-job.service';
 import { SasaPayKycService } from '../modules/onboarding/services/sasapay-kyc.service';
+import { SasaPayWaasService } from '../modules/onboarding/services/sasapay-waas.service';
+import { OnboardingService } from '../modules/onboarding/services/onboarding.service';
 import * as os from 'os';
 
 @Injectable()
@@ -15,6 +17,8 @@ export class JobsWorker implements OnModuleInit, OnModuleDestroy {
     private readonly jobService: JobService,
     private readonly waasOnboardingJob: WaasOnboardingJobService,
     private readonly sasaPayKyc: SasaPayKycService,
+    private readonly sasapayWaas: SasaPayWaasService,
+    private readonly onboardingService: OnboardingService,
   ) {}
 
   async onModuleInit() {
@@ -71,7 +75,7 @@ export class JobsWorker implements OnModuleInit, OnModuleDestroy {
         // Uses SELECT FOR UPDATE SKIP LOCKED to prevent duplicate processing
         // -----------------------------------------------------------------------
         case 'sasapay_otp_confirmation': {
-          const payload = job.payload as OnboardingJobPayload & { requestId: string; otp: string };
+          const payload = job.payload as OnboardingJobPayload & { requestId: string };
           this.logger.log(`[OTP CONFIRM JOB] Processing OTP confirmation for customer ${payload.customerId}`);
           await this.waasOnboardingJob.confirmOtpAndCreateWallet(payload);
           await this.jobService.markCompleted(job.id);
@@ -138,6 +142,21 @@ export class JobsWorker implements OnModuleInit, OnModuleDestroy {
     } catch (error) {
       const errorDetails = this.formatError(error);
       this.logger.error(`[JOBS WORKER] Job ${job.job_type} (${job.uuid}) failed: ${errorDetails}`);
+      if (
+        job.job_type === 'sasapay_otp_confirmation' &&
+        this.sasapayWaas.isWalletLimitExceeded(error)
+      ) {
+        try {
+          await this.onboardingService.recordWalletLimitReached(
+            job.payload.customerId,
+            'otp_verification',
+          );
+        } catch (auditError) {
+          this.logger.error(`[JOBS WORKER] Could not record SasaPay wallet limit: ${auditError?.message}`);
+        }
+        await this.jobService.markPermanentlyFailed(job.id, errorDetails);
+        return;
+      }
       if (
         job.job_type === 'sasapay_kyc_submission_upload' &&
         job.attempts >= job.max_attempts &&

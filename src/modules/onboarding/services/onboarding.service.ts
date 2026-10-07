@@ -1,10 +1,11 @@
-import { Injectable, BadRequestException, Logger, UnauthorizedException } from '@nestjs/common';
+import { Injectable, ConflictException, Logger, UnauthorizedException } from '@nestjs/common';
 import { DatabaseService } from '../../../core/database/database.service';
 import { AstppAdapterService } from '../../astpp/astpp-adapter.service';
 import { DeviceGatekeeperService } from '../../devices/services/device-gatekeeper.service';
 import { SecureJwtService } from '../../../core/auth/jwt.service';
 import { MessageService } from '../../../core/messages/message.service';
 import { JobService } from '../../../core/jobs/job.service';
+import { KafkaNotificationService } from '../../../core/notifications/kafka-notification.service';
 import { OnboardUserDeviceDto } from '../dto/onboarding.dto';
 
 @Injectable()
@@ -17,15 +18,80 @@ export class OnboardingService {
     private readonly jwtService: SecureJwtService,
     private readonly messages: MessageService,
     private readonly jobService: JobService,
+    private readonly notifications: KafkaNotificationService,
   ) {}
+
+  async recordWalletLimitReached(
+    customerId: number,
+    stage: 'onboarding_initiation' | 'otp_verification',
+    providerResponseCode = 'SP4000',
+  ): Promise<void> {
+    const recipient = await this.db.queryOne(
+      `SELECT astpp_id, phone_number FROM customers WHERE id = $1`,
+      [customerId],
+    );
+    if (!recipient) {
+      throw new Error(`Cannot record SasaPay wallet limit for missing customer ${customerId}`);
+    }
+
+    await this.db.query(
+      `INSERT INTO customer_activity_logs (customer_id, event_type, actor_type, actor_id, details)
+       VALUES ($1, 'SASAPAY_WALLET_LIMIT_REACHED', 'SYSTEM', 'SASAPAY_WAAS', $2::jsonb)`,
+      [customerId, { stage, providerResponseCode, walletLimit: 2 }],
+    );
+
+    await this.notifications.sendNotification({
+      astppId: String(recipient.astpp_id),
+      channels: ['sms', 'push'],
+      title: this.messages.get('wallets.onboarding.walletLimitReached.title'),
+      body: this.messages.get('wallets.onboarding.walletLimitReached.body'),
+      priority: 'urgent',
+      correlationId: `sasapay-wallet-limit-${customerId}-${Date.now()}`,
+      sourceService: 'customer-management-service',
+      type: 'SASAPAY_WALLET_LIMIT_REACHED',
+      notifyTopic: true,
+      contact: recipient.phone_number ? { phoneNumber: recipient.phone_number } : undefined,
+      context: { customerId, stage },
+      metadata: { providerResponseCode, walletLimit: 2 },
+    });
+  }
+
+  private async assertWalletCapacityAvailable(customerId: number): Promise<void> {
+    const identity = await this.db.queryOne<{ identity_document_type: string; identity_document_number: string }>(
+      `SELECT identity_document_type, identity_document_number
+       FROM customer_applicant_details
+       WHERE customer_id = $1 AND application_type IN ('primary_kyc', 'wallet_kyc')
+       ORDER BY CASE WHEN application_type = 'primary_kyc' THEN 0 ELSE 1 END, updated_at DESC
+       LIMIT 1`,
+      [customerId],
+    );
+
+    if (!identity?.identity_document_number?.trim()) return;
+
+    const walletCount = await this.db.queryOne<{ wallet_count: number }>(
+      `SELECT COUNT(DISTINCT wallet.account_number)::int AS wallet_count
+       FROM customer_applicant_details matching_identity
+       JOIN customer_wallets wallet ON wallet.customer_id = matching_identity.customer_id
+         WHERE UPPER(TRIM(matching_identity.identity_document_type)) = UPPER(TRIM($1))
+         AND REGEXP_REPLACE(UPPER(TRIM(matching_identity.identity_document_number)), '[^A-Z0-9]', '', 'g')
+             = REGEXP_REPLACE(UPPER(TRIM($2)), '[^A-Z0-9]', '', 'g')`,
+      [identity.identity_document_type, identity.identity_document_number],
+    );
+
+    if ((walletCount?.wallet_count ?? 0) < 2) return;
+
+    await this.recordWalletLimitReached(customerId, 'onboarding_initiation', 'LOCAL_WALLET_LIMIT');
+    throw new ConflictException(this.messages.get('wallets.onboarding.walletLimitReached.body'));
+  }
 
   /**
    * Complete Onboard User Device Flow:
    * 1. Query ASTPP MySQL database for VoIP account & customer profile.
    * 2. Upsert customer & customer_applications in PostgreSQL.
-   * 3. Register device using DeviceGatekeeperService (checks single-device rule).
-   * 4. Enqueue background onboarding job for SasaPay WaaS and KYC image processing.
-   * 5. Return simplified response with user details and token (if PIN set).
+   * 3. Check the local wallet limit for the customer's identity before device registration.
+   * 4. Register device using DeviceGatekeeperService (checks single-device rule).
+   * 5. Enqueue background onboarding job for SasaPay WaaS and KYC image processing.
+   * 6. Return simplified response with user details and token (if PIN set).
    */
   async onboardUserDevice(dto: OnboardUserDeviceDto, ipAddress: string = '127.0.0.1'): Promise<{
     user: any;
@@ -132,6 +198,14 @@ export class OnboardingService {
       throw new UnauthorizedException('Customer account is inactive or deleted.');
     }
 
+    const existingWallet = await this.db.queryOne(
+      `SELECT id FROM customer_wallets WHERE customer_id = $1 AND status IN ('active', 'locked', 'frozen')`,
+      [customer.id],
+    );
+    if (!existingWallet) {
+      await this.assertWalletCapacityAvailable(customer.id);
+    }
+
     // 2. Register / Verify Device with single-device constraint
     const deviceResult = await this.deviceGatekeeper.registerOrVerifyDevice(
       customer.id,
@@ -155,11 +229,6 @@ export class OnboardingService {
     const isWalletPinSet = !!pinRecord;
 
     // 4. Enqueue background onboarding job (SasaPay WaaS + KYC image sync)
-    //    Guard A: skip if customer already has an active wallet
-    const existingWallet = await this.db.queryOne(
-      `SELECT id FROM customer_wallets WHERE customer_id = $1 AND status IN ('active', 'locked', 'frozen')`,
-      [customer.id],
-    );
     let otpPending = false;
 
     if (existingWallet) {

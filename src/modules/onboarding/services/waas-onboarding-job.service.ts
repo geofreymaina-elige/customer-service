@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DatabaseService } from '../../../core/database/database.service';
 import { AstppMysqlService } from '../../../core/astpp-mysql/astpp-mysql.service';
-import { SasaPayWaasService } from './sasapay-waas.service';
+import { SasaPayWalletConfirmation, SasaPayWaasService } from './sasapay-waas.service';
 import { JobService } from '../../../core/jobs/job.service';
 import { Client as SSHClient } from 'ssh2';
 import * as fs from 'fs';
@@ -18,6 +18,7 @@ export interface OnboardingJobPayload {
   submissionId?: string;
   requestId?: string;
   otp?: string;
+  providerConfirmation?: SasaPayWalletConfirmation;
 }
 
 interface OnboardingJobState {
@@ -89,8 +90,14 @@ export class WaasOnboardingJobService {
    *    - ACTIVE → active wallet
    *    - AWAITING_APPROVAL → locked wallet, no KYC job
    */
-  async confirmOtpAndCreateWallet(payload: OnboardingJobPayload & { requestId: string; otp: string }): Promise<void> {
-    const { customerId, astppId, applicationId, requestId, otp } = payload;
+  async confirmOtpAndCreateWallet(
+    payload: OnboardingJobPayload & {
+      requestId: string;
+      otp?: string;
+      providerConfirmation?: SasaPayWalletConfirmation;
+    },
+  ): Promise<void> {
+    const { customerId, astppId, applicationId, requestId, otp, providerConfirmation } = payload;
 
     this.logger.log(`[OTP CONFIRM JOB] Processing OTP for customer ${customerId}, requestId: ${requestId}`);
 
@@ -112,18 +119,28 @@ export class WaasOnboardingJobService {
       return; // Job completes successfully (idempotent)
     }
 
-    // --- 2. Call SasaPay OTP Confirmation API ---
-    const result = await this.sasapayWaas.confirmPersonalOnboardingByRequestId(requestId, otp);
+    // Consume the API's provider result, or confirm here for legacy jobs.
+    let result: SasaPayWalletConfirmation;
+    if (providerConfirmation) {
+      result = providerConfirmation;
+    } else {
+      if (!otp) throw new Error('OTP confirmation job has no provider result or legacy OTP payload');
+      result = await this.sasapayWaas.confirmPersonalOnboardingByRequestId(requestId, otp);
+    }
 
     if (!result.status) {
       await this.writeAuditLog(customerId, 'SASAPAY_OTP_JOB_FAILED', {
         requestId,
-        otp,
+        responseCode: result.responseCode,
         message: result.message,
         reason: 'SasaPay API returned error',
       });
 
-      throw new Error(`SasaPay OTP confirmation failed: ${result.message}`);
+      const error = new Error(`SasaPay OTP confirmation failed: ${result.message}`) as Error & {
+        response?: { data: SasaPayWalletConfirmation };
+      };
+      error.response = { data: result };
+      throw error;
     }
 
     const accountStatus = result.data?.accountStatus;

@@ -5,6 +5,19 @@ import { AppCacheService } from '../../../core/cache/app-cache.service';
 import { SasaPayLogger } from '../../../core/logging/sasapay-logger.service';
 import { PersonalOnboardingDto, PersonalOnboardingConfirmDto } from '../dto/onboarding.dto';
 
+export interface SasaPayWalletConfirmation {
+  status: boolean;
+  responseCode?: string;
+  message: string;
+  data: {
+    merchantCode: string;
+    accountNumber: string;
+    displayName: string;
+    accountStatus: 'ACTIVE' | 'AWAITING_APPROVAL' | 'AWAITING_KYC_UPLOAD';
+    accountBalance: number;
+  };
+}
+
 export interface SasaPayCustomerDetails {
   status: boolean;
   responseCode: string;
@@ -204,37 +217,17 @@ export class SasaPayWaasService {
   /**
    * Step 2: Confirm Personal Onboarding with OTP
    */
-  async confirmPersonalOnboarding(dto: PersonalOnboardingConfirmDto, requestId: string): Promise<{
-    status: boolean;
-    responseCode: string;
-    message: string;
-    data: {
-      merchantCode: string;
-      accountNumber: string;
-      displayName: string;
-      accountStatus: 'ACTIVE' | 'AWAITING_APPROVAL' | 'AWAITING_KYC_UPLOAD';
-      accountBalance: number;
-    };
-  }> {
+  async confirmPersonalOnboarding(
+    dto: PersonalOnboardingConfirmDto,
+    requestId: string,
+  ): Promise<SasaPayWalletConfirmation> {
     return this.confirmPersonalOnboardingByRequestId(requestId, dto.otp);
   }
 
   /**
-   * Confirm Personal Onboarding by RequestId (Job-based flow)
-   * Accepts requestId and OTP directly without DTO wrapper
+   * Confirm Personal Onboarding by request ID and return the provider result.
    */
-  async confirmPersonalOnboardingByRequestId(requestId: string, otp: string): Promise<{
-    status: boolean;
-    responseCode: string;
-    message: string;
-    data: {
-      merchantCode: string;
-      accountNumber: string;
-      displayName: string;
-      accountStatus: 'ACTIVE' | 'AWAITING_APPROVAL' | 'AWAITING_KYC_UPLOAD';
-      accountBalance: number;
-    };
-  }> {
+  async confirmPersonalOnboardingByRequestId(requestId: string, otp: string): Promise<SasaPayWalletConfirmation> {
     return this.callSasaPayApi(async (token) => {
       const payload = {
         merchantCode: this.merchantCode,
@@ -266,6 +259,30 @@ export class SasaPayWaasService {
         accountBalance: 0,
       },
     }));
+  }
+
+  isWalletLimitExceeded(errorOrResponse: unknown): boolean {
+    if (!errorOrResponse || typeof errorOrResponse !== 'object') return false;
+
+    const candidate = errorOrResponse as {
+      response?: { data?: unknown };
+      data?: unknown;
+      responseCode?: unknown;
+      message?: unknown;
+    };
+    const responseData = candidate.response?.data && typeof candidate.response.data === 'object'
+      ? candidate.response.data as Record<string, unknown>
+      : undefined;
+    const nestedData = candidate.data && typeof candidate.data === 'object'
+      ? candidate.data as Record<string, unknown>
+      : undefined;
+    const possibleResponses = [responseData, nestedData, candidate as Record<string, unknown>];
+
+    return possibleResponses.some((response) =>
+      response?.responseCode === 'SP4000'
+      && typeof response.message === 'string'
+      && /maximum number of wallets you can create is 2/i.test(response.message),
+    );
   }
 
   /**

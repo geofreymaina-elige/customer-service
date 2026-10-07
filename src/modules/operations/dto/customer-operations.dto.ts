@@ -7,7 +7,7 @@ export class CustomerQueryDto {
   query?: string; // Search across phone, VoIP DID, ID document, email, or name
 
   @IsOptional()
-  @IsIn(['active', 'suspended', 'pending_verification', 'closed'])
+  @IsIn(['active', 'suspended'])
   status?: string;
 
   @IsOptional()
@@ -29,10 +29,10 @@ export class CustomerQueryDto {
 
 export class UpdateCustomerStatusDto {
   @IsNotEmpty({ message: 'Customer status is required.' })
-  @IsIn(['active', 'suspended', 'pending_verification', 'closed'], {
-    message: 'Status must be active, suspended, pending_verification, or closed.',
+  @IsIn(['active', 'suspended'], {
+    message: 'Status must be active or suspended.',
   })
-  status: 'active' | 'suspended' | 'pending_verification' | 'closed';
+  status: 'active' | 'suspended';
 
   @IsNotEmpty({ message: 'Reason for status update is required.' })
   @IsString()

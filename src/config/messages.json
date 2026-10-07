@@ -75,6 +75,10 @@
       "notStarted": "Wallet onboarding not started. Ready to begin.",
       "readyToStart": "Ready to start wallet onboarding process.",
       "awaitingOtp": "Wallet onboarding initiated. Please verify the OTP sent to {phoneNumber}.",
+      "walletLimitReached": {
+        "title": "Wallet limit reached",
+        "body": "We could not create your wallet because the maximum number of wallets allowed for your identity has been reached. Please contact customer support for assistance."
+      },
       "processingKyc": "Your wallet KYC documents are being processed. This may take a few minutes.",
       "inProgress": "Wallet onboarding is in progress. Please wait for approval.",
       "approved": "Your wallet has been successfully approved and is ready to use.",

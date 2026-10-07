@@ -1,10 +1,10 @@
-import { Controller, Post, Body, Req, HttpCode, HttpStatus, UseGuards, UnauthorizedException, Delete } from '@nestjs/common';
+import { BadGatewayException, ConflictException, Controller, Post, Body, Req, HttpCode, HttpStatus, UseGuards, UnauthorizedException, Delete } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiSecurity, ApiBody, ApiExcludeEndpoint } from '@nestjs/swagger';
 import { Request } from 'express';
 import * as crypto from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { OnboardingService } from '../services/onboarding.service';
-import { SasaPayWaasService } from '../services/sasapay-waas.service';
+import { SasaPayWalletConfirmation, SasaPayWaasService } from '../services/sasapay-waas.service';
 import { SasaPayKycService } from '../services/sasapay-kyc.service';
 import { PinAuthService } from '../../auth/services/pin-auth.service';
 import { DeviceLogoutService } from '../../devices/services/device-logout.service';
@@ -129,6 +129,7 @@ It registers the device and triggers SasaPay wallet creation which sends an OTP 
       }
     }
   })
+  @ApiResponse({ status: 409, description: "Identity document has reached SasaPay's wallet limit." })
   @Post('api/v2/auth/sessions/device')
   @UseGuards(AstppTokenGuard)
   @HttpCode(HttpStatus.OK)
@@ -450,6 +451,7 @@ Success indicates wallet activation is being processed. Customer should wait bri
       }
     }
   })
+  @ApiResponse({ status: 409, description: "Identity document has reached SasaPay's wallet limit." })
   @Post('api/v2/auth/wallet-verifications')
   @UseGuards(AuthGuard)
   @HttpCode(HttpStatus.ACCEPTED)
@@ -503,13 +505,41 @@ Success indicates wallet activation is being processed. Customer should wait bri
       };
     }
 
-    // --- 3. ENQUEUE JOB: Let worker handle SasaPay API call ---
+    // Confirm with SasaPay before acknowledging the OTP so definitive provider
+    // rejections can be returned to the customer immediately.
+    let providerConfirmation: SasaPayWalletConfirmation;
+    try {
+      providerConfirmation = await this.sasapayWaas.confirmPersonalOnboardingByRequestId(requestId, dto.otp);
+    } catch (error) {
+      if (!this.sasapayWaas.isWalletLimitExceeded(error)) {
+        throw new BadGatewayException('Unable to verify your OTP with SasaPay. Please try again.');
+      }
+
+      await this.onboardingService.recordWalletLimitReached(customerId, 'otp_verification');
+      throw new ConflictException(this.messages.get('wallets.onboarding.walletLimitReached.body'));
+    }
+
+    if (this.sasapayWaas.isWalletLimitExceeded(providerConfirmation)) {
+      await this.onboardingService.recordWalletLimitReached(
+        customerId,
+        'otp_verification',
+        providerConfirmation.responseCode || 'SP4000',
+      );
+      throw new ConflictException(this.messages.get('wallets.onboarding.walletLimitReached.body'));
+    }
+
+    if (!providerConfirmation.status) {
+      throw new BadGatewayException(providerConfirmation.message || 'SasaPay could not verify the OTP.');
+    }
+
+    // The provider has accepted the OTP. Persist its result asynchronously so
+    // database retries never submit the same OTP to SasaPay again.
     const jobUuid = await this.jobService.enqueue('sasapay_otp_confirmation', {
       customerId,
       astppId: appRow.astpp_id,
       applicationId: appRow.pg_app_id,
       requestId,
-      otp: dto.otp,
+      providerConfirmation,
     });
 
     await this.writeAuditLog(customerId, 'SASAPAY_OTP_JOB_QUEUED', {
