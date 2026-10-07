@@ -13,7 +13,6 @@ import { validateAndDecryptToken } from './astpp-token.util';
  *
  * It resolves the ASTPP account ID from:
  *   1. req.params.astppId   (GET routes like /wallets/:astppId/onboarding-status)
- *   2. req.query.astppId    (GET routes like /wallets/onboarding-status?astppId=123)
  *   3. req.body.astpp_id    (POST routes like /onboarding/user-device)
  *
  * The token is expected in the HTTP header: X-Astpp-Token

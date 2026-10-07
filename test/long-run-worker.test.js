@@ -210,10 +210,16 @@ test('Postman classifier keeps balance periodic and state-changing requests out 
   const balance = requests.find((request) => request.name === 'Get my balance');
   const setPin = requests.find((request) => request.name === 'Set the initial PIN');
   const onboardingStatus = requests.find((request) => request.name === 'Get wallet onboarding status');
+  const wallet = requests.find((request) => request.name === 'Get my wallet');
+  const sessions = requests.find((request) => request.name === 'List my signed-in phones');
 
   assert.equal(safeGetClass(balance), 'balance');
+  assert.match(balance.url, /\/api\/v2\/customers\/me\/balance/);
   assert.equal(safeGetClass(setPin), 'mutation');
   assert.equal(safeGetClass(onboardingStatus), 'status');
+  assert.match(onboardingStatus.url, /\/api\/v2\/customers\/onboarding-status/);
+  assert.equal(safeGetClass(wallet), 'wallet');
+  assert.equal(safeGetClass(sessions), 'sessions');
   assert.ok(requests.length >= 10);
 });
 
@@ -347,10 +353,10 @@ test('balance request is skipped on startup and waits for its configured interva
     const runner = new ApiRunner(config, logger);
     const firstCycle = Date.now();
     await runner.runCycle(firstCycle);
-    assert.equal(calls.some((call) => call.url.includes('/wallets/me/balance')), false);
+    assert.equal(calls.some((call) => call.url.includes('/customers/me/balance')), false);
 
     await runner.runCycle(firstCycle + config.balanceIntervalMs + 1000);
-    assert.equal(calls.filter((call) => call.url.includes('/wallets/me/balance')).length, 1);
+    assert.equal(calls.filter((call) => call.url.includes('/customers/me/balance')).length, 1);
   } finally {
     global.fetch = originalFetch;
   }
@@ -371,7 +377,7 @@ test('balance is disabled by default because its handler calls SasaPay', async (
     await runner.runCycle(Date.now());
     await runner.runCycle(Date.now() + config.balanceIntervalMs + 1000);
     assert.equal(config.balanceApiEnabled, false);
-    assert.equal(calls.some((url) => url.includes('/wallets/me/balance')), false);
+    assert.equal(calls.some((url) => url.includes('/customers/me/balance')), false);
   } finally {
     global.fetch = originalFetch;
   }
@@ -430,7 +436,7 @@ test('app and transaction tokens are hydrated from the auth APIs instead of bein
       body: init.body ? JSON.parse(init.body) : undefined,
     });
 
-    if (requestUrl.pathname === '/api/v2/wallets/onboarding-status') {
+    if (requestUrl.pathname === '/api/v2/customers/onboarding-status') {
       return new Response(JSON.stringify({ success: true, data: { wallet: { status: 'active' } } }), {
         status: 200,
         headers: { 'content-type': 'application/json' },

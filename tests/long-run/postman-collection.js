@@ -33,10 +33,10 @@ function safeGetClass(request) {
   if (request.method === 'POST' && request.url.includes('/api/v2/auth/sessions/device')) return 'device_signin';
   if (request.method === 'POST' && request.url.includes('/api/v2/auth/transaction-tokens')) return 'token_refresh';
   if (request.method !== 'GET') return 'mutation';
-  if (request.url.includes('/api/v2/wallets/me/balance')) return 'balance';
-  if (request.url.includes('/api/v2/wallets/onboarding-status')) return 'status';
-  if (request.url.includes('/api/v2/wallets/me')) return 'wallet';
+  if (request.url.includes('/api/v2/customers/me/balance')) return 'balance';
+  if (request.url.includes('/api/v2/customers/onboarding-status')) return 'status';
   if (request.url.includes('/api/v2/customers/me/sessions')) return 'sessions';
+  if (request.url.includes('/api/v2/customers/me')) return 'wallet';
   if (request.url.includes('/api/v1/app-config')) return 'app_config';
   return 'read_once';
 }
