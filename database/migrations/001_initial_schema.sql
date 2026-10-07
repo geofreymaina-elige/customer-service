@@ -131,6 +131,50 @@ COMMENT ON COLUMN customer_applications.sasapay_request_id IS 'SasaPay personal 
 COMMENT ON COLUMN customer_applications.sasapay_account_number IS 'SasaPay wallet account number after successful onboarding';
 
 -- ============================================================================
+-- 3. DOCUMENT POLICIES
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS document_policies (
+    id BIGSERIAL PRIMARY KEY,
+    document_type VARCHAR(50) NOT NULL,
+    version INTEGER NOT NULL CHECK (version > 0),
+    required_documents TEXT[] NOT NULL,
+    accepted_mime_types TEXT[] NOT NULL,
+    max_file_size_bytes INTEGER NOT NULL CHECK (max_file_size_bytes > 0),
+    is_active BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_by VARCHAR(128),
+    CONSTRAINT uq_document_policy_version UNIQUE (document_type, version),
+    CONSTRAINT ck_document_policy_documents CHECK (
+        required_documents <@ ARRAY['document_front', 'document_back', 'selfie']::TEXT[]
+        AND (CARDINALITY(required_documents) = 0 OR 'selfie' = ANY(required_documents))
+    ),
+    CONSTRAINT ck_document_policy_mime_types CHECK (
+        CARDINALITY(accepted_mime_types) > 0
+        AND accepted_mime_types <@ ARRAY['image/jpeg', 'image/png', 'image/webp']::TEXT[]
+    )
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_document_active_policy
+    ON document_policies(document_type)
+    WHERE is_active = TRUE;
+
+COMMENT ON TABLE document_policies IS
+    'Versioned document requirements for KYC submissions (used for SasaPay and other providers)';
+
+INSERT INTO document_policies (
+    document_type, version, required_documents, accepted_mime_types,
+    max_file_size_bytes, is_active, created_by
+) VALUES
+    ('national_id', 1, ARRAY['document_front', 'document_back', 'selfie']::TEXT[],
+     ARRAY['image/jpeg', 'image/png', 'image/webp']::TEXT[], 20971520, TRUE, 'system_seed'),
+    ('passport', 1, ARRAY['document_front', 'document_back', 'selfie']::TEXT[],
+     ARRAY['image/jpeg', 'image/png', 'image/webp']::TEXT[], 20971520, TRUE, 'system_seed'),
+    ('alien_id', 1, ARRAY['document_front', 'document_back', 'selfie']::TEXT[],
+     ARRAY['image/jpeg', 'image/png', 'image/webp']::TEXT[], 20971520, TRUE, 'system_seed')
+ON CONFLICT (document_type, version) DO NOTHING;
+
+-- ============================================================================
 -- 3. CUSTOMER APPLICANT DETAILS (KYC Documents & Identity Info)
 -- Mirrors: ASTPP applicant_details + wallet_application_images tables
 -- Handles: Multiple document sets per customer (primary_kyc, wallet_kyc, etc.)
@@ -146,7 +190,7 @@ CREATE TABLE IF NOT EXISTS customer_applicant_details (
     astpp_id INTEGER NOT NULL,
     
     -- Application type (identifies which KYC document set this is)
-    application_type VARCHAR(20) NOT NULL DEFAULT 'primary_kyc', -- 'primary_kyc' or 'wallet_kyc'
+    application_type VARCHAR(20) NOT NULL DEFAULT 'primary_kyc', -- 'primary_kyc', 'wallet_kyc', or 'sasapay_kyc'
     
     -- Personal Information
     name VARCHAR(100) NOT NULL, -- Full name from ASTPP
@@ -167,6 +211,23 @@ CREATE TABLE IF NOT EXISTS customer_applicant_details (
     -- JSONB array: [{image_id, filename, original_name, image_type, file_size, mime_type, description, uploaded_at}]
     images JSONB DEFAULT '[]'::jsonb,
     
+    -- SasaPay submission policy and current workflow state
+    policy_id BIGINT REFERENCES document_policies(id) ON DELETE SET NULL,
+    policy_version INTEGER,
+    sasapay_submission_status VARCHAR(32),
+    sasapay_request_id VARCHAR(128),
+    sasapay_submitted_at TIMESTAMPTZ,
+    sasapay_result_at TIMESTAMPTZ,
+    sasapay_callback_payload JSONB,
+    sasapay_psp_status VARCHAR(32),
+    sasapay_psp_reason TEXT,
+    review_status VARCHAR(16),
+    review_decision VARCHAR(16),
+    reviewed_by VARCHAR(128),
+    reviewed_at TIMESTAMPTZ,
+    review_reason TEXT,
+    required_documents TEXT[] DEFAULT '{}',
+
     -- ASTPP metadata
     registration_type INTEGER, -- From ASTPP applicant_details.registration_type
     local_id_allowed BOOLEAN,
@@ -177,7 +238,22 @@ CREATE TABLE IF NOT EXISTS customer_applicant_details (
     synced_at TIMESTAMPTZ,
     
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT ck_applicant_sasapay_status CHECK (
+        sasapay_submission_status IS NULL OR sasapay_submission_status IN (
+            'awaiting_requirements', 'awaiting_documents', 'submitted_for_review',
+            'approved_for_psp', 'rejected', 'awaiting_psp_result',
+            'processing_psp_upload', 'psp_upload_failed', 'psp_approved', 'psp_rejected'
+        )
+    ),
+    CONSTRAINT ck_applicant_review_decision CHECK (
+        review_decision IS NULL OR review_decision IN ('approved', 'rejected')
+    ),
+    CONSTRAINT ck_applicant_required_documents CHECK (
+        required_documents <@ ARRAY['document_front', 'document_back', 'selfie']::TEXT[]
+        AND (CARDINALITY(required_documents) = 0 OR 'selfie' = ANY(required_documents))
+    )
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_applicant_details_application_type ON customer_applicant_details(customer_application_id, application_type);
@@ -185,12 +261,93 @@ CREATE INDEX IF NOT EXISTS idx_applicant_details_customer_application ON custome
 CREATE INDEX IF NOT EXISTS idx_applicant_details_customer ON customer_applicant_details(customer_id);
 CREATE INDEX IF NOT EXISTS idx_applicant_details_astpp_id ON customer_applicant_details(astpp_id);
 CREATE INDEX IF NOT EXISTS idx_applicant_details_doc_number ON customer_applicant_details(identity_document_number);
+CREATE INDEX IF NOT EXISTS idx_applicant_sasapay_request
+    ON customer_applicant_details(sasapay_request_id)
+    WHERE sasapay_request_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_applicant_sasapay_status
+    ON customer_applicant_details(sasapay_submission_status, created_at DESC)
+    WHERE sasapay_submission_status IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_applicant_review_status
+    ON customer_applicant_details(review_status, created_at DESC)
+    WHERE review_status IS NOT NULL;
 
 COMMENT ON TABLE customer_applicant_details IS 'KYC documents and identity details - multiple records per customer application (primary_kyc, wallet_kyc, etc.)';
 COMMENT ON COLUMN customer_applicant_details.customer_application_id IS 'References customer_applications.id (not ASTPP application_id)';
-COMMENT ON COLUMN customer_applicant_details.application_type IS 'Type of KYC: primary_kyc = initial onboarding, wallet_kyc = secondary KYC for wallet activation';
-COMMENT ON COLUMN customer_applicant_details.images IS 'JSONB array of additional document images from ASTPP wallet_application_images table';
+COMMENT ON COLUMN customer_applicant_details.application_type IS 'Type of KYC: primary_kyc = initial onboarding, wallet_kyc = secondary KYC, sasapay_kyc = SasaPay submission';
+COMMENT ON COLUMN customer_applicant_details.images IS 'JSONB array of document images. SasaPay submissions store document_front, document_back, and selfie here.';
 COMMENT ON COLUMN customer_applicant_details.identity_document_type IS 'Document type as string (ASTPP stores as integer: 0=NATIONAL_ID, 1=PASSPORT, etc.)';
+COMMENT ON COLUMN customer_applicant_details.sasapay_submission_status IS 'SasaPay submission workflow status - only populated for application_type = ''sasapay_kyc''';
+COMMENT ON COLUMN customer_applicant_details.policy_id IS 'Reference to document_policies - tracks which policy version was used for this submission';
+
+-- ============================================================================
+-- 4. SASAPAY KYC SUBMISSION LOG (Audit Trail)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS sasapay_kyc_submission_log (
+    id BIGSERIAL PRIMARY KEY,
+    customer_application_id BIGINT NOT NULL REFERENCES customer_applications(id) ON DELETE CASCADE,
+    customer_applicant_detail_id BIGINT REFERENCES customer_applicant_details(id) ON DELETE SET NULL,
+    policy_id BIGINT REFERENCES document_policies(id) ON DELETE SET NULL,
+    event_type VARCHAR(64) NOT NULL,
+    event_timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    triggered_by VARCHAR(128),
+    document_type VARCHAR(50),
+    policy_version INTEGER,
+    required_documents TEXT[],
+    submission_status VARCHAR(32),
+    sasapay_request_id VARCHAR(128),
+    sasapay_submitted_at TIMESTAMPTZ,
+    sasapay_result_at TIMESTAMPTZ,
+    sasapay_callback_payload JSONB,
+    sasapay_psp_status VARCHAR(32),
+    sasapay_psp_reason TEXT,
+    review_status VARCHAR(16),
+    review_decision VARCHAR(16),
+    reviewed_by VARCHAR(128),
+    reviewed_at TIMESTAMPTZ,
+    review_reason TEXT,
+    uploaded_documents JSONB,
+    metadata JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT ck_sasapay_log_event_type CHECK (
+        event_type IN (
+            'submission_created', 'documents_uploaded', 'documents_updated',
+            'submitted_for_review', 'admin_approved', 'admin_rejected',
+            'queued_for_psp', 'psp_upload_started', 'psp_upload_failed',
+            'psp_callback_received', 'psp_approved', 'psp_rejected'
+        )
+    ),
+    CONSTRAINT ck_sasapay_log_submission_status CHECK (
+        submission_status IS NULL OR submission_status IN (
+            'awaiting_requirements', 'awaiting_documents', 'submitted_for_review',
+            'approved_for_psp', 'rejected', 'awaiting_psp_result',
+            'processing_psp_upload', 'psp_upload_failed', 'psp_approved', 'psp_rejected'
+        )
+    ),
+    CONSTRAINT ck_sasapay_log_review_decision CHECK (
+        review_decision IS NULL OR review_decision IN ('approved', 'rejected')
+    )
+);
+
+CREATE INDEX IF NOT EXISTS idx_sasapay_log_application
+    ON sasapay_kyc_submission_log(customer_application_id, event_timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_sasapay_log_event_type
+    ON sasapay_kyc_submission_log(event_type, event_timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_sasapay_log_request_id
+    ON sasapay_kyc_submission_log(sasapay_request_id)
+    WHERE sasapay_request_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_sasapay_log_status
+    ON sasapay_kyc_submission_log(submission_status, event_timestamp DESC)
+    WHERE submission_status IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_sasapay_log_timestamp
+    ON sasapay_kyc_submission_log(event_timestamp DESC);
+
+COMMENT ON TABLE sasapay_kyc_submission_log IS
+    'Audit log of SasaPay KYC submission events and state changes; current state is held in customer_applicant_details';
+COMMENT ON COLUMN sasapay_kyc_submission_log.event_type IS
+    'Type of event that triggered this log entry';
+COMMENT ON COLUMN sasapay_kyc_submission_log.triggered_by IS
+    'Who or what triggered this event: customer, admin, system, or SasaPay callback';
 
 -- ============================================================================
 -- 2. SECURITY, PIN MANAGEMENT & ANTI-BRUTE-FORCE LOCKOUT

@@ -1,15 +1,11 @@
 -- ============================================================================
 -- Customer Management Service - Database Schema
 -- ============================================================================
--- Complete schema representing the current state of the database.
--- This file consolidates all migrations into a single schema definition.
+-- Legacy schema snapshot retained for reference.
+-- The canonical fresh-database schema is migrations/001_initial_schema.sql.
+-- Do not use this snapshot to initialize a database.
 --
--- To apply this schema to a fresh database:
--- 1. Create the database: CREATE DATABASE ambia_pay;
--- 2. Run this file: psql -U postgres -d ambia_pay -f schema.sql
---
--- Version: 1.0
--- Last Updated: 2026-10-05
+-- Last updated: 2026-10-05
 -- ============================================================================
 
 -- Enable UUID extension

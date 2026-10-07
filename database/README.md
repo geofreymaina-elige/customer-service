@@ -6,56 +6,25 @@ This directory contains the complete database schema for the Customer Management
 
 ## Files
 
-### `schema.sql`
-**Single consolidated schema file** representing the current state of the database. This file merges all migrations (001-007) into one comprehensive schema definition.
+### `migrations/001_initial_schema.sql`
+The single canonical schema for a new database. It includes the current customer, wallet,
+device, jobs, document-policy, and SasaPay KYC audit structures. It intentionally excludes
+the retired `sasapay_kyc_submissions` and `sasapay_kyc_submission_images` tables.
 
-**Use this file when**:
-- Setting up a fresh database
-- Creating test/staging environments
-- Documenting the complete database structure
-- Onboarding new developers
-
-### `migrations/` directory
-**Historical migration files** (001-007) showing how the schema evolved over time.
-
-**Use these when**:
-- Understanding schema evolution
-- Debugging migration-related issues
-- Reference for creating new migrations
-
-### Migration Files (Historical Reference)
-- `001_initial_schema.sql` - Base schema (customers, applications, wallets, devices, etc.)
-- `002_allow_inactive_wallet_status.sql` - Added 'inactive' wallet status
-- `003_add_country_code_to_customers.sql` - Added country_code column
-- `004_sasapay_kyc_workflow.sql` - Created original SasaPay tables (now superseded)
-- `005_seed_document_policies.sql` - Seeded document policies
-- `006_simplify_sasapay_to_applicant_details.sql` - Simplified SasaPay schema
-- `007_add_sasapay_submission_log.sql` - Added audit log table
+Apply this file to a **new, empty database**. It is not an upgrade script for an existing
+database because `CREATE TABLE IF NOT EXISTS` will not add missing columns to tables that
+already exist.
 
 ## Quick Start
 
-### Option 1: Fresh Database Setup (Recommended)
-
-For a new database, use the consolidated schema:
+### Fresh Database Setup
 
 ```bash
 # Create database
 createdb ambia_pay
 
-# Apply schema
-psql -U postgres -d ambia_pay -f database/schema.sql
-```
-
-### Option 2: Using Migrations (Existing Databases)
-
-For databases that need to be migrated:
-
-```bash
-# Run all migrations
-npm run migrate
-
-# Or run a specific migration
-npx ts-node database/run-007.ts
+# Apply the canonical initial schema
+psql -U postgres -d ambia_pay -f database/migrations/001_initial_schema.sql
 ```
 
 ## Schema Overview
@@ -70,7 +39,6 @@ npx ts-node database/run-007.ts
 #### Document Policies & Audit
 - `document_policies` - KYC document requirements
 - `sasapay_kyc_submission_log` - **Audit log** of all SasaPay KYC events
-- `sasapay_kyc_callback_receipts` - SasaPay callback deduplication
 
 #### Security & Authentication
 - `customer_pins` - PIN hashes and lockout status
@@ -205,21 +173,11 @@ psql -U postgres -d ambia_pay -c "\d+ customer_applicant_details"  # Describe ta
 
 ## Development Notes
 
-### Creating New Migrations
-
-When adding new migrations, update both:
-1. Create `migrations/008_your_migration.sql`
-2. Update `database/schema.sql` to reflect the final state
-
-### Migration Best Practices
-- Use `IF NOT EXISTS` for all CREATE statements
-- Add comments explaining purpose
-- Include rollback instructions in comments
-- Test on staging before production
+The migration directory is intentionally kept to the single initial schema. If the project
+later adopts incremental migrations, document that workflow separately and preserve this file
+as the fresh-database baseline.
 
 ## Support
 
-For issues or questions:
-- Check migration logs: `npm run migrate`
-- Review `schema.sql` for current structure
-- Examine `sasapay_kyc_submission_log` for audit trail
+For issues or questions, review `migrations/001_initial_schema.sql` for the fresh-database
+structure and `sasapay_kyc_submission_log` for the SasaPay KYC audit trail.
