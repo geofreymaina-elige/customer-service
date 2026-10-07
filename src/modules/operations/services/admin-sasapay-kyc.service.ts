@@ -37,7 +37,7 @@ export class AdminSasaPayKycService {
       `SELECT c.id, c.uuid, c.astpp_id, c.phone_number, c.email,
               c.first_name, c.last_name, c.status AS customer_status,
               c.country_code, c.account_type, c.created_at,
-              ca.id AS app_id, ca.uuid AS app_uuid, ca.kyc_status, ca.kyc_tier,
+              ca.id AS app_id,ca.application_id AS astpp_application_id, ca.uuid AS app_uuid, ca.kyc_status, ca.kyc_tier,
               ca.sasapay_request_id, ca.sasapay_account_number, ca.sasapay_account_status,
               ca.submitted_at, ca.approved_at, ca.rejected_at, ca.rejection_reason,
               -- Determine which KYC source is being used (priority: sasapay > wallet > primary)
@@ -118,19 +118,19 @@ export class AdminSasaPayKycService {
       if (customer.wallet_doc_front) {
         documents.push({
           type: 'document_front',
-          url: `${astppBaseUrl}/application_images/${customer.astpp_id}/${customer.wallet_doc_front}`,
+          url: `${astppBaseUrl}/application_images/${customer.astpp_application_id}/${customer.wallet_doc_front}`,
         });
       }
       if (customer.wallet_doc_back) {
         documents.push({
           type: 'document_back',
-          url: `${astppBaseUrl}/application_images/${customer.astpp_id}/${customer.wallet_doc_back}`,
+          url: `${astppBaseUrl}/application_images/${customer.astpp_application_id}/${customer.wallet_doc_back}`,
         });
       }
       if (customer.wallet_selfie) {
         documents.push({
           type: 'selfie',
-          url: `${astppBaseUrl}/application_images/${customer.astpp_id}/${customer.wallet_selfie}`,
+          url: `${astppBaseUrl}/application_images/${customer.astpp_application_id}/${customer.wallet_selfie}`,
         });
       }
     } else if (customer.kyc_source === 'primary_kyc') {
@@ -138,19 +138,19 @@ export class AdminSasaPayKycService {
       if (customer.primary_doc_front) {
         documents.push({
           type: 'document_front',
-          url: `${astppBaseUrl}/application_images/${customer.astpp_id}/${customer.primary_doc_front}`,
+          url: `${astppBaseUrl}/application_images/${customer.astpp_application_id}/${customer.primary_doc_front}`,
         });
       }
       if (customer.primary_doc_back) {
         documents.push({
           type: 'document_back',
-          url: `${astppBaseUrl}/application_images/${customer.astpp_id}/${customer.primary_doc_back}`,
+          url: `${astppBaseUrl}/application_images/${customer.astpp_application_id}/${customer.primary_doc_back}`,
         });
       }
       if (customer.primary_selfie) {
         documents.push({
           type: 'selfie',
-          url: `${astppBaseUrl}/application_images/${customer.astpp_id}/${customer.primary_selfie}`,
+          url: `${astppBaseUrl}/application_images/${customer.astpp_application_id}/${customer.primary_selfie}`,
         });
       }
     }
