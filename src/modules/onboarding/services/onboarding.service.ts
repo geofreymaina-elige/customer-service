@@ -25,6 +25,7 @@ export class OnboardingService {
     customerId: number,
     stage: 'onboarding_initiation' | 'otp_verification',
     providerResponseCode = 'SP4000',
+    notifyCustomer = true,
   ): Promise<void> {
     const recipient = await this.db.queryOne(
       `SELECT astpp_id, phone_number FROM customers WHERE id = $1`,
@@ -40,20 +41,22 @@ export class OnboardingService {
       [customerId, { stage, providerResponseCode, walletLimit: 2 }],
     );
 
-    await this.notifications.sendNotification({
-      astppId: String(recipient.astpp_id),
-      channels: ['sms', 'push'],
-      title: this.messages.get('wallets.onboarding.walletLimitReached.title'),
-      body: this.messages.get('wallets.onboarding.walletLimitReached.body'),
-      priority: 'urgent',
-      correlationId: `sasapay-wallet-limit-${customerId}-${Date.now()}`,
-      sourceService: 'customer-management-service',
-      type: 'SASAPAY_WALLET_LIMIT_REACHED',
-      notifyTopic: true,
-      contact: recipient.phone_number ? { phoneNumber: recipient.phone_number } : undefined,
-      context: { customerId, stage },
-      metadata: { providerResponseCode, walletLimit: 2 },
-    });
+    if (notifyCustomer) {
+      await this.notifications.sendNotification({
+        astppId: String(recipient.astpp_id),
+        channels: ['sms', 'push'],
+        title: this.messages.get('wallets.onboarding.walletLimitReached.title'),
+        body: this.messages.get('wallets.onboarding.walletLimitReached.body'),
+        priority: 'urgent',
+        correlationId: `sasapay-wallet-limit-${customerId}-${Date.now()}`,
+        sourceService: 'customer-management-service',
+        type: 'SASAPAY_WALLET_LIMIT_REACHED',
+        notifyTopic: true,
+        contact: recipient.phone_number ? { phoneNumber: recipient.phone_number } : undefined,
+        context: { customerId, stage },
+        metadata: { providerResponseCode, walletLimit: 2 },
+      });
+    }
   }
 
   private async assertWalletCapacityAvailable(customerId: number): Promise<void> {
@@ -80,7 +83,7 @@ export class OnboardingService {
 
     if ((walletCount?.wallet_count ?? 0) < 2) return;
 
-    await this.recordWalletLimitReached(customerId, 'onboarding_initiation', 'LOCAL_WALLET_LIMIT');
+    await this.recordWalletLimitReached(customerId, 'onboarding_initiation', 'LOCAL_WALLET_LIMIT', false);
     throw new ConflictException(this.messages.get('wallets.onboarding.walletLimitReached.body'));
   }
 
