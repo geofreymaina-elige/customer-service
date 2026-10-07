@@ -291,20 +291,16 @@ export class WaasOnboardingJobService {
              $2::boolean
              AND
              cad.application_type = 'sasapay_kyc'
-             AND EXISTS (
+             AND cad.sasapay_submission_status = 'approved_for_psp'
+             AND CARDINALITY(cad.required_documents) > 0
+             AND NOT EXISTS (
                SELECT 1
-               FROM sasapay_kyc_submissions s
-               WHERE s.customer_applicant_detail_id = cad.id
-                 AND s.status = 'approved_for_psp'
-                 AND NOT EXISTS (
-                   SELECT 1
-                   FROM unnest(s.required_documents) AS required(document_type)
-                   WHERE NOT EXISTS (
-                     SELECT 1 FROM sasapay_kyc_submission_images image
-                     WHERE image.submission_id = s.id
-                       AND image.document_type = required.document_type
-                   )
-                 )
+               FROM unnest(cad.required_documents) AS required(document_type)
+               WHERE NOT EXISTS (
+                 SELECT 1
+                 FROM jsonb_array_elements(COALESCE(cad.images, '[]'::jsonb)) AS image(value)
+                 WHERE image.value->>'type' = required.document_type
+               )
              )
            )
          )
@@ -661,28 +657,33 @@ export class WaasOnboardingJobService {
     }
 
     const sasaPayImageResult = await this.db.query(
-      `SELECT s.id AS submission_id, ca.id AS customer_application_id,
-              s.required_documents, image.document_type, image.relative_path
-       FROM sasapay_kyc_submissions s
-       JOIN customer_applications ca ON ca.id = s.customer_application_id
-       JOIN sasapay_kyc_submission_images image ON image.submission_id = s.id
+      `SELECT cad.id::text AS submission_id, ca.id AS customer_application_id,
+              cad.required_documents, cad.images
+       FROM customer_applicant_details cad
+       JOIN customer_applications ca ON ca.id = cad.customer_application_id
        WHERE ca.customer_id = $1
          AND $2::boolean
-         AND s.status IN ('approved_for_psp', 'processing_psp_upload')
-         AND ($3::uuid IS NULL OR s.id = $3::uuid)
+         AND cad.application_type = 'sasapay_kyc'
+         AND cad.sasapay_submission_status IN ('approved_for_psp', 'processing_psp_upload')
+         AND CARDINALITY(cad.required_documents) > 0
+         AND ($3::text IS NULL OR cad.id::text = $3)
          AND NOT EXISTS (
            SELECT 1
-           FROM unnest(s.required_documents) AS required(document_type)
+           FROM unnest(cad.required_documents) AS required(document_type)
            WHERE NOT EXISTS (
-             SELECT 1 FROM sasapay_kyc_submission_images required_image
-             WHERE required_image.submission_id = s.id
-               AND required_image.document_type = required.document_type
+             SELECT 1
+             FROM jsonb_array_elements(COALESCE(cad.images, '[]'::jsonb)) AS image(value)
+             WHERE image.value->>'type' = required.document_type
            )
          )
-       ORDER BY s.updated_at DESC, image.document_type`,
-      [payload.customerId, this.config.get<boolean>('sasapay.kycEnabled') === true, payload.submissionId || null],
+       ORDER BY cad.updated_at DESC`,
+      [
+        payload.customerId,
+        this.config.get<boolean>('sasapay.kycEnabled') === true,
+        payload.submissionId || null,
+      ],
     );
-    const sasaPayImageRows = sasaPayImageResult.rows as any[];
+    const sasaPayImageRows = sasaPayImageResult.rows;
     if (sasaPayImageRows.length) {
       const submission = sasaPayImageRows[0];
       const requiredDocuments = submission.required_documents as string[];
@@ -695,16 +696,27 @@ export class WaasOnboardingJobService {
       const images: Record<string, string> = {};
       let filesAvailable = true;
 
-      for (const image of sasaPayImageRows) {
-        const imagePath = path.resolve(process.cwd(), image.relative_path);
+      for (const image of (Array.isArray(submission.images) ? submission.images : [])) {
+        if (
+          typeof image.filename !== 'string' ||
+          !image.filename ||
+          path.basename(image.filename) !== image.filename ||
+          image.filename.includes('\\')
+        ) {
+          throw new Error('Stored SasaPay KYC image has an invalid filename.');
+        }
+        const imagePath = path.resolve(applicationDirectory, image.filename);
         if (!imagePath.startsWith(`${applicationDirectory}${path.sep}`)) {
           throw new Error('Stored SasaPay KYC image path is outside its application directory.');
         }
-        const imageKey = image.document_type === 'document_front'
+        const imageKey = image.type === 'document_front'
           ? 'front'
-          : image.document_type === 'document_back'
+          : image.type === 'document_back'
             ? 'back'
-            : 'selfie';
+            : image.type === 'selfie'
+              ? 'selfie'
+              : null;
+        if (!imageKey) continue;
         images[imageKey] = imagePath;
       }
 
@@ -915,11 +927,14 @@ export class WaasOnboardingJobService {
 
     if (state.images.submissionId) {
       await this.db.query(
-        `UPDATE sasapay_kyc_submissions
-         SET status = 'awaiting_psp_result',
+        `UPDATE customer_applicant_details
+         SET sasapay_submission_status = 'awaiting_psp_result',
              sasapay_request_id = COALESCE($2, sasapay_request_id),
-             psp_submitted_at = NOW(), updated_at = NOW()
-         WHERE id = $1 AND status = 'processing_psp_upload'`,
+             sasapay_submitted_at = NOW(),
+             updated_at = NOW()
+         WHERE id = $1
+           AND application_type = 'sasapay_kyc'
+           AND sasapay_submission_status = 'processing_psp_upload'`,
         [state.images.submissionId, uploadRequestId],
       );
       await this.writeAuditLog(payload.customerId, 'SASAPAY_KYC_RESUBMISSION_SENT', {
