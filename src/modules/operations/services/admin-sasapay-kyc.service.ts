@@ -13,18 +13,12 @@ export class AdminSasaPayKycService {
   ) {}
 
   private getPublicUrl(): string {
-    const rawUrl =
-      this.config.get<string>('publicUrl') ||
-      process.env.PUBLIC_URL ||
-      'https://api.ambiapay.com';
+    const rawUrl = this.config.getOrThrow<string>('publicUrl');
     return rawUrl.replace(/\/+$/, '');
   }
 
   private getAstppBaseUrl(): string {
-    const rawUrl =
-      this.config.get<string>('astpp.baseUrl') ||
-      process.env.ASTPP_BASE_URL ||
-      'https://msa-portal.elige-africa.com';
+    const rawUrl = this.config.getOrThrow<string>('astpp.baseUrl');
     return rawUrl.replace(/\/+$/, '');
   }
 

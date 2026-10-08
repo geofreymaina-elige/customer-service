@@ -53,8 +53,8 @@ export class WaasOnboardingJobService {
   private readonly sshHost: string;
   private readonly sshPort: number;
   private readonly sshUsername: string;
-  private readonly sshPrivateKey: string;
-  private readonly sshPrivateKeyPath: string;
+  private readonly sshPrivateKey: string | undefined;
+  private readonly sshPrivateKeyPath: string | undefined;
   private readonly astppImagesPath: string;
 
   constructor(
@@ -64,12 +64,12 @@ export class WaasOnboardingJobService {
     private readonly jobService: JobService,
     private readonly config: ConfigService,
   ) {
-    this.sshHost = this.config.get<string>('astpp.ssh.host') || 'localhost';
-    this.sshPort = this.config.get<number>('astpp.ssh.port') || 22;
-    this.sshUsername = this.config.get<string>('astpp.ssh.username') || 'jeff';
-    this.sshPrivateKey = this.config.get<string>('astpp.ssh.privateKey') || '';
-    this.sshPrivateKeyPath = this.config.get<string>('astpp.ssh.privateKeyPath') || '';
-    this.astppImagesPath = this.config.get<string>('astpp.imagesPath') || '/var/www/html/astpp/application_images';
+    this.sshHost = this.config.getOrThrow<string>('astpp.ssh.host');
+    this.sshPort = this.config.getOrThrow<number>('astpp.ssh.port');
+    this.sshUsername = this.config.getOrThrow<string>('astpp.ssh.username');
+    this.sshPrivateKey = this.config.get<string>('astpp.ssh.privateKey');
+    this.sshPrivateKeyPath = this.config.get<string>('astpp.ssh.privateKeyPath');
+    this.astppImagesPath = this.config.getOrThrow<string>('astpp.imagesPath');
 
     if (!this.astppImagesPath.startsWith('/')) {
       throw new Error(`astpp.imagesPath must be an absolute path, got: "${this.astppImagesPath}"`);
@@ -1070,7 +1070,7 @@ export class WaasOnboardingJobService {
   private getPrivateKey(): string | Buffer {
     let key = this.sshPrivateKeyPath
       ? fs.readFileSync(this.sshPrivateKeyPath, 'utf8').trim()
-      : (this.sshPrivateKey || '').trim();
+      : (this.sshPrivateKey ?? '').trim();
     if (!key) {
       throw new Error('ASTPP_SSH_PRIVATE_KEY or ASTPP_SSH_PRIVATE_KEY_PATH is not configured');
     }

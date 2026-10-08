@@ -5,14 +5,31 @@ import * as dotenv from 'dotenv';
 
 dotenv.config();
 
+function requiredEnvironment(name: string): string {
+  const value = process.env[name]?.trim();
+  if (!value) {
+    throw new Error(`[CONFIG] ${name} is required to run migrations.`);
+  }
+  return value;
+}
+
 async function runMigrations() {
+  const databasePort = Number(requiredEnvironment('DATABASE_PORT'));
+  if (!Number.isInteger(databasePort) || databasePort < 1 || databasePort > 65535) {
+    throw new Error('[CONFIG] DATABASE_PORT must be an integer between 1 and 65535.');
+  }
+  const databaseSsl = requiredEnvironment('DATABASE_SSL');
+  if (databaseSsl !== 'true' && databaseSsl !== 'false') {
+    throw new Error('[CONFIG] DATABASE_SSL must be either true or false.');
+  }
+
   const pool = new Pool({
-    host: process.env.DATABASE_HOST || 'localhost',
-    port: parseInt(process.env.DATABASE_PORT || '5432', 10),
-    database: process.env.DATABASE_NAME || 'ambia_pay',
-    user: process.env.DATABASE_USER || 'postgres',
-    password: process.env.DATABASE_PASSWORD || 'postgres',
-    ssl: process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: false } : false,
+    host: requiredEnvironment('DATABASE_HOST'),
+    port: databasePort,
+    database: requiredEnvironment('DATABASE_NAME'),
+    user: requiredEnvironment('DATABASE_USER'),
+    password: requiredEnvironment('DATABASE_PASSWORD'),
+    ssl: databaseSsl === 'true' ? { rejectUnauthorized: true } : false,
   });
 
   console.log('[MIGRATION] Connecting to PostgreSQL database...');

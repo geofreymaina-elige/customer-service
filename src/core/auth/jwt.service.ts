@@ -35,16 +35,9 @@ export class SecureJwtService {
   private readonly appAccessExpiresInSeconds: number;
 
   constructor(private configService: ConfigService) {
-    this.secret = this.configService.get<string>('jwt.secret') || 'default_secret';
-    this.transactionExpiresInSeconds = this.configService.get<number>('jwt.expiresInSeconds') || 900;
-    const configuredAppAccessTtl = this.configService.get<number>('jwt.appAccessExpiresInSeconds');
-    this.appAccessExpiresInSeconds = Number.isFinite(configuredAppAccessTtl) && configuredAppAccessTtl > 0
-      ? configuredAppAccessTtl
-      : 60 * 60 * 24 * 30;
-
-    if (!this.secret || this.secret.length < 32) {
-      console.warn('[SECURITY WARNING] JWT_SECRET should be at least 32 characters long for production security.');
-    }
+    this.secret = this.configService.getOrThrow<string>('jwt.secret');
+    this.transactionExpiresInSeconds = this.configService.getOrThrow<number>('jwt.expiresInSeconds');
+    this.appAccessExpiresInSeconds = this.configService.getOrThrow<number>('jwt.appAccessExpiresInSeconds');
   }
 
   generateToken(
@@ -118,13 +111,13 @@ export class SecureJwtService {
   }
 
   hashDevice(deviceIdentifier: string, deviceModel: string, mobileType: string): string {
-    const salt = this.configService.get<string>('security.deviceUuidSalt') || 'AMBIA_DEVICE_SALT_SECURE_2026_X99';
+    const salt = this.configService.getOrThrow<string>('security.deviceUuidSalt');
     const raw = `${deviceIdentifier}|${deviceModel}|${mobileType}|${salt}`;
     return crypto.createHash('sha256').update(raw).digest('hex');
   }
 
   hashOtp(otpCode: string): string {
-    const salt = this.configService.get<string>('security.otpSalt') || 'AMBIA_OTP_SALT_SECURE_2026_V1';
+    const salt = this.configService.getOrThrow<string>('security.otpSalt');
     return crypto.createHash('sha256').update(`${otpCode}|${salt}`).digest('hex');
   }
 }

@@ -47,7 +47,7 @@ const swaggerCustomScript = `
     rows: [
       ['Version', '2.0'],
       ['Last Updated', 'October 2026'],
-      ['Base URL', '<a href="https://api.ambiapay.com" target="_blank" rel="noopener">https://api.ambiapay.com</a>']
+      ['Base URL', 'Use the configured server URL shown in the OpenAPI document.']
     ],
     copyright: '\\u00A9 2026 AmbiaPay. All rights reserved.'
   };
@@ -87,7 +87,21 @@ const swaggerCustomScript = `
 })();
 `;
 
-export function createSwaggerConfig() {
+function formatDuration(seconds: number): string {
+  if (seconds % 86400 === 0) return `${seconds / 86400} day${seconds === 86400 ? '' : 's'}`;
+  if (seconds % 3600 === 0) return `${seconds / 3600} hour${seconds === 3600 ? '' : 's'}`;
+  if (seconds % 60 === 0) return `${seconds / 60} minute${seconds === 60 ? '' : 's'}`;
+  return `${seconds} second${seconds === 1 ? '' : 's'}`;
+}
+
+export function createSwaggerConfig(
+  publicUrl: string,
+  appAccessExpiresInSeconds: number,
+  transactionExpiresInSeconds: number,
+) {
+  const appAccessValidity = formatDuration(appAccessExpiresInSeconds);
+  const transactionValidity = formatDuration(transactionExpiresInSeconds);
+
   return new DocumentBuilder()
     .setTitle('AmbiaPay Customer Service API')
     .setDescription(`
@@ -113,12 +127,12 @@ X-API-Key: your_api_key_here
 X-Astpp-Token: encrypted_astpp_token
 \`\`\`
 
-**App Access Token** - For general wallet operations (24-hour validity)
+**App Access Token** - For general wallet operations (${appAccessValidity} validity)
 \`\`\`
 Authorization: Bearer app_access_token
 \`\`\`
 
-**Transaction Token** - For sensitive operations like balance checks (5-minute validity)
+**Transaction Token** - For sensitive operations like balance checks (${transactionValidity} validity)
 \`\`\`
 Authorization: Bearer transaction_token
 \`\`\`
@@ -156,7 +170,7 @@ Authorization: Bearer transaction_token
   - If false → Redirect to PIN setup screen
   - If true → Proceed to home screen
 
-**Returns** App access token (24-hour validity) for subsequent API calls
+**Returns** App access token (${appAccessValidity} validity) for subsequent API calls
 
 ---
 
@@ -235,13 +249,13 @@ All responses follow this structure
 ## Token Lifecycle
 
 ### App Access Token
-- **Validity** 24 hours
+- **Validity** ${appAccessValidity}
 - **Purpose** General wallet operations
 - **Obtained from** Device registration endpoint
 - **Scopes** \`app:access\`
 
 ### Transaction Token
-- **Validity** 5 minutes
+- **Validity** ${transactionValidity}
 - **Purpose** Sensitive operations (balance, transfers)
 - **Obtained from** PIN verification endpoint
 - **Scopes** \`wallet:transact\`
@@ -276,9 +290,7 @@ nextAction?
 \`\`\`
     `)
     .setVersion('2.0')
-    .addServer('https://api.ambiapay.com', 'Production')
-    .addServer('https://dev-api.ambiapay.com', 'Staging')
-    .addServer('http://localhost:5006', 'Local Development')
+    .addServer(publicUrl, 'Configured environment')
     .addApiKey(
       {
         type: 'apiKey',
@@ -302,7 +314,7 @@ nextAction?
         type: 'http',
         scheme: 'bearer',
         bearerFormat: 'JWT',
-        description: '**App Access Token** - 24-hour validity JWT for general wallet operations. Obtained from device registration.',
+        description: `**App Access Token** - ${appAccessValidity} validity JWT for general wallet operations. Obtained from device registration.`,
       },
       'AppAccessToken',
     )
@@ -311,7 +323,7 @@ nextAction?
         type: 'http',
         scheme: 'bearer',
         bearerFormat: 'JWT',
-        description: '**Transaction Token** - 5-minute validity JWT for sensitive operations (balance, transfers). Obtained from PIN verification.',
+        description: `**Transaction Token** - ${transactionValidity} validity JWT for sensitive operations (balance, transfers). Obtained from PIN verification.`,
       },
       'TransactionToken',
     )
@@ -326,8 +338,17 @@ nextAction?
 /**
  * Call this from main.ts:  setupSwagger(app);
  */
-export function setupSwagger(app: INestApplication, path = 'docs') {
-  const document = SwaggerModule.createDocument(app, createSwaggerConfig());
+export function setupSwagger(
+  app: INestApplication,
+  publicUrl: string,
+  appAccessExpiresInSeconds: number,
+  transactionExpiresInSeconds: number,
+  path = 'docs',
+) {
+  const document = SwaggerModule.createDocument(
+    app,
+    createSwaggerConfig(publicUrl, appAccessExpiresInSeconds, transactionExpiresInSeconds),
+  );
 
   SwaggerModule.setup(path, app, document, {
     customSiteTitle: 'AmbiaPay Customer Service API',

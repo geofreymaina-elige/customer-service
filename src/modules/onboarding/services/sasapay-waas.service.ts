@@ -53,13 +53,13 @@ export class SasaPayWaasService {
     private readonly appCache: AppCacheService,
     private readonly sasaPayLogger: SasaPayLogger,
   ) {
-    const configuredBaseUrl = this.config.get<string>('sasapay.baseUrl') || 'https://sandbox.sasapay.app';
+    const configuredBaseUrl = this.config.getOrThrow<string>('sasapay.baseUrl');
     this.baseUrl = configuredBaseUrl.replace(/\/+$/, '').replace(/\/api\/v2\/waas$/i, '');
     this.apiRootUrl = this.baseUrl;
-    this.clientId = this.config.get<string>('sasapay.clientId') || '';
-    this.clientSecret = this.config.get<string>('sasapay.clientSecret') || '';
-    this.merchantCode = this.config.get<string>('sasapay.merchantCode') || '';
-    this.callbackUrl = this.config.get<string>('sasapay.callbackUrl') || '';
+    this.clientId = this.config.getOrThrow<string>('sasapay.clientId');
+    this.clientSecret = this.config.getOrThrow<string>('sasapay.clientSecret');
+    this.merchantCode = this.config.getOrThrow<string>('sasapay.merchantCode');
+    this.callbackUrl = this.config.getOrThrow<string>('sasapay.callbackUrl');
   }
 
   /**

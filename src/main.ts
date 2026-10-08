@@ -17,27 +17,12 @@ async function bootstrap() {
   const messageService = app.get(MessageService);
 
   // Enable CORS Protection
-  const allowedOrigins = configService.get<string[]>('cors.allowedOrigins') || [
-    'https://api.ambiapay.com',
-    'https://admin.ambiapay.com',
-    'http://localhost:3000',
-    'http://localhost:5173',
-  ];
+  const allowedOrigins = configService.getOrThrow<string[]>('cors.allowedOrigins');
 
   app.enableCors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (such as mobile apps, curl, or server-to-server calls)
-      if (!origin) return callback(null, true);
-
-      const isAllowed =
-        allowedOrigins.includes(origin) ||
-        /^https:\/\/([a-zA-Z0-9-]+\.)?ambiapay\.com$/.test(origin);
-
-      if (isAllowed) {
-        callback(null, true);
-      } else {
-        callback(new Error(`Origin ${origin} not allowed by CORS`));
-      }
+      if (!origin) return callback(null, false);
+      callback(null, allowedOrigins.includes(origin));
     },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
@@ -62,7 +47,7 @@ async function bootstrap() {
       'X-RateLimit-Reset',
       'Retry-After',
     ],
-    credentials: true,
+    credentials: configService.getOrThrow<boolean>('cors.allowCredentials'),
     maxAge: 86400,
   });
 
@@ -96,7 +81,12 @@ async function bootstrap() {
   app.useGlobalGuards(new ApiKeyGuard(configService, reflector));
 
   // Swagger API Documentation
-  const swaggerConfig = createSwaggerConfig();
+  const publicUrl = configService.getOrThrow<string>('publicUrl');
+  const swaggerConfig = createSwaggerConfig(
+    publicUrl,
+    configService.getOrThrow<number>('jwt.appAccessExpiresInSeconds'),
+    configService.getOrThrow<number>('jwt.expiresInSeconds'),
+  );
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api/docs', app, document, {
     customSiteTitle: 'AmbiaPay Customer Service API Documentation',
@@ -104,15 +94,19 @@ async function bootstrap() {
     swaggerOptions,
   });
 
-  const port = configService.get<number>('port') || 5006;
+  const port = configService.getOrThrow<number>('port');
   await app.listen(port, '0.0.0.0');
 
   console.log(`========================================================================`);
-  console.log(`  Ambia Customer Management Service running on http://localhost:${port}`);
+  console.log(`  Ambia Customer Management Service running on ${publicUrl}`);
   console.log(`  Environment:  ${configService.get<string>('nodeEnv')}`);
-  console.log(`  Health Check: http://localhost:${port}/health`);
-  console.log(`  API Docs:     http://localhost:${port}/api/docs`);
+  console.log(`  Health Check: ${publicUrl}/health`);
+  console.log(`  API Docs:     ${publicUrl}/api/docs`);
   console.log(`========================================================================`);
 }
 
-bootstrap();
+bootstrap().catch((error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(`[STARTUP] Server failed before becoming ready: ${message}`);
+  process.exitCode = 1;
+});

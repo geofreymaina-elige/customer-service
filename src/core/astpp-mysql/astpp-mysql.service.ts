@@ -28,11 +28,11 @@ export class AstppMysqlService implements OnModuleInit, OnModuleDestroy {
       user: astppConfig.user,
       password: astppConfig.password,
       database: astppConfig.database,
-      waitForConnections: true,
-      connectionLimit: 10,
-      queueLimit: 0,
-      enableKeepAlive: true,
-      keepAliveInitialDelay: 0,
+      waitForConnections: astppConfig.mysqlWaitForConnections,
+      connectionLimit: astppConfig.mysqlConnectionLimit,
+      queueLimit: astppConfig.mysqlQueueLimit,
+      enableKeepAlive: astppConfig.mysqlKeepAlive,
+      keepAliveInitialDelay: astppConfig.mysqlKeepAliveInitialDelay,
     });
 
     this.logger.log(`MySQL ASTPP connection pool initialized: ${astppConfig.host}:${astppConfig.port}/${astppConfig.database}`);

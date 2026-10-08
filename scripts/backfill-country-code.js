@@ -11,26 +11,51 @@ require('dotenv').config();
 const mysql = require('mysql2/promise');
 const { Pool } = require('pg');
 
+function requiredEnvironment(name) {
+  const value = process.env[name];
+  if (!value || !value.trim()) {
+    throw new Error(`[CONFIG] ${name} is required to run this script.`);
+  }
+  return value.trim();
+}
+
+function requiredPort(name) {
+  const port = Number(requiredEnvironment(name));
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(`[CONFIG] ${name} must be an integer between 1 and 65535.`);
+  }
+  return port;
+}
+
+const databaseSsl = requiredEnvironment('DATABASE_SSL');
+if (databaseSsl !== 'true' && databaseSsl !== 'false') {
+  throw new Error('[CONFIG] DATABASE_SSL must be either true or false.');
+}
+
 const mysqlConfig = {
-  host:     process.env.ASTPP_HOST     || 'localhost',
-  port:     Number(process.env.ASTPP_PORT     || 3306),
-  user:     process.env.ASTPP_USER     || 'root',
-  password: process.env.ASTPP_PASSWORD || '',
-  database: process.env.ASTPP_DATABASE || 'astpp',
+  host:     requiredEnvironment('ASTPP_HOST'),
+  port:     requiredPort('ASTPP_PORT'),
+  user:     requiredEnvironment('ASTPP_USER'),
+  password: requiredEnvironment('ASTPP_PASSWORD'),
+  database: requiredEnvironment('ASTPP_DATABASE'),
 };
 
 const pgConfig = {
-  host:     process.env.DATABASE_HOST     || 'localhost',
-  port:     Number(process.env.DATABASE_PORT || 5432),
-  user:     process.env.DATABASE_USER     || 'postgres',
-  password: process.env.DATABASE_PASSWORD || '',
-  database: process.env.DATABASE_NAME     || 'customer_service',
+  host:     requiredEnvironment('DATABASE_HOST'),
+  port:     requiredPort('DATABASE_PORT'),
+  user:     requiredEnvironment('DATABASE_USER'),
+  password: requiredEnvironment('DATABASE_PASSWORD'),
+  database: requiredEnvironment('DATABASE_NAME'),
+  ssl:      databaseSsl === 'true' ? { rejectUnauthorized: true } : false,
 };
 
 async function main() {
   console.log('[backfill-country-code] Starting...');
 
-  const mysqlPool = mysql.createPool({ ...mysqlConfig, connectionLimit: 3 });
+  const mysqlPool = mysql.createPool({
+    ...mysqlConfig,
+    connectionLimit: Number(requiredEnvironment('ASTPP_MYSQL_CONNECTION_LIMIT')),
+  });
   const pgPool    = new Pool(pgConfig);
 
   try {

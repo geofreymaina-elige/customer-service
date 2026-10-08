@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import configuration from './config/configuration';
+import { validateEnvironment } from './config/environment.validation';
 import { MessagesModule } from './core/messages/messages.module';
 import { DatabaseModule } from './core/database/database.module';
 import { CacheModule } from './core/cache/cache.module';
@@ -28,14 +29,15 @@ import { AppConfigModule } from './modules/app-config/app-config.module';
       isGlobal: true,
       load: [configuration],
       envFilePath: ['.env', '.env.local'],
+      validate: validateEnvironment,
     }),
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => [
         {
-          ttl: (config.get<number>('rateLimit.ttl') || 60) * 1000,
-          limit: config.get<number>('rateLimit.limit') || 120,
+          ttl: config.getOrThrow<number>('rateLimit.ttl') * 1000,
+          limit: config.getOrThrow<number>('rateLimit.limit'),
         },
       ],
     }),

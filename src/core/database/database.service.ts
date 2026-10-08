@@ -17,7 +17,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       database: dbConfig.name,
       user: dbConfig.user,
       password: dbConfig.password,
-      ssl: dbConfig.ssl ? { rejectUnauthorized: false } : false,
+      ssl: dbConfig.ssl ? { rejectUnauthorized: true } : false,
       min: dbConfig.poolMin,
       max: dbConfig.poolMax,
       connectionTimeoutMillis: dbConfig.connectionTimeoutMillis,

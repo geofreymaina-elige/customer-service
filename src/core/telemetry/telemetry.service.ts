@@ -14,7 +14,7 @@ export class TelemetryService {
   private readonly logger = new Logger(TelemetryService.name);
 
   constructor(private readonly config: ConfigService) {
-    this.isEnabled = this.config.get<boolean>('SENTRY_ENABLED') ?? false;
+    this.isEnabled = this.config.getOrThrow<boolean>('telemetry.enabled');
     if (this.isEnabled) {
       this.logger.log('Sentry Telemetry initialized');
     }

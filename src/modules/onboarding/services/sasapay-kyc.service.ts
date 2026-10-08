@@ -140,8 +140,8 @@ export class SasaPayKycService {
     }
 
     // Build image URLs based on KYC source
-    const astppBaseUrl = this.config.get<string>('astpp.baseUrl') || 'https://msa-portal.elige-africa.com';
-    const publicUrl = this.config.get<string>('publicUrl') || 'https://api.ambiapay.com';
+    const astppBaseUrl = this.config.getOrThrow<string>('astpp.baseUrl');
+    const publicUrl = this.config.getOrThrow<string>('publicUrl');
     
     let documents = [];
     

@@ -49,28 +49,11 @@ export class ApiKeyGuard implements CanActivate {
       return true;
     }
 
-    const configuredApiKey =
-      this.configService.get<string>('apiKey') || process.env.API_KEY;
-
-    if (!configuredApiKey) {
-      // API key is required - throw error if not configured
-      throw new UnauthorizedException({
-        success: false,
-        message: 'API key is not configured on the server. Please contact support.',
-        code: 'API_KEY_NOT_CONFIGURED',
-      });
-    }
+    const configuredApiKey = this.configService.getOrThrow<string>('apiKey');
 
     // Check X-API-Key header or Authorization: ApiKey <key>
     const headerKey = request.headers['x-api-key'];
-    const authHeader = request.headers['authorization'];
     let providedApiKey = typeof headerKey === 'string' ? headerKey : undefined;
-
-    if (!providedApiKey && typeof authHeader === 'string') {
-      if (authHeader.startsWith('ApiKey ')) {
-        providedApiKey = authHeader.substring(7).trim();
-      }
-    }
 
     if (!providedApiKey) {
       throw new UnauthorizedException({

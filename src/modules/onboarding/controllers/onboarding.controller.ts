@@ -686,7 +686,7 @@ Success indicates wallet activation is being processed. Customer should wait bri
   }
 
   private verifySasaPayCallback(req: Request, dto: SasaPayOnboardingCallbackDto): void {
-    const configuredIps = this.config.get<string[]>('sasapay.callbackSecurity.allowedIps') || [];
+    const configuredIps = this.config.getOrThrow<string[]>('sasapay.callbackSecurity.allowedIps');
     const sourceIp = this.normalizeIp(req.socket.remoteAddress || req.ip);
     const allowed = configuredIps.map((ip) => this.normalizeIp(ip)).includes(sourceIp);
 
@@ -714,7 +714,7 @@ Success indicates wallet activation is being processed. Customer should wait bri
 
     const message = `${transactionCode}-${merchantCode}-${accountNumber}-${paymentReference}-${amount}`;
     const expectedSignature = crypto
-      .createHmac('sha512', this.config.get<string>('sasapay.clientId') || '')
+      .createHmac('sha512', this.config.getOrThrow<string>('sasapay.clientId'))
       .update(message, 'utf8')
       .digest('hex');
 

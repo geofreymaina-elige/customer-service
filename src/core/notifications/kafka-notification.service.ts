@@ -24,21 +24,22 @@ export interface NotificationPayload {
 export class KafkaNotificationService {
   private readonly logger = new Logger(KafkaNotificationService.name);
   private producer: Producer;
-  private readonly topic = 'customer_service.notifications';
+  private readonly topic: string;
   private isConnected = false;
 
   constructor(private readonly config: ConfigService) {
+    this.topic = this.config.getOrThrow<string>('kafka.notificationTopic');
     this.initializeKafka();
   }
 
   private async initializeKafka() {
     try {
-      const brokers = this.config.get<string>('kafka.brokers') || [];
-      const clientId = this.config.get<string>('kafka.clientId') || 'customer-service';
+      const brokers = this.config.getOrThrow<string[]>('kafka.brokers');
+      const clientId = this.config.getOrThrow<string>('kafka.clientId');
 
       const kafka = new Kafka({
         clientId,
-        brokers: Array.isArray(brokers) ? brokers : brokers.split(','),
+        brokers,
       });
 
       this.producer = kafka.producer();
