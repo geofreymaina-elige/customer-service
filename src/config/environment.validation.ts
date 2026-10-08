@@ -65,7 +65,6 @@ const requiredVariables = [
   'SASAPAY_BASE_URL',
   'SASAPAY_CALLBACK_URL',
   'SASAPAY_CALLBACK_ALLOWED_IPS',
-  'NOTIFICATION_SERVICE_URL',
   'SENTRY_ENABLED',
 ] as const;
 
@@ -126,7 +125,7 @@ function validateValue(env: Environment, name: string, value: string | undefined
     return value === 'true' || value === 'false';
   }
 
-  if (['PUBLIC_URL', 'ASTPP_BASE_URL', 'SASAPAY_BASE_URL', 'SASAPAY_CALLBACK_URL', 'NOTIFICATION_SERVICE_URL'].includes(name)) {
+  if (['PUBLIC_URL', 'ASTPP_BASE_URL', 'SASAPAY_BASE_URL', 'SASAPAY_CALLBACK_URL'].includes(name)) {
     return isValidUrl(value) && (env.NODE_ENV !== 'production' || value.startsWith('https://'));
   }
 

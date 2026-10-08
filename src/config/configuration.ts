@@ -74,9 +74,6 @@ export default () => ({
       allowedIps: process.env.SASAPAY_CALLBACK_ALLOWED_IPS.split(',').map((ip) => ip.trim()).filter(Boolean),
     },
   },
-  notification: {
-    url: process.env.NOTIFICATION_SERVICE_URL,
-  },
   telemetry: {
     enabled: process.env.SENTRY_ENABLED === 'true',
   },
