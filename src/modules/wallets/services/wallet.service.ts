@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { DatabaseService } from '../../../core/database/database.service';
 import { MessageService } from '../../../core/messages/message.service';
@@ -9,6 +9,8 @@ import { SasaPayKycService } from '../../onboarding/services/sasapay-kyc.service
 
 @Injectable()
 export class WalletService {
+  private readonly logger = new Logger(WalletService.name);
+
   constructor(
     private readonly db: DatabaseService,
     private readonly messages: MessageService,
@@ -49,7 +51,7 @@ export class WalletService {
 
   async getBalance(customerId: number) {
     const wallet = await this.db.queryOne(
-      `SELECT cw.account_number, cw.currency, cw.status, c.country_code
+      `SELECT c.id AS customer_id, cw.account_number, cw.currency, cw.status, c.country_code
        FROM customer_wallets cw
        JOIN customers c ON c.id = cw.customer_id
        WHERE cw.customer_id = $1`,
@@ -60,20 +62,70 @@ export class WalletService {
       throw new NotFoundException(this.messages.get('wallets.notFound'));
     }
 
-    const sasaPayDetails = await this.sasaPayWaas.getCustomerDetails(
-      String(wallet.account_number),
-      wallet.country_code ?? '',
-    );
-    const sasaPayWallet = sasaPayDetails?.data?.CustomerWallets?.find(
-      (item) => String(item.account_number) === String(wallet.account_number),
-    ) || sasaPayDetails?.data?.CustomerWallets?.[0];
+    const requestedAt = new Date();
+    try {
+      const sasaPayDetails = await this.sasaPayWaas.getCustomerDetails(
+        String(wallet.account_number),
+        wallet.country_code ?? '',
+      );
+      const sasaPayWallet = sasaPayDetails?.data?.CustomerWallets?.find(
+        (item) => String(item.account_number) === String(wallet.account_number),
+      ) || sasaPayDetails?.data?.CustomerWallets?.[0];
+      const balance = Number(sasaPayWallet?.account_balance_derived || 0);
+      const currency = sasaPayWallet?.currency_code || wallet.currency;
 
-    return {
-      accountNumber: wallet.account_number,
-      currency: sasaPayWallet?.currency_code || wallet.currency,
-      balance: Number(sasaPayWallet?.account_balance_derived || 0),
-      status: wallet.status,
-    };
+      this.recordBalanceCheck({
+        customerId: wallet.customer_id,
+        accountNumber: wallet.account_number,
+        currency,
+        balance,
+        requestedAt,
+        outcome: 'success',
+      });
+
+      return {
+        accountNumber: wallet.account_number,
+        currency,
+        balance,
+        status: wallet.status,
+      };
+    } catch (error) {
+      this.recordBalanceCheck({
+        customerId: wallet.customer_id,
+        accountNumber: wallet.account_number,
+        currency: wallet.currency,
+        balance: null,
+        requestedAt,
+        outcome: 'failure',
+      });
+      throw error;
+    }
+  }
+
+  private recordBalanceCheck(record: {
+    customerId: number;
+    accountNumber: string;
+    currency: string;
+    balance: number | null;
+    requestedAt: Date;
+    outcome: 'success' | 'failure';
+  }): void {
+    void this.db.query(
+      `INSERT INTO customer_balance_audit
+         (customer_id, account_number, currency, balance, requested_at, outcome)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        record.customerId,
+        record.accountNumber,
+        record.currency,
+        record.balance,
+        record.requestedAt,
+        record.outcome,
+      ],
+    ).catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Failed to persist balance audit for customer ${record.customerId}: ${message}`);
+    });
   }
 
   /**

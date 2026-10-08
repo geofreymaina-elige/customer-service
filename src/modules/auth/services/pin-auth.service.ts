@@ -175,6 +175,17 @@ export class PinAuthService {
       throw new UnauthorizedException('Customer account is inactive or deleted.');
     }
 
+    const wallet = await this.db.queryOne(
+      `SELECT status, is_locked
+       FROM customer_wallets
+       WHERE customer_id = $1`,
+      [customer.id],
+    );
+
+    if (!wallet || wallet.status !== 'active' || wallet.is_locked) {
+      throw new ForbiddenException(this.messages.get('auth.pin.walletUnavailable'));
+    }
+
     // Check PIN record
     const pinRecord = await this.db.queryOne(
       `SELECT id, pin_hash, failed_attempts, locked_until, is_permanently_locked

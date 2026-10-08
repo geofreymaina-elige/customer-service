@@ -18,7 +18,8 @@
       "temporarilyLocked": "PIN verification is locked due to too many failed attempts. Try again in {minutes} minutes.",
       "permanentlyLocked": "PIN is permanently locked. Please complete identity verification or contact support to unlock.",
       "required": "Security PIN is required to complete this action.",
-      "notSet": "No security PIN has been set up for this account. Please set up your PIN first."
+      "notSet": "No security PIN has been set up for this account. Please set up your PIN first.",
+      "walletUnavailable": "A transaction token cannot be issued because your wallet is locked or inactive. Please contact support."
     },
     "reset": {
       "initiated": "Identity verified successfully. An OTP has been sent to your registered phone number.",

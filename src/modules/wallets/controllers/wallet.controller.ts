@@ -207,6 +207,9 @@ Determines the customer's current onboarding state and returns the next action t
 **IMPORTANT** This endpoint requires a transaction token (10-minute validity).
 You must call POST /auth/transaction-tokens (with PIN verification) first to get the transaction token.
 
+Every lookup is recorded in an append-only audit table with its request timestamp and result.
+Audit persistence runs asynchronously and does not delay the SasaPay balance response.
+
 **Use Case** Display balance on home screen after PIN verification.`
   })
   @ApiSecurity('API-Key')

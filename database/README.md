@@ -15,6 +15,11 @@ Apply this file to a **new, empty database**. It is not an upgrade script for an
 database because `CREATE TABLE IF NOT EXISTS` will not add missing columns to tables that
 already exist.
 
+### `migrations/002_customer_balance_audit.sql`
+Upgrade migration that adds the append-only `customer_balance_audit` table. Apply it after
+`001_initial_schema.sql` on new databases and to existing databases before deploying the
+application version that writes balance audit records.
+
 ## Quick Start
 
 ### Fresh Database Setup
@@ -25,6 +30,9 @@ createdb ambia_pay
 
 # Apply the canonical initial schema
 psql -U postgres -d ambia_pay -f database/migrations/001_initial_schema.sql
+
+# Apply incremental balance audit schema
+psql -U postgres -d ambia_pay -f database/migrations/002_customer_balance_audit.sql
 ```
 
 ## Schema Overview
@@ -39,6 +47,7 @@ psql -U postgres -d ambia_pay -f database/migrations/001_initial_schema.sql
 #### Document Policies & Audit
 - `document_policies` - KYC document requirements
 - `sasapay_kyc_submission_log` - **Audit log** of all SasaPay KYC events
+- `customer_balance_audit` - **Append-only audit log** of balance lookups and returned values
 
 #### Security & Authentication
 - `customer_pins` - PIN hashes and lockout status
