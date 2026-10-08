@@ -16,7 +16,7 @@ export class AppConfigController {
   @RequireScopes(JwtScopes.AppAccess)
   @ApiOperation({
     summary: 'Get App Configuration',
-    description: 'Retrieve the mobile app home page layout configuration including hero section and feature cards. This endpoint provides URLs for images and content to display on the app home screen.',
+    description: 'Retrieve the mobile app home page layout and feature flags that indicate which app features are enabled.',
   })
   @ApiSecurity('AppAccessToken')
   @ApiResponse({
@@ -55,6 +55,20 @@ export class AppConfigController {
                   subtitle: { type: 'string', example: 'Transfer funds instantly' }
                 }
               }
+            }
+          }
+        },
+        feature_flags: {
+          type: 'array',
+          description: 'Feature availability settings, returned separately from page layout.',
+          items: {
+            type: 'object',
+            properties: {
+              service: { type: 'string', example: 'wallet' },
+              feature_key: { type: 'string', example: 'topup.mpesa' },
+              parent_key: { type: 'string', nullable: true, example: 'topup' },
+              name: { type: 'string', example: 'Top-up via M-Pesa' },
+              is_enabled: { type: 'boolean', example: true }
             }
           }
         }

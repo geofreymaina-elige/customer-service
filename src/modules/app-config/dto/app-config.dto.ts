@@ -22,8 +22,17 @@ export interface PageLayout {
   feature_cards: FeatureCard[];
 }
 
+export interface FeatureFlag {
+  service: string;
+  feature_key: string;
+  parent_key: string | null;
+  name: string;
+  is_enabled: boolean;
+}
+
 export interface AppConfigResponse {
   status: string;
   layout_version: string;
   page_layout: PageLayout;
+  feature_flags: FeatureFlag[];
 }

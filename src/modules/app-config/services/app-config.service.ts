@@ -4,6 +4,7 @@ import {
   AppConfigResponse,
   HeroSection,
   FeatureCard,
+  FeatureFlag,
   PageLayout,
 } from '../dto/app-config.dto';
 
@@ -55,6 +56,12 @@ export class AppConfigService {
       [heroAsset.id]
     );
 
+    const featureFlags = await this.db.query<FeatureFlag>(
+      `SELECT service, feature_key, parent_key, name, is_enabled
+       FROM feature_flags
+       ORDER BY service ASC, feature_key ASC`
+    );
+
     // Return the stored full URL for the hero image
     const heroSection: HeroSection = {
       asset_uuid: heroAsset.asset_uuid,
@@ -85,6 +92,7 @@ export class AppConfigService {
       status: 'success',
       layout_version: '2026-09-30-v1',
       page_layout: pageLayout,
+      feature_flags: featureFlags.rows,
     };
   }
 }
