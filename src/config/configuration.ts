@@ -76,7 +76,6 @@ export default () => ({
   },
   notification: {
     url: process.env.NOTIFICATION_SERVICE_URL,
-    apiKey: process.env.NOTIFICATION_SERVICE_API_KEY,
   },
   telemetry: {
     enabled: process.env.SENTRY_ENABLED === 'true',

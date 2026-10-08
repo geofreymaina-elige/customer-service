@@ -66,7 +66,6 @@ const requiredVariables = [
   'SASAPAY_CALLBACK_URL',
   'SASAPAY_CALLBACK_ALLOWED_IPS',
   'NOTIFICATION_SERVICE_URL',
-  'NOTIFICATION_SERVICE_API_KEY',
   'SENTRY_ENABLED',
 ] as const;
 
@@ -132,10 +131,6 @@ function validateValue(env: Environment, name: string, value: string | undefined
   }
 
   if (['JWT_SECRET', 'API_KEY', 'ADMIN_API_KEY', 'DEVICE_UUID_SALT', 'OTP_SALT'].includes(name)) {
-    return value.trim().length >= 32;
-  }
-
-  if (name === 'NOTIFICATION_SERVICE_API_KEY') {
     return value.trim().length >= 32;
   }
 

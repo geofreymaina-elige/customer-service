@@ -67,7 +67,6 @@ function validEnvironment() {
     SASAPAY_CALLBACK_URL: 'https://service.example.test/callback',
     SASAPAY_CALLBACK_ALLOWED_IPS: '192.0.2.1',
     NOTIFICATION_SERVICE_URL: 'https://notifications.example.test',
-    NOTIFICATION_SERVICE_API_KEY: 'n'.repeat(40),
     SENTRY_ENABLED: 'false',
   };
 }
