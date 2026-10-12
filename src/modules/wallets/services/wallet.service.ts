@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException, BadGatewayException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { DatabaseService } from '../../../core/database/database.service';
 import { MessageService } from '../../../core/messages/message.service';
@@ -70,7 +70,10 @@ export class WalletService {
       );
       const sasaPayWallet = sasaPayDetails?.data?.CustomerWallets?.find(
         (item) => String(item.account_number) === String(wallet.account_number),
-      ) || sasaPayDetails?.data?.CustomerWallets?.[0];
+      );
+      if (!sasaPayWallet) {
+        throw new BadGatewayException('SasaPay did not return the requested wallet account.');
+      }
       const balance = Number(sasaPayWallet?.account_balance_derived || 0);
       const currency = sasaPayWallet?.currency_code || wallet.currency;
 

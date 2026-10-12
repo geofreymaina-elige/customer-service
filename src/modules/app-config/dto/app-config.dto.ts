@@ -30,7 +30,14 @@ export interface FeatureFlag {
   is_enabled: boolean;
 }
 
+export interface AppServices {
+  esim: boolean;
+  wallet: boolean;
+  voip: boolean;
+}
+
 export interface AppConfigResponse {
+  services: AppServices;
   status: string;
   layout_version: string;
   page_layout: PageLayout;

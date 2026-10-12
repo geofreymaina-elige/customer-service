@@ -2,6 +2,7 @@
 
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
+const { BadGatewayException } = require('@nestjs/common');
 const { WalletService } = require('../dist/src/modules/wallets/services/wallet.service.js');
 
 function createWalletService({ providerResult, providerError, auditPromise }) {
@@ -65,6 +66,61 @@ test('returns the synchronous provider balance without waiting for audit persist
   assert.ok(calls[0][1][4] instanceof Date);
 
   finishAudit({ rowCount: 1 });
+});
+
+test('selects the requested account when SasaPay returns multiple wallets', async () => {
+  const { service, calls } = createWalletService({
+    providerResult: {
+      data: {
+        CustomerWallets: [
+          {
+            account_number: 'other-account',
+            currency_code: 'KES',
+            account_balance_derived: '999.00',
+          },
+          {
+            account_number: 'acct-123',
+            currency_code: 'KES',
+            account_balance_derived: '2.00',
+          },
+        ],
+      },
+    },
+  });
+
+  const result = await service.getBalance(7);
+
+  assert.deepEqual(result, {
+    accountNumber: 'acct-123',
+    currency: 'KES',
+    balance: 2,
+    status: 'active',
+  });
+  assert.equal(calls[0][1][3], 2);
+  assert.equal(calls[0][1][5], 'success');
+});
+
+test('rejects a provider response without the requested account and records failure', async () => {
+  const { service, calls } = createWalletService({
+    providerResult: {
+      data: {
+        CustomerWallets: [{
+          account_number: 'other-account',
+          currency_code: 'KES',
+          account_balance_derived: '999.00',
+        }],
+      },
+    },
+  });
+
+  await assert.rejects(
+    service.getBalance(7),
+    (error) => error instanceof BadGatewayException && error.getStatus() === 502,
+  );
+
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0][1].slice(0, 4), [7, 'acct-123', 'KES', null]);
+  assert.equal(calls[0][1][5], 'failure');
 });
 
 test('writes a failure audit entry and still propagates the provider error', async () => {

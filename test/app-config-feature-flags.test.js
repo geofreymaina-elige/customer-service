@@ -32,6 +32,12 @@ test('returns app feature flags separately from page layout with only app-facing
 
   const response = await new AppConfigService(db).getAppConfig();
 
+  assert.deepEqual(response.services, {
+    esim: true,
+    wallet: false,
+    voip: true,
+  });
+  assert.equal(Object.keys(response)[0], 'services');
   assert.deepEqual(response.feature_flags, flags);
   assert.equal(response.feature_flags[0].is_enabled, false);
   assert.deepEqual(Object.keys(response.feature_flags[0]), [

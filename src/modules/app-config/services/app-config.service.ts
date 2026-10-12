@@ -89,6 +89,11 @@ export class AppConfigService {
     };
 
     return {
+      services: {
+        esim: true,
+        wallet: false,
+        voip: true,
+      },
       status: 'success',
       layout_version: '2026-09-30-v1',
       page_layout: pageLayout,

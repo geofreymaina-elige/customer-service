@@ -25,6 +25,15 @@ export class AppConfigController {
     schema: {
       type: 'object',
       properties: {
+        services: {
+          type: 'object',
+          description: 'Top-level service availability settings.',
+          properties: {
+            esim: { type: 'boolean', example: true },
+            wallet: { type: 'boolean', example: false },
+            voip: { type: 'boolean', example: true },
+          },
+        },
         status: { type: 'string', example: 'success' },
         layout_version: { type: 'string', example: '2026-09-30-v1' },
         page_layout: {
