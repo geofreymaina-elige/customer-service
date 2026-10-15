@@ -62,7 +62,7 @@ export class AppConfigController {
   @Get('banners')
   @ApiOperation({
     summary: 'Get App Banners',
-    description: 'Retrieve active banner carousel slots 1–5. Slot 1 is returned as the hero section; slots 2–5 are returned as feature cards.',
+    description: 'Retrieve active banner carousel slots 1-5. Slot 1 is returned as the hero section; slots 2-5 are returned as feature cards.',
   })
   @ApiResponse({
     status: 200,

@@ -81,7 +81,7 @@ export class AppConfigService {
       url: banner.url.trim(),
       alt_text: banner.alt_text || '',
       subtitle: banner.subtitle || '',
-    }));
+    });
 
     const heroSection: HeroSection = toBannerResponse(heroBanner);
     const featureCardsList = banners.rows
