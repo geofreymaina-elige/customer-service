@@ -1,9 +1,6 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiSecurity } from '@nestjs/swagger';
 import { AppConfigService } from '../services/app-config.service';
-import { AuthGuard } from '../../../core/auth/auth.guard';
-import { RequireScopes } from '../../../core/auth/scopes.decorator';
-import { JwtScopes } from '../../../core/auth/jwt.service';
 
 @ApiTags('Configuration and Banners')
 @ApiSecurity('API-Key')
@@ -12,13 +9,10 @@ export class AppConfigController {
   constructor(private readonly appConfigService: AppConfigService) {}
 
   @Get('app-config')
-  @UseGuards(AuthGuard)
-  @RequireScopes(JwtScopes.AppAccess)
   @ApiOperation({
     summary: 'Get App Configuration',
-    description: 'Retrieve the mobile app home page layout and feature flags that indicate which app features are enabled.',
+    description: 'Retrieve service availability and feature flags. Disabled feature flags include their configured error message.',
   })
-  @ApiSecurity('AppAccessToken')
   @ApiResponse({
     status: 200,
     description: 'App configuration retrieved successfully',
@@ -27,13 +21,55 @@ export class AppConfigController {
       properties: {
         services: {
           type: 'object',
-          description: 'Top-level service availability settings.',
           properties: {
             esim: { type: 'boolean', example: true },
             wallet: { type: 'boolean', example: false },
             voip: { type: 'boolean', example: true },
           },
         },
+        status: { type: 'string', example: 'success' },
+        feature_flags: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              service: { type: 'string', example: 'wallet' },
+              feature_key: { type: 'string', example: 'topup.mpesa' },
+              parent_key: { type: 'string', nullable: true, example: 'topup' },
+              name: { type: 'string', example: 'Top-up via M-Pesa' },
+              description: { type: 'string', example: 'Allows customers to top up using M-Pesa.' },
+              is_enabled: { type: 'boolean', example: false },
+              message: {
+                type: 'string',
+                nullable: true,
+                example: 'This feature is temporarily unavailable. Please try again later.',
+                description: 'Configured error message when the feature is disabled; null when enabled.',
+              },
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing API key',
+  })
+  async getAppConfig() {
+    return this.appConfigService.getAppConfig();
+  }
+
+  @Get('banners')
+  @ApiOperation({
+    summary: 'Get App Banners',
+    description: 'Retrieve the active hero banner and feature-card banners for the mobile app.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Banners retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
         status: { type: 'string', example: 'success' },
         layout_version: { type: 'string', example: '2026-09-30-v1' },
         page_layout: {
@@ -46,8 +82,8 @@ export class AppConfigController {
                 asset_key: { type: 'string', example: 'hero_banner' },
                 updated_at: { type: 'string', example: '2026-10-05T10:30:00Z' },
                 url: { type: 'string', example: 'https://cdn.ambiapay.com/images/hero-banner.jpg' },
-                alt_text: { type: 'string', example: 'Welcome to AmbiaPay' }
-              }
+                alt_text: { type: 'string', example: 'Welcome to AmbiaPay' },
+              },
             },
             feature_cards: {
               type: 'array',
@@ -61,53 +97,24 @@ export class AppConfigController {
                   updated_at: { type: 'string', example: '2026-10-05T10:30:00Z' },
                   url: { type: 'string', example: 'https://cdn.ambiapay.com/images/send-money.png' },
                   title: { type: 'string', example: 'Send Money' },
-                  subtitle: { type: 'string', example: 'Transfer funds instantly' }
-                }
-              }
-            }
-          }
+                  subtitle: { type: 'string', example: 'Transfer funds instantly' },
+                },
+              },
+            },
+          },
         },
-        feature_flags: {
-          type: 'array',
-          description: 'Feature availability settings, returned separately from page layout.',
-          items: {
-            type: 'object',
-            properties: {
-              service: { type: 'string', example: 'wallet' },
-              feature_key: { type: 'string', example: 'topup.mpesa' },
-              parent_key: { type: 'string', nullable: true, example: 'topup' },
-              name: { type: 'string', example: 'Top-up via M-Pesa' },
-              is_enabled: { type: 'boolean', example: true }
-            }
-          }
-        }
-      }
-    }
+      },
+    },
   })
   @ApiResponse({
     status: 401,
-    description: 'Unauthorized - Invalid or missing AppAccessToken',
-    schema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean', example: false },
-        message: { type: 'string', example: 'Unauthorized' }
-      }
-    }
+    description: 'Unauthorized - Invalid or missing API key',
   })
   @ApiResponse({
     status: 404,
-    description: 'No active configuration found',
-    schema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean', example: false },
-        message: { type: 'string', example: 'No active hero asset found' }
-      }
-    }
+    description: 'No active banner configuration found',
   })
-  async getAppConfig() {
-    const data = await this.appConfigService.getAppConfig();
-    return data;
+  async getBanners() {
+    return this.appConfigService.getBanners();
   }
 }

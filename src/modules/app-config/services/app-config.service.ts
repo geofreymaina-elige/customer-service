@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../../../core/database/database.service';
 import {
   AppConfigResponse,
+  BannersResponse,
   HeroSection,
   FeatureCard,
   FeatureFlag,
@@ -13,6 +14,25 @@ export class AppConfigService {
   constructor(private readonly db: DatabaseService) {}
 
   async getAppConfig(): Promise<AppConfigResponse> {
+    const featureFlags = await this.db.query<FeatureFlag>(
+      `SELECT service, feature_key, parent_key, name, description, is_enabled,
+              CASE WHEN is_enabled THEN NULL ELSE error_message END AS message
+       FROM feature_flags
+       ORDER BY service ASC, feature_key ASC`
+    );
+
+    return {
+      services: {
+        esim: true,
+        wallet: false,
+        voip: true,
+      },
+      status: 'success',
+      feature_flags: featureFlags.rows,
+    };
+  }
+
+  async getBanners(): Promise<BannersResponse> {
     // Query the first active asset with an image URL for the hero section
     const heroAsset = await this.db.queryOne(
       `SELECT 
@@ -56,12 +76,6 @@ export class AppConfigService {
       [heroAsset.id]
     );
 
-    const featureFlags = await this.db.query<FeatureFlag>(
-      `SELECT service, feature_key, parent_key, name, is_enabled
-       FROM feature_flags
-       ORDER BY service ASC, feature_key ASC`
-    );
-
     // Return the stored full URL for the hero image
     const heroSection: HeroSection = {
       asset_uuid: heroAsset.asset_uuid,
@@ -89,15 +103,9 @@ export class AppConfigService {
     };
 
     return {
-      services: {
-        esim: true,
-        wallet: false,
-        voip: true,
-      },
       status: 'success',
       layout_version: '2026-09-30-v1',
       page_layout: pageLayout,
-      feature_flags: featureFlags.rows,
     };
   }
 }

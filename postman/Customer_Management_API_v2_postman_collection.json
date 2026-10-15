@@ -7872,7 +7872,7 @@
         },
         {
           "name": "App Config",
-          "description": "Mobile app banners and feature cards configuration.",
+          "description": "Mobile app service configuration, feature flags, and banner content. These endpoints require X-API-Key only; no app access token is needed.",
           "item": [
             {
               "name": "Get app config",
@@ -7882,7 +7882,17 @@
                   "script": {
                     "type": "text/javascript",
                     "exec": [
-                      "pm.test('status is documented success', () => pm.expect([200]).to.include(pm.response.code));"
+                      "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                      "pm.test('Feature flags include description and disabled message', () => {",
+                      "  const body = pm.response.json();",
+                      "  pm.expect(body.feature_flags).to.be.an('array');",
+                      "  body.feature_flags.forEach((flag) => {",
+                      "    pm.expect(flag).to.have.property('description').that.is.a('string');",
+                      "    pm.expect(flag).to.have.property('message');",
+                      "    if (flag.is_enabled) pm.expect(flag.message).to.be.null;",
+                      "    else pm.expect(flag.message).to.be.a('string').and.not.empty;",
+                      "  });",
+                      "});"
                     ]
                   }
                 }
@@ -7897,6 +7907,9 @@
                     "description": "API key required for all requests"
                   }
                 ],
+                "auth": {
+                  "type": "noauth"
+                },
                 "url": {
                   "raw": "{{baseUrl}}/api/v1/app-config",
                   "host": [
@@ -7908,21 +7921,11 @@
                     "app-config"
                   ]
                 },
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{appAccessToken}}",
-                      "type": "string"
-                    }
-                  ]
-                },
-                "description": "Returns hero section banner and feature cards for the mobile app. Only active assets and cards are returned. Images use local_path if available, otherwise falls back to url."
+                "description": "Returns service availability and feature flags. Disabled flags include the configured error_message as message; enabled flags return message as null. Requires X-API-Key only."
               },
               "response": [
                 {
-                  "name": "200 App config",
+                  "name": "200 OK",
                   "originalRequest": {
                     "method": "GET",
                     "header": [
@@ -7933,6 +7936,9 @@
                         "description": "API key required for all requests"
                       }
                     ],
+                    "auth": {
+                      "type": "noauth"
+                    },
                     "url": {
                       "raw": "{{baseUrl}}/api/v1/app-config",
                       "host": [
@@ -7944,7 +7950,7 @@
                         "app-config"
                       ]
                     },
-                    "description": "Returns hero section banner and feature cards for the mobile app. Only active assets and cards are returned. Images use local_path if available, otherwise falls back to url."
+                    "description": "Returns service availability and feature flags. Disabled flags include the configured error_message as message; enabled flags return message as null. Requires X-API-Key only."
                   },
                   "status": "OK",
                   "code": 200,
@@ -7956,10 +7962,59 @@
                     }
                   ],
                   "cookie": [],
-                  "body": "{\n  \"status\": \"success\",\n  \"layout_version\": \"2026-09-30-v1\",\n  \"page_layout\": {\n    \"hero_section\": {\n      \"asset_uuid\": \"c30f4db2-1234-5678-abcd-ef123456789a\",\n      \"asset_key\": \"main_dashboard_bg\",\n      \"updated_at\": \"2026-09-28T14:22:00Z\",\n      \"url\": \"https://yourapp.com/path/to/image.jpg\",\n      \"alt_text\": \"Scenic view of Mount Fuji banner background\"\n    },\n    \"feature_cards\": [\n      {\n        \"card_uuid\": \"a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d\",\n        \"card_slug\": \"promo_50_airtime\",\n        \"asset_uuid\": \"f5e4d3c2-b1a0-9f8e-7d6c-5b4a3a2b1c0d\",\n        \"asset_key\": \"icon_airtime_promo\",\n        \"updated_at\": \"2026-09-15T08:00:00Z\",\n        \"url\": \"https://yourapp.com/path/to/icon.jpg\",\n        \"title\": \"Get 50% more airtime today!\",\n        \"subtitle\": \"Limited time\"\n      }\n    ]\n  }\n}"
-                },
+                  "body": "{\n  \"services\": {\n    \"esim\": true,\n    \"wallet\": false,\n    \"voip\": true\n  },\n  \"status\": \"success\",\n  \"feature_flags\": [\n    {\n      \"service\": \"customer\",\n      \"feature_key\": \"kyc.secondary.submission\",\n      \"parent_key\": \"onboarding\",\n      \"name\": \"Secondary KYC Submission\",\n      \"description\": \"Controls submission of additional identity verification documents and information.\",\n      \"is_enabled\": false,\n      \"message\": \"Identity verification submission is temporarily unavailable. Please try again later.\"\n    },\n    {\n      \"service\": \"wallet\",\n      \"feature_key\": \"topup.mpesa\",\n      \"parent_key\": \"topup\",\n      \"name\": \"M-Pesa Top-ups\",\n      \"description\": \"Allows customers to top up their wallet using M-Pesa.\",\n      \"is_enabled\": true,\n      \"message\": null\n    }\n  ]\n}"
+                }
+              ]
+            },
+            {
+              "name": "Get banners",
+              "event": [
                 {
-                  "name": "401 TOKEN_EXPIRED",
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                      "pm.test('Response contains banner layout', () => {",
+                      "  const body = pm.response.json();",
+                      "  pm.expect(body.page_layout).to.be.an('object');",
+                      "  pm.expect(body.page_layout.hero_section).to.be.an('object');",
+                      "  pm.expect(body.page_layout.feature_cards).to.be.an('array');",
+                      "  pm.expect(body).not.to.have.property('feature_flags');",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-API-Key",
+                    "value": "{{apiKey}}",
+                    "type": "text",
+                    "description": "API key required for all requests"
+                  }
+                ],
+                "auth": {
+                  "type": "noauth"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/banners",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "banners"
+                  ]
+                },
+                "description": "Returns the active hero banner and feature-card banners for the mobile app. Requires X-API-Key only."
+              },
+              "response": [
+                {
+                  "name": "200 OK",
                   "originalRequest": {
                     "method": "GET",
                     "header": [
@@ -7970,252 +8025,33 @@
                         "description": "API key required for all requests"
                       }
                     ],
+                    "auth": {
+                      "type": "noauth"
+                    },
                     "url": {
-                      "raw": "{{baseUrl}}/api/v1/app-config",
+                      "raw": "{{baseUrl}}/api/v1/banners",
                       "host": [
                         "{{baseUrl}}"
                       ],
                       "path": [
                         "api",
                         "v1",
-                        "app-config"
+                        "banners"
                       ]
                     },
-                    "description": "Returns hero section banner and feature cards for the mobile app. Only active assets and cards are returned. Images use local_path if available, otherwise falls back to url."
+                    "description": "Returns the active hero banner and feature-card banners for the mobile app. Requires X-API-Key only."
                   },
-                  "status": "Unauthorized",
-                  "code": 401,
+                  "status": "OK",
+                  "code": 200,
                   "_postman_previewlanguage": "json",
                   "header": [
                     {
                       "key": "Content-Type",
-                      "value": "application/problem+json"
+                      "value": "application/json"
                     }
                   ],
                   "cookie": [],
-                  "body": "{\n  \"success\": false,\n  \"message\": \"The access token has expired.\",\n  \"code\": \"TOKEN_EXPIRED\",\n  \"traceId\": \"4bf92f3577b34da6a3ce929d0e0e4736\",\n  \"data\": null\n}"
-                },
-                {
-                  "name": "401 TOKEN_INVALID",
-                  "originalRequest": {
-                    "method": "GET",
-                    "header": [
-                      {
-                        "key": "X-API-Key",
-                        "value": "{{apiKey}}",
-                        "type": "text",
-                        "description": "API key required for all requests"
-                      }
-                    ],
-                    "url": {
-                      "raw": "{{baseUrl}}/api/v1/app-config",
-                      "host": [
-                        "{{baseUrl}}"
-                      ],
-                      "path": [
-                        "api",
-                        "v1",
-                        "app-config"
-                      ]
-                    },
-                    "description": "Returns hero section banner and feature cards for the mobile app. Only active assets and cards are returned. Images use local_path if available, otherwise falls back to url."
-                  },
-                  "status": "Unauthorized",
-                  "code": 401,
-                  "_postman_previewlanguage": "json",
-                  "header": [
-                    {
-                      "key": "Content-Type",
-                      "value": "application/problem+json"
-                    }
-                  ],
-                  "cookie": [],
-                  "body": "{\n  \"success\": false,\n  \"message\": \"The access token is missing, malformed or has a bad signature.\",\n  \"code\": \"TOKEN_INVALID\",\n  \"traceId\": \"4bf92f3577b34da6a3ce929d0e0e4736\",\n  \"data\": null\n}"
-                },
-                {
-                  "name": "401 SESSION_REVOKED",
-                  "originalRequest": {
-                    "method": "GET",
-                    "header": [
-                      {
-                        "key": "X-API-Key",
-                        "value": "{{apiKey}}",
-                        "type": "text",
-                        "description": "API key required for all requests"
-                      }
-                    ],
-                    "url": {
-                      "raw": "{{baseUrl}}/api/v1/app-config",
-                      "host": [
-                        "{{baseUrl}}"
-                      ],
-                      "path": [
-                        "api",
-                        "v1",
-                        "app-config"
-                      ]
-                    },
-                    "description": "Returns hero section banner and feature cards for the mobile app. Only active assets and cards are returned. Images use local_path if available, otherwise falls back to url."
-                  },
-                  "status": "Unauthorized",
-                  "code": 401,
-                  "_postman_previewlanguage": "json",
-                  "header": [
-                    {
-                      "key": "Content-Type",
-                      "value": "application/problem+json"
-                    }
-                  ],
-                  "cookie": [],
-                  "body": "{\n  \"success\": false,\n  \"message\": \"This session was signed out or revoked.\",\n  \"code\": \"SESSION_REVOKED\",\n  \"traceId\": \"4bf92f3577b34da6a3ce929d0e0e4736\",\n  \"data\": null\n}"
-                },
-                {
-                  "name": "403 INSUFFICIENT_SCOPE",
-                  "originalRequest": {
-                    "method": "GET",
-                    "header": [
-                      {
-                        "key": "X-API-Key",
-                        "value": "{{apiKey}}",
-                        "type": "text",
-                        "description": "API key required for all requests"
-                      }
-                    ],
-                    "url": {
-                      "raw": "{{baseUrl}}/api/v1/app-config",
-                      "host": [
-                        "{{baseUrl}}"
-                      ],
-                      "path": [
-                        "api",
-                        "v1",
-                        "app-config"
-                      ]
-                    },
-                    "description": "Returns hero section banner and feature cards for the mobile app. Only active assets and cards are returned. Images use local_path if available, otherwise falls back to url."
-                  },
-                  "status": "Forbidden",
-                  "code": 403,
-                  "_postman_previewlanguage": "json",
-                  "header": [
-                    {
-                      "key": "Content-Type",
-                      "value": "application/problem+json"
-                    }
-                  ],
-                  "cookie": [],
-                  "body": "{\n  \"success\": false,\n  \"message\": \"Authentication token does not have the required scope.\",\n  \"code\": \"INSUFFICIENT_SCOPE\",\n  \"traceId\": \"4bf92f3577b34da6a3ce929d0e0e4736\",\n  \"data\": null\n}"
-                },
-                {
-                  "name": "404 NO_ACTIVE_ASSETS",
-                  "originalRequest": {
-                    "method": "GET",
-                    "header": [
-                      {
-                        "key": "X-API-Key",
-                        "value": "{{apiKey}}",
-                        "type": "text",
-                        "description": "API key required for all requests"
-                      }
-                    ],
-                    "url": {
-                      "raw": "{{baseUrl}}/api/v1/app-config",
-                      "host": [
-                        "{{baseUrl}}"
-                      ],
-                      "path": [
-                        "api",
-                        "v1",
-                        "app-config"
-                      ]
-                    },
-                    "description": "Returns hero section banner and feature cards for the mobile app. Only active assets and cards are returned. Images use local_path if available, otherwise falls back to url."
-                  },
-                  "status": "Not Found",
-                  "code": 404,
-                  "_postman_previewlanguage": "json",
-                  "header": [
-                    {
-                      "key": "Content-Type",
-                      "value": "application/problem+json"
-                    }
-                  ],
-                  "cookie": [],
-                  "body": "{\n  \"success\": false,\n  \"message\": \"No active hero asset found\",\n  \"code\": \"NO_ACTIVE_ASSETS\",\n  \"traceId\": \"4bf92f3577b34da6a3ce929d0e0e4736\",\n  \"data\": null\n}"
-                },
-                {
-                  "name": "429 RATE_LIMITED",
-                  "originalRequest": {
-                    "method": "GET",
-                    "header": [
-                      {
-                        "key": "X-API-Key",
-                        "value": "{{apiKey}}",
-                        "type": "text",
-                        "description": "API key required for all requests"
-                      }
-                    ],
-                    "url": {
-                      "raw": "{{baseUrl}}/api/v1/app-config",
-                      "host": [
-                        "{{baseUrl}}"
-                      ],
-                      "path": [
-                        "api",
-                        "v1",
-                        "app-config"
-                      ]
-                    },
-                    "description": "Returns hero section banner and feature cards for the mobile app. Only active assets and cards are returned. Images use local_path if available, otherwise falls back to url."
-                  },
-                  "status": "Too Many Requests",
-                  "code": 429,
-                  "_postman_previewlanguage": "json",
-                  "header": [
-                    {
-                      "key": "Content-Type",
-                      "value": "application/problem+json"
-                    }
-                  ],
-                  "cookie": [],
-                  "body": "{\n  \"success\": false,\n  \"message\": \"Rate limit exceeded.\",\n  \"code\": \"RATE_LIMITED\",\n  \"traceId\": \"4bf92f3577b34da6a3ce929d0e0e4736\",\n  \"data\": null,\n  \"retryAfter\": 30\n}"
-                },
-                {
-                  "name": "500 INTERNAL_ERROR",
-                  "originalRequest": {
-                    "method": "GET",
-                    "header": [
-                      {
-                        "key": "X-API-Key",
-                        "value": "{{apiKey}}",
-                        "type": "text",
-                        "description": "API key required for all requests"
-                      }
-                    ],
-                    "url": {
-                      "raw": "{{baseUrl}}/api/v1/app-config",
-                      "host": [
-                        "{{baseUrl}}"
-                      ],
-                      "path": [
-                        "api",
-                        "v1",
-                        "app-config"
-                      ]
-                    },
-                    "description": "Returns hero section banner and feature cards for the mobile app. Only active assets and cards are returned. Images use local_path if available, otherwise falls back to url."
-                  },
-                  "status": "Internal Server Error",
-                  "code": 500,
-                  "_postman_previewlanguage": "json",
-                  "header": [
-                    {
-                      "key": "Content-Type",
-                      "value": "application/problem+json"
-                    }
-                  ],
-                  "cookie": [],
-                  "body": "{\n  \"success\": false,\n  \"message\": \"Something went wrong on our side.\",\n  \"code\": \"INTERNAL_ERROR\",\n  \"traceId\": \"4bf92f3577b34da6a3ce929d0e0e4736\",\n  \"data\": null\n}"
+                  "body": "{\n  \"status\": \"success\",\n  \"layout_version\": \"2026-09-30-v1\",\n  \"page_layout\": {\n    \"hero_section\": {\n      \"asset_uuid\": \"cae5c1f2-53d2-45f6-acea-90994c824117\",\n      \"asset_key\": \"main_dashboard_bg\",\n      \"updated_at\": \"2026-09-30T12:33:18.888Z\",\n      \"url\": \"https://images.example.com/banners/dashboard-background.jpg\",\n      \"alt_text\": \"Scenic view of Mount Fuji banner background\"\n    },\n    \"feature_cards\": [\n      {\n        \"card_uuid\": \"bdf39a75-e68e-4e1b-b6f1-2bba8f29434a\",\n        \"card_slug\": \"banner_slot_1\",\n        \"asset_uuid\": \"bead9b0f-ac9c-4521-9e49-5da5defe5c81\",\n        \"asset_key\": \"banner_slot_1\",\n        \"updated_at\": \"2026-10-05T14:45:49.125Z\",\n        \"url\": \"https://images.example.com/banners/banner-slot-1.jpg\",\n        \"title\": \"Banner Slot 1\",\n        \"subtitle\": \"\"\n      }\n    ]\n  }\n}"
                 }
               ]
             }

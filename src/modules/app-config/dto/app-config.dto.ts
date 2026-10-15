@@ -27,7 +27,9 @@ export interface FeatureFlag {
   feature_key: string;
   parent_key: string | null;
   name: string;
+  description: string;
   is_enabled: boolean;
+  message: string | null;
 }
 
 export interface AppServices {
@@ -39,7 +41,11 @@ export interface AppServices {
 export interface AppConfigResponse {
   services: AppServices;
   status: string;
+  feature_flags: FeatureFlag[];
+}
+
+export interface BannersResponse {
+  status: string;
   layout_version: string;
   page_layout: PageLayout;
-  feature_flags: FeatureFlag[];
 }
