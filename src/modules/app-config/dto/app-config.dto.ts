@@ -1,18 +1,25 @@
 export interface HeroSection {
+  card_uuid: string;
+  card_slug: string;
+  slot: number;
   asset_uuid: string;
   asset_key: string;
   updated_at: string;
   url: string;
   alt_text: string;
+  title: string;
+  subtitle: string;
 }
 
 export interface FeatureCard {
   card_uuid: string;
   card_slug: string;
+  slot: number;
   asset_uuid: string;
   asset_key: string;
   updated_at: string;
   url: string;
+  alt_text: string;
   title: string;
   subtitle: string;
 }

@@ -7978,8 +7978,10 @@
                       "pm.test('Response contains banner layout', () => {",
                       "  const body = pm.response.json();",
                       "  pm.expect(body.page_layout).to.be.an('object');",
-                      "  pm.expect(body.page_layout.hero_section).to.be.an('object');",
+                      "  pm.expect(body.page_layout.hero_section).to.have.property('card_slug', 'banner_slot_1');",
+                      "  pm.expect(body.page_layout.hero_section).to.have.property('title', 'Banner Slot 1');",
                       "  pm.expect(body.page_layout.feature_cards).to.be.an('array');",
+                      "  pm.expect(body.page_layout.feature_cards.every((banner) => banner.slot >= 2 && banner.slot <= 5)).to.be.true;",
                       "  pm.expect(body).not.to.have.property('feature_flags');",
                       "});"
                     ]
@@ -8010,7 +8012,7 @@
                     "banners"
                   ]
                 },
-                "description": "Returns the active hero banner and feature-card banners for the mobile app. Requires X-API-Key only."
+                "description": "Returns active banner carousel slots 1-5. Slot 1 is the hero section; slots 2-5 are feature cards. Requires X-API-Key only."
               },
               "response": [
                 {
@@ -8039,7 +8041,7 @@
                         "banners"
                       ]
                     },
-                    "description": "Returns the active hero banner and feature-card banners for the mobile app. Requires X-API-Key only."
+                    "description": "Returns active banner carousel slots 1-5. Slot 1 is the hero section; slots 2-5 are feature cards. Requires X-API-Key only."
                   },
                   "status": "OK",
                   "code": 200,
@@ -8051,7 +8053,7 @@
                     }
                   ],
                   "cookie": [],
-                  "body": "{\n  \"status\": \"success\",\n  \"layout_version\": \"2026-09-30-v1\",\n  \"page_layout\": {\n    \"hero_section\": {\n      \"asset_uuid\": \"cae5c1f2-53d2-45f6-acea-90994c824117\",\n      \"asset_key\": \"main_dashboard_bg\",\n      \"updated_at\": \"2026-09-30T12:33:18.888Z\",\n      \"url\": \"https://images.example.com/banners/dashboard-background.jpg\",\n      \"alt_text\": \"Scenic view of Mount Fuji banner background\"\n    },\n    \"feature_cards\": [\n      {\n        \"card_uuid\": \"bdf39a75-e68e-4e1b-b6f1-2bba8f29434a\",\n        \"card_slug\": \"banner_slot_1\",\n        \"asset_uuid\": \"bead9b0f-ac9c-4521-9e49-5da5defe5c81\",\n        \"asset_key\": \"banner_slot_1\",\n        \"updated_at\": \"2026-10-05T14:45:49.125Z\",\n        \"url\": \"https://images.example.com/banners/banner-slot-1.jpg\",\n        \"title\": \"Banner Slot 1\",\n        \"subtitle\": \"\"\n      }\n    ]\n  }\n}"
+                  "body": "{\n  \"status\": \"success\",\n  \"layout_version\": \"2026-09-30-v1\",\n  \"page_layout\": {\n    \"hero_section\": {\n      \"card_uuid\": \"bdf39a75-e68e-4e1b-b6f1-2bba8f29434a\",\n      \"card_slug\": \"banner_slot_1\",\n      \"slot\": 1,\n      \"asset_uuid\": \"bead9b0f-ac9c-4521-9e49-5da5defe5c81\",\n      \"asset_key\": \"banner_slot_1_1791210825763\",\n      \"updated_at\": \"2026-10-05T14:45:49.125Z\",\n      \"url\": \"https://images.ambiapay.com/banners/banner_1acfa350-6c05-4977-95d6-44da239ef6cf.jpg\",\n      \"alt_text\": \"Mt Kenya\",\n      \"title\": \"Banner Slot 1\",\n      \"subtitle\": \"\"\n    },\n    \"feature_cards\": [\n      {\n        \"card_uuid\": \"e7233723-3a1c-46c4-a347-72b9b696f70f\",\n        \"card_slug\": \"banner_slot_2\",\n        \"slot\": 2,\n        \"asset_uuid\": \"de07f184-f4da-45a2-a585-e8e09960c621\",\n        \"asset_key\": \"banner_slot_2_1791210524828\",\n        \"updated_at\": \"2026-10-14T07:56:16.993Z\",\n        \"url\": \"https://images.ambiapay.com/banners/banner_5ef3b386-231c-4345-8c35-aaabb71a51bc.jpg\",\n        \"alt_text\": \"Mt Kenya\",\n        \"title\": \"Banner Slot 2\",\n        \"subtitle\": \"\"\n      },\n      {\n        \"card_uuid\": \"3ffaa4fb-010b-4a3d-a31d-cfe69563dfa8\",\n        \"card_slug\": \"banner_slot_3\",\n        \"slot\": 3,\n        \"asset_uuid\": \"df4bd68b-6067-42cd-894f-b9a680d0c34f\",\n        \"asset_key\": \"banner_slot_3_1791210834084\",\n        \"updated_at\": \"2026-10-05T14:33:54.084Z\",\n        \"url\": \"https://images.ambiapay.com/banners/banner_2c53ae8c-ed29-4df2-9cf0-de0f63e51148.jpg\",\n        \"alt_text\": \"\",\n        \"title\": \"Banner Slot 3\",\n        \"subtitle\": \"\"\n      },\n      {\n        \"card_uuid\": \"308755a0-44d7-4a67-8fd9-ac33c0cc255a\",\n        \"card_slug\": \"banner_slot_4\",\n        \"slot\": 4,\n        \"asset_uuid\": \"153e47f7-0409-4c54-a671-eb112af79600\",\n        \"asset_key\": \"banner_slot_4_1791210848631\",\n        \"updated_at\": \"2026-10-05T14:34:08.631Z\",\n        \"url\": \"https://images.ambiapay.com/banners/banner_6bd5c3a4-ec60-4ebb-9f68-8b8969a04810.jpg\",\n        \"alt_text\": \"\",\n        \"title\": \"Banner Slot 4\",\n        \"subtitle\": \"\"\n      },\n      {\n        \"card_uuid\": \"1e38c05e-71a7-471d-854c-19f09ad0e6df\",\n        \"card_slug\": \"banner_slot_5\",\n        \"slot\": 5,\n        \"asset_uuid\": \"c5d88426-3675-4517-9e1e-543c0ea9a93b\",\n        \"asset_key\": \"banner_slot_5_1791210869746\",\n        \"updated_at\": \"2026-10-05T14:34:29.746Z\",\n        \"url\": \"https://images.ambiapay.com/banners/banner_af64a705-e864-40dd-bb5e-beec9b18ee81.jpg\",\n        \"alt_text\": \"\",\n        \"title\": \"Banner Slot 5\",\n        \"subtitle\": \"\"\n      }\n    ]\n  }\n}"
                 }
               ]
             }

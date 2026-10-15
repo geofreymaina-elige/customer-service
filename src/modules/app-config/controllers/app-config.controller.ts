@@ -62,7 +62,7 @@ export class AppConfigController {
   @Get('banners')
   @ApiOperation({
     summary: 'Get App Banners',
-    description: 'Retrieve the active hero banner and feature-card banners for the mobile app.',
+    description: 'Retrieve active banner carousel slots 1–5. Slot 1 is returned as the hero section; slots 2–5 are returned as feature cards.',
   })
   @ApiResponse({
     status: 200,
@@ -78,11 +78,16 @@ export class AppConfigController {
             hero_section: {
               type: 'object',
               properties: {
+                card_uuid: { type: 'string', example: 'card-uuid-456' },
+                card_slug: { type: 'string', example: 'banner_slot_1' },
+                slot: { type: 'number', example: 1 },
                 asset_uuid: { type: 'string', example: 'hero-uuid-123' },
-                asset_key: { type: 'string', example: 'hero_banner' },
+                asset_key: { type: 'string', example: 'banner_slot_1' },
                 updated_at: { type: 'string', example: '2026-10-05T10:30:00Z' },
                 url: { type: 'string', example: 'https://cdn.ambiapay.com/images/hero-banner.jpg' },
                 alt_text: { type: 'string', example: 'Welcome to AmbiaPay' },
+                title: { type: 'string', example: 'Banner Slot 1' },
+                subtitle: { type: 'string', example: '' },
               },
             },
             feature_cards: {
@@ -91,11 +96,13 @@ export class AppConfigController {
                 type: 'object',
                 properties: {
                   card_uuid: { type: 'string', example: 'card-uuid-456' },
-                  card_slug: { type: 'string', example: 'send-money' },
+                  card_slug: { type: 'string', example: 'banner_slot_2' },
+                  slot: { type: 'number', example: 2 },
                   asset_uuid: { type: 'string', example: 'asset-uuid-789' },
                   asset_key: { type: 'string', example: 'send_money_icon' },
                   updated_at: { type: 'string', example: '2026-10-05T10:30:00Z' },
                   url: { type: 'string', example: 'https://cdn.ambiapay.com/images/send-money.png' },
+                  alt_text: { type: 'string', nullable: true, example: 'Mt Kenya' },
                   title: { type: 'string', example: 'Send Money' },
                   subtitle: { type: 'string', example: 'Transfer funds instantly' },
                 },

@@ -53,34 +53,41 @@ test('app config returns feature flags with descriptions and disabled messages o
   assert.equal(response.feature_flags[1].message, null);
 });
 
-test('banners returns the hero and active feature cards without app config data', async () => {
-  const heroAsset = {
-    id: 1,
-    asset_uuid: 'hero-uuid',
-    asset_key: 'hero',
-    url: ' https://cdn.example.test/hero.jpg ',
-    alt_text: 'Hero',
-    updated_at: new Date('2026-10-01T00:00:00Z'),
-  };
-  const card = {
-    card_uuid: 'card-uuid',
-    card_slug: 'promo',
-    asset_uuid: 'card-asset-uuid',
-    asset_key: 'promo',
-    url: ' https://cdn.example.test/promo.jpg ',
-    title: 'Promotion',
-    subtitle: null,
-    updated_at: new Date('2026-10-02T00:00:00Z'),
-  };
-  const db = {
-    queryOne: async (sql) => {
-      assert.match(sql, /FROM app_assets/);
-      return heroAsset;
+test('banners promote slot 1 to hero and return slots 2-5 as feature cards', async () => {
+  const bannerRows = [
+    {
+      card_uuid: 'slot-1-card-uuid',
+      card_slug: 'banner_slot_1',
+      slot: 1,
+      title: 'Banner Slot 1',
+      subtitle: '',
+      asset_uuid: 'slot-1-asset-uuid',
+      asset_key: 'banner_slot_1_asset',
+      url: ' https://cdn.example.test/banner-1.jpg ',
+      alt_text: 'Mt Kenya',
+      updated_at: new Date('2026-10-05T14:45:49.125Z'),
     },
-    query: async (sql, params) => {
-      assert.match(sql, /FROM feature_cards fc/);
-      assert.deepEqual(params, [heroAsset.id]);
-      return { rows: [card] };
+    ...[2, 3, 4, 5].map((slot) => ({
+      card_uuid: `slot-${slot}-card-uuid`,
+      card_slug: `banner_slot_${slot}`,
+      slot,
+      title: `Banner Slot ${slot}`,
+      subtitle: null,
+      asset_uuid: `slot-${slot}-asset-uuid`,
+      asset_key: `banner_slot_${slot}_asset`,
+      url: ` https://cdn.example.test/banner-${slot}.jpg `,
+      alt_text: null,
+      updated_at: new Date(`2026-10-05T14:4${slot}:00.000Z`),
+    })),
+  ];
+  const db = {
+    query: async (sql) => {
+      assert.match(sql, /fc\.display_order AS slot/);
+      assert.match(sql, /fc\.display_order BETWEEN 1 AND 5/);
+      assert.match(sql, /fc\.card_slug LIKE 'banner_slot_%'/);
+      assert.match(sql, /aa\.is_active = TRUE/);
+      assert.match(sql, /ORDER BY fc\.display_order ASC/);
+      return { rows: bannerRows };
     },
   };
 
@@ -91,24 +98,38 @@ test('banners returns the hero and active feature cards without app config data'
     layout_version: '2026-09-30-v1',
     page_layout: {
       hero_section: {
-        asset_uuid: 'hero-uuid',
-        asset_key: 'hero',
-        updated_at: '2026-10-01T00:00:00.000Z',
-        url: 'https://cdn.example.test/hero.jpg',
-        alt_text: 'Hero',
-      },
-      feature_cards: [{
-        card_uuid: 'card-uuid',
-        card_slug: 'promo',
-        asset_uuid: 'card-asset-uuid',
-        asset_key: 'promo',
-        updated_at: '2026-10-02T00:00:00.000Z',
-        url: 'https://cdn.example.test/promo.jpg',
-        title: 'Promotion',
+        card_uuid: 'slot-1-card-uuid',
+        card_slug: 'banner_slot_1',
+        slot: 1,
+        title: 'Banner Slot 1',
         subtitle: '',
-      }],
+        asset_uuid: 'slot-1-asset-uuid',
+        asset_key: 'banner_slot_1_asset',
+        updated_at: '2026-10-05T14:45:49.125Z',
+        url: 'https://cdn.example.test/banner-1.jpg',
+        alt_text: 'Mt Kenya',
+      },
+      feature_cards: bannerRows.slice(1).map((banner) => ({
+        ...banner,
+        updated_at: banner.updated_at.toISOString(),
+        url: banner.url.trim(),
+        alt_text: '',
+        subtitle: '',
+      })),
     },
   });
   assert.equal(Object.hasOwn(response, 'services'), false);
   assert.equal(Object.hasOwn(response, 'feature_flags'), false);
+  assert.equal(response.page_layout.feature_cards.some((banner) => banner.slot === 1), false);
+});
+
+test('banners fail when the active slot 1 hero banner is missing', async () => {
+  const db = {
+    query: async () => ({ rows: [] }),
+  };
+
+  await assert.rejects(
+    new AppConfigService(db).getBanners(),
+    { message: 'No active hero asset found' }
+  );
 });
