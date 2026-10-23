@@ -153,3 +153,16 @@ See [docs/transaction-token-auth.md](docs/transaction-token-auth.md) for the tra
 | `POST` | `/api/v1/operations/customers/:uuid/kyc/review` | Review & approve/reject customer KYC documents |
 | `POST` | `/api/v1/operations/customers/:uuid/pin/unlock` | Admin unlock permanently locked PIN |
 | `POST` | `/api/v1/operations/customers/:uuid/wallet/freeze` | Admin freeze or unfreeze account for compliance |
+
+### ⚙️ App Configuration & Banners
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/v1/app-config?astppId={astppId}` | Retrieve service availability and feature flags |
+| `GET` | `/api/v1/banners?astppId={astppId}` | Retrieve the active banner layout |
+
+`astppId` is an optional integer query parameter on both endpoints. Requests without it remain supported. When provided, the API checks that the ASTPP ID belongs to an existing customer and returns `404 Customer not found.` if it does not. Responses are currently shared across ASTPP accounts; customer-specific configuration and banners are future work.
+
+**TODO — customer-specific configuration and banners**
+- Add ASTPP account ownership/mapping for app configuration and banner records.
+- Filter both endpoints by `astppId`, including a defined response when an account has no customer-specific records.
+- Add tests proving one account cannot receive another account's configuration or banners.

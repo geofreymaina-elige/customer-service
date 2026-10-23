@@ -1,5 +1,5 @@
-import { Controller, Get } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiSecurity } from '@nestjs/swagger';
+import { Controller, Get, ParseIntPipe, Query } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiSecurity, ApiQuery } from '@nestjs/swagger';
 import { AppConfigService } from '../services/app-config.service';
 
 @ApiTags('Configuration and Banners')
@@ -9,6 +9,12 @@ export class AppConfigController {
   constructor(private readonly appConfigService: AppConfigService) {}
 
   @Get('app-config')
+  @ApiQuery({
+    name: 'astppId',
+    required: false,
+    type: Number,
+    description: 'Optional ASTPP account ID. If provided, it must belong to an existing customer; configuration is currently shared.',
+  })
   @ApiOperation({
     summary: 'Get App Configuration',
     description: 'Retrieve service availability and feature flags. Disabled feature flags include their configured error message.',
@@ -55,11 +61,23 @@ export class AppConfigController {
     status: 401,
     description: 'Unauthorized - Invalid or missing API key',
   })
-  async getAppConfig() {
-    return this.appConfigService.getAppConfig();
+  @ApiResponse({
+    status: 404,
+    description: 'Customer not found for the provided ASTPP account ID',
+  })
+  async getAppConfig(
+    @Query('astppId', new ParseIntPipe({ optional: true })) astppId?: number
+  ) {
+    return this.appConfigService.getAppConfig(astppId);
   }
 
   @Get('banners')
+  @ApiQuery({
+    name: 'astppId',
+    required: false,
+    type: Number,
+    description: 'Optional ASTPP account ID. If provided, it must belong to an existing customer; banners are currently shared.',
+  })
   @ApiOperation({
     summary: 'Get App Banners',
     description: 'Retrieve active banner carousel slots 1-5. Slot 1 is returned as the hero section; slots 2-5 are returned as feature cards.',
@@ -119,9 +137,11 @@ export class AppConfigController {
   })
   @ApiResponse({
     status: 404,
-    description: 'No active banner configuration found',
+    description: 'Customer not found for the provided ASTPP account ID, or no active banner configuration found',
   })
-  async getBanners() {
-    return this.appConfigService.getBanners();
+  async getBanners(
+    @Query('astppId', new ParseIntPipe({ optional: true })) astppId?: number
+  ) {
+    return this.appConfigService.getBanners(astppId);
   }
 }

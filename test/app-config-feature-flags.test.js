@@ -3,6 +3,84 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { AppConfigService } = require('../dist/src/modules/app-config/services/app-config.service.js');
+const { AppConfigController } = require('../dist/src/modules/app-config/controllers/app-config.controller.js');
+
+test('configuration and banner controllers pass optional ASTPP IDs to the service', async () => {
+  const calls = [];
+  const service = {
+    getAppConfig: async (astppId) => {
+      calls.push(['app-config', astppId]);
+      return { status: 'success' };
+    },
+    getBanners: async (astppId) => {
+      calls.push(['banners', astppId]);
+      return { status: 'success' };
+    },
+  };
+  const controller = new AppConfigController(service);
+
+  await controller.getAppConfig(1862533);
+  await controller.getBanners(1862533);
+  await controller.getAppConfig();
+  await controller.getBanners();
+
+  assert.deepEqual(calls, [
+    ['app-config', 1862533],
+    ['banners', 1862533],
+    ['app-config', undefined],
+    ['banners', undefined],
+  ]);
+});
+
+test('app config validates a provided ASTPP ID and returns the shared config for an existing customer', async () => {
+  let customerLookup;
+  const db = {
+    queryOne: async (sql, params) => {
+      customerLookup = { sql, params };
+      return { id: 123 };
+    },
+    query: async () => ({ rows: [] }),
+  };
+
+  const response = await new AppConfigService(db).getAppConfig(1862533);
+
+  assert.deepEqual(customerLookup, {
+    sql: 'SELECT id FROM customers WHERE astpp_id = $1 LIMIT 1',
+    params: [1862533],
+  });
+  assert.deepEqual(response, {
+    services: {
+      esim: true,
+      wallet: false,
+      voip: true,
+    },
+    status: 'success',
+    feature_flags: [],
+  });
+});
+
+test('configuration and banners reject ASTPP IDs without a matching customer', async () => {
+  for (const method of ['getAppConfig', 'getBanners']) {
+    let customerLookupCount = 0;
+    const db = {
+      queryOne: async (sql, params) => {
+        customerLookupCount += 1;
+        assert.match(sql, /FROM customers WHERE astpp_id = \$1/);
+        assert.deepEqual(params, [1862533]);
+        return null;
+      },
+      query: async () => {
+        assert.fail(`${method} should stop when the customer does not exist`);
+      },
+    };
+
+    await assert.rejects(
+      new AppConfigService(db)[method](1862533),
+      { message: 'Customer not found.' }
+    );
+    assert.equal(customerLookupCount, 1);
+  }
+});
 
 test('app config returns feature flags with descriptions and disabled messages only', async () => {
   const flags = [

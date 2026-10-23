@@ -7911,7 +7911,7 @@
                   "type": "noauth"
                 },
                 "url": {
-                  "raw": "{{baseUrl}}/api/v1/app-config",
+                  "raw": "{{baseUrl}}/api/v1/app-config?astppId={{astppId}}",
                   "host": [
                     "{{baseUrl}}"
                   ],
@@ -7919,9 +7919,16 @@
                     "api",
                     "v1",
                     "app-config"
+                  ],
+                  "query": [
+                    {
+                      "key": "astppId",
+                      "value": "{{astppId}}",
+                      "description": "Optional ASTPP account ID; must belong to an existing customer. Config is currently shared."
+                    }
                   ]
                 },
-                "description": "Returns service availability and feature flags. Disabled flags include the configured error_message as message; enabled flags return message as null. Requires X-API-Key only."
+                "description": "Returns service availability and feature flags. Disabled flags include the configured error_message as message; enabled flags return message as null. Optional astppId must belong to an existing customer (otherwise 404); configuration is currently shared. Requires X-API-Key only."
               },
               "response": [
                 {
@@ -7940,7 +7947,7 @@
                       "type": "noauth"
                     },
                     "url": {
-                      "raw": "{{baseUrl}}/api/v1/app-config",
+                      "raw": "{{baseUrl}}/api/v1/app-config?astppId={{astppId}}",
                       "host": [
                         "{{baseUrl}}"
                       ],
@@ -7948,9 +7955,16 @@
                         "api",
                         "v1",
                         "app-config"
+                      ],
+                      "query": [
+                        {
+                          "key": "astppId",
+                          "value": "{{astppId}}",
+                          "description": "Optional ASTPP account ID; must belong to an existing customer. Config is currently shared."
+                        }
                       ]
                     },
-                    "description": "Returns service availability and feature flags. Disabled flags include the configured error_message as message; enabled flags return message as null. Requires X-API-Key only."
+                    "description": "Returns service availability and feature flags. Disabled flags include the configured error_message as message; enabled flags return message as null. Optional astppId must belong to an existing customer (otherwise 404); configuration is currently shared. Requires X-API-Key only."
                   },
                   "status": "OK",
                   "code": 200,
@@ -8002,7 +8016,7 @@
                   "type": "noauth"
                 },
                 "url": {
-                  "raw": "{{baseUrl}}/api/v1/banners",
+                  "raw": "{{baseUrl}}/api/v1/banners?astppId={{astppId}}",
                   "host": [
                     "{{baseUrl}}"
                   ],
@@ -8010,9 +8024,16 @@
                     "api",
                     "v1",
                     "banners"
+                  ],
+                  "query": [
+                    {
+                      "key": "astppId",
+                      "value": "{{astppId}}",
+                      "description": "Optional ASTPP account ID; must belong to an existing customer. Banners are currently shared."
+                    }
                   ]
                 },
-                "description": "Returns active banner carousel slots 1-5. Slot 1 is the hero section; slots 2-5 are feature cards. Requires X-API-Key only."
+                "description": "Returns active banner carousel slots 1-5. Slot 1 is the hero section; slots 2-5 are feature cards. Optional astppId must belong to an existing customer (otherwise 404); banners are currently shared. Requires X-API-Key only."
               },
               "response": [
                 {
@@ -8031,7 +8052,7 @@
                       "type": "noauth"
                     },
                     "url": {
-                      "raw": "{{baseUrl}}/api/v1/banners",
+                      "raw": "{{baseUrl}}/api/v1/banners?astppId={{astppId}}",
                       "host": [
                         "{{baseUrl}}"
                       ],
@@ -8039,9 +8060,16 @@
                         "api",
                         "v1",
                         "banners"
+                      ],
+                      "query": [
+                        {
+                          "key": "astppId",
+                          "value": "{{astppId}}",
+                          "description": "Optional ASTPP account ID; must belong to an existing customer. Banners are currently shared."
+                        }
                       ]
                     },
-                    "description": "Returns active banner carousel slots 1-5. Slot 1 is the hero section; slots 2-5 are feature cards. Requires X-API-Key only."
+                    "description": "Returns active banner carousel slots 1-5. Slot 1 is the hero section; slots 2-5 are feature cards. Optional astppId must belong to an existing customer (otherwise 404); banners are currently shared. Requires X-API-Key only."
                   },
                   "status": "OK",
                   "code": 200,
