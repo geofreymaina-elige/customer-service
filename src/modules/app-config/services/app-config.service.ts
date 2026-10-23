@@ -26,9 +26,7 @@ interface BannerRecord {
 export class AppConfigService {
   constructor(private readonly db: DatabaseService) {}
 
-  async getAppConfig(astppId?: number): Promise<AppConfigResponse> {
-    await this.assertCustomerExists(astppId);
-
+  async getAppConfig(): Promise<AppConfigResponse> {
     const featureFlags = await this.db.query<FeatureFlag>(
       `SELECT service, feature_key, parent_key, name, description, is_enabled,
               CASE WHEN is_enabled THEN NULL ELSE error_message END AS message
@@ -47,7 +45,7 @@ export class AppConfigService {
     };
   }
 
-  async getBanners(astppId?: number): Promise<BannersResponse> {
+  async getBanners(astppId: string): Promise<BannersResponse> {
     await this.assertCustomerExists(astppId);
 
     const banners = await this.db.query<BannerRecord>(
@@ -104,14 +102,15 @@ export class AppConfigService {
     };
   }
 
-  private async assertCustomerExists(astppId?: number): Promise<void> {
-    if (astppId === undefined) {
+  private async assertCustomerExists(astppId?: string): Promise<void> {
+    const normalizedAstppId = astppId?.trim();
+    if (!normalizedAstppId) {
       return;
     }
 
     const customer = await this.db.queryOne<{ id: number }>(
       'SELECT id FROM customers WHERE astpp_id = $1 LIMIT 1',
-      [astppId]
+      [normalizedAstppId]
     );
 
     if (!customer) {

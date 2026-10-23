@@ -157,12 +157,12 @@ See [docs/transaction-token-auth.md](docs/transaction-token-auth.md) for the tra
 ### ⚙️ App Configuration & Banners
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/api/v1/app-config?astppId={astppId}` | Retrieve service availability and feature flags |
-| `GET` | `/api/v1/banners?astppId={astppId}` | Retrieve the active banner layout |
+| `GET` | `/api/v1/app-config` | Retrieve service availability and feature flags (X-API-Key) |
+| `GET` | `/api/v1/banners` | Retrieve the active banner layout (X-API-Key + X-Astpp-Id + matching X-Astpp-Token; optional X-Fcm-Token) |
 
-`astppId` is an optional integer query parameter on both endpoints. Requests without it remain supported. When provided, the API checks that the ASTPP ID belongs to an existing customer and returns `404 Customer not found.` if it does not. Responses are currently shared across ASTPP accounts; customer-specific configuration and banners are future work.
+The banners endpoint requires `X-Astpp-Id` and `X-Astpp-Token`; the ASTPP middleware validates that the token matches the account ID. When supplied, the account ID is also checked against existing customers. `X-Fcm-Token` (app-installation identity) is optional and is not used as authentication. The API currently returns shared banner content; customer/device-specific targeting is future work. App config does not require ASTPP authentication.
 
 **TODO — customer-specific configuration and banners**
 - Add ASTPP account ownership/mapping for app configuration and banner records.
-- Filter both endpoints by `astppId`, including a defined response when an account has no customer-specific records.
+- Use ASTPP account and FCM installation identities to select customer/device-specific banners, including a defined response when no targeted records exist.
 - Add tests proving one account cannot receive another account's configuration or banners.

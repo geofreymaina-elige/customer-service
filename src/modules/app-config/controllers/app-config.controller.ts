@@ -1,6 +1,7 @@
-import { Controller, Get, ParseIntPipe, Query } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiSecurity, ApiQuery } from '@nestjs/swagger';
+import { Controller, Get, Headers, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiSecurity, ApiHeader } from '@nestjs/swagger';
 import { AppConfigService } from '../services/app-config.service';
+import { AstppTokenGuard } from '../../../core/auth/astpp-token.guard';
 
 @ApiTags('Configuration and Banners')
 @ApiSecurity('API-Key')
@@ -9,12 +10,6 @@ export class AppConfigController {
   constructor(private readonly appConfigService: AppConfigService) {}
 
   @Get('app-config')
-  @ApiQuery({
-    name: 'astppId',
-    required: false,
-    type: Number,
-    description: 'Optional ASTPP account ID. If provided, it must belong to an existing customer; configuration is currently shared.',
-  })
   @ApiOperation({
     summary: 'Get App Configuration',
     description: 'Retrieve service availability and feature flags. Disabled feature flags include their configured error message.',
@@ -61,26 +56,27 @@ export class AppConfigController {
     status: 401,
     description: 'Unauthorized - Invalid or missing API key',
   })
-  @ApiResponse({
-    status: 404,
-    description: 'Customer not found for the provided ASTPP account ID',
-  })
-  async getAppConfig(
-    @Query('astppId', new ParseIntPipe({ optional: true })) astppId?: number
-  ) {
-    return this.appConfigService.getAppConfig(astppId);
+  async getAppConfig() {
+    return this.appConfigService.getAppConfig();
   }
 
   @Get('banners')
-  @ApiQuery({
-    name: 'astppId',
-    required: false,
-    type: Number,
-    description: 'Optional ASTPP account ID. If provided, it must belong to an existing customer; banners are currently shared.',
+  @ApiHeader({
+    name: 'X-Astpp-Id',
+    required: true,
+    description: 'ASTPP subscriber/account ID. The X-Astpp-Token must be valid for this account.',
+    example: '1862533',
   })
+  @ApiHeader({
+    name: 'X-Fcm-Token',
+    required: false,
+    description: 'Optional Firebase registration token for future app-installation-level banner targeting.',
+    example: 'fcm-registration-token',
+  })
+  @ApiSecurity('ASTPP-Token')
   @ApiOperation({
     summary: 'Get App Banners',
-    description: 'Retrieve active banner carousel slots 1-5. Slot 1 is returned as the hero section; slots 2-5 are returned as feature cards.',
+    description: 'Retrieve active banner carousel slots 1-5. Requires an X-Astpp-Token valid for the X-Astpp-Id account. X-Fcm-Token is an optional app-installation identity for future targeting. Slot 1 is returned as the hero section; slots 2-5 are returned as feature cards.',
   })
   @ApiResponse({
     status: 200,
@@ -136,12 +132,15 @@ export class AppConfigController {
     description: 'Unauthorized - Invalid or missing API key',
   })
   @ApiResponse({
+    status: 400,
+    description: 'Invalid or missing ASTPP token or account ID',
+  })
+  @ApiResponse({
     status: 404,
     description: 'Customer not found for the provided ASTPP account ID, or no active banner configuration found',
   })
-  async getBanners(
-    @Query('astppId', new ParseIntPipe({ optional: true })) astppId?: number
-  ) {
+  @UseGuards(AstppTokenGuard)
+  async getBanners(@Headers('x-astpp-id') astppId: string) {
     return this.appConfigService.getBanners(astppId);
   }
 }

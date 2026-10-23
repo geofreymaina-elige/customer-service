@@ -7872,7 +7872,7 @@
         },
         {
           "name": "App Config",
-          "description": "Mobile app service configuration, feature flags, and banner content. These endpoints require X-API-Key only; no app access token is needed.",
+          "description": "Mobile app service configuration, feature flags, and banner content. App config requires X-API-Key. Banners require X-API-Key, X-Astpp-Id, and a matching X-Astpp-Token; X-Fcm-Token is optional.",
           "item": [
             {
               "name": "Get app config",
@@ -7911,7 +7911,7 @@
                   "type": "noauth"
                 },
                 "url": {
-                  "raw": "{{baseUrl}}/api/v1/app-config?astppId={{astppId}}",
+                  "raw": "{{baseUrl}}/api/v1/app-config",
                   "host": [
                     "{{baseUrl}}"
                   ],
@@ -7919,16 +7919,9 @@
                     "api",
                     "v1",
                     "app-config"
-                  ],
-                  "query": [
-                    {
-                      "key": "astppId",
-                      "value": "{{astppId}}",
-                      "description": "Optional ASTPP account ID; must belong to an existing customer. Config is currently shared."
-                    }
                   ]
                 },
-                "description": "Returns service availability and feature flags. Disabled flags include the configured error_message as message; enabled flags return message as null. Optional astppId must belong to an existing customer (otherwise 404); configuration is currently shared. Requires X-API-Key only."
+                "description": "Returns service availability and feature flags. Disabled flags include the configured error_message as message; enabled flags return message as null. Configuration is currently shared. Requires X-API-Key only."
               },
               "response": [
                 {
@@ -7947,7 +7940,7 @@
                       "type": "noauth"
                     },
                     "url": {
-                      "raw": "{{baseUrl}}/api/v1/app-config?astppId={{astppId}}",
+                      "raw": "{{baseUrl}}/api/v1/app-config",
                       "host": [
                         "{{baseUrl}}"
                       ],
@@ -7955,16 +7948,9 @@
                         "api",
                         "v1",
                         "app-config"
-                      ],
-                      "query": [
-                        {
-                          "key": "astppId",
-                          "value": "{{astppId}}",
-                          "description": "Optional ASTPP account ID; must belong to an existing customer. Config is currently shared."
-                        }
                       ]
                     },
-                    "description": "Returns service availability and feature flags. Disabled flags include the configured error_message as message; enabled flags return message as null. Optional astppId must belong to an existing customer (otherwise 404); configuration is currently shared. Requires X-API-Key only."
+                    "description": "Returns service availability and feature flags. Disabled flags include the configured error_message as message; enabled flags return message as null. Configuration is currently shared. Requires X-API-Key only."
                   },
                   "status": "OK",
                   "code": 200,
@@ -8010,13 +7996,31 @@
                     "value": "{{apiKey}}",
                     "type": "text",
                     "description": "API key required for all requests"
+                  },
+                  {
+                    "key": "X-Astpp-Id",
+                    "value": "{{astppId}}",
+                    "type": "text",
+                    "description": "Required subscriber/account ID matched against X-Astpp-Token."
+                  },
+                  {
+                    "key": "X-Astpp-Token",
+                    "value": "{{astppToken}}",
+                    "type": "text",
+                    "description": "Required ASTPP token validated for X-Astpp-Id."
+                  },
+                  {
+                    "key": "X-Fcm-Token",
+                    "value": "{{fcmToken}}",
+                    "type": "text",
+                    "description": "Optional Firebase registration token for app-installation identity."
                   }
                 ],
                 "auth": {
                   "type": "noauth"
                 },
                 "url": {
-                  "raw": "{{baseUrl}}/api/v1/banners?astppId={{astppId}}",
+                  "raw": "{{baseUrl}}/api/v1/banners",
                   "host": [
                     "{{baseUrl}}"
                   ],
@@ -8024,16 +8028,9 @@
                     "api",
                     "v1",
                     "banners"
-                  ],
-                  "query": [
-                    {
-                      "key": "astppId",
-                      "value": "{{astppId}}",
-                      "description": "Optional ASTPP account ID; must belong to an existing customer. Banners are currently shared."
-                    }
                   ]
                 },
-                "description": "Returns active banner carousel slots 1-5. Slot 1 is the hero section; slots 2-5 are feature cards. Optional astppId must belong to an existing customer (otherwise 404); banners are currently shared. Requires X-API-Key only."
+                "description": "Returns active banner carousel slots 1-5. Slot 1 is the hero section; slots 2-5 are feature cards. Requires X-Astpp-Id and a matching X-Astpp-Token. X-Fcm-Token is optional and is not used as authentication. The ASTPP ID must belong to an existing customer. Banners are currently shared."
               },
               "response": [
                 {
@@ -8046,13 +8043,31 @@
                         "value": "{{apiKey}}",
                         "type": "text",
                         "description": "API key required for all requests"
+                      },
+                      {
+                        "key": "X-Astpp-Id",
+                        "value": "{{astppId}}",
+                        "type": "text",
+                        "description": "Required subscriber/account ID matched against X-Astpp-Token."
+                      },
+                      {
+                        "key": "X-Astpp-Token",
+                        "value": "{{astppToken}}",
+                        "type": "text",
+                        "description": "Required ASTPP token validated for X-Astpp-Id."
+                      },
+                      {
+                        "key": "X-Fcm-Token",
+                        "value": "{{fcmToken}}",
+                        "type": "text",
+                        "description": "Optional Firebase registration token for app-installation identity."
                       }
                     ],
                     "auth": {
                       "type": "noauth"
                     },
                     "url": {
-                      "raw": "{{baseUrl}}/api/v1/banners?astppId={{astppId}}",
+                      "raw": "{{baseUrl}}/api/v1/banners",
                       "host": [
                         "{{baseUrl}}"
                       ],
@@ -8060,16 +8075,9 @@
                         "api",
                         "v1",
                         "banners"
-                      ],
-                      "query": [
-                        {
-                          "key": "astppId",
-                          "value": "{{astppId}}",
-                          "description": "Optional ASTPP account ID; must belong to an existing customer. Banners are currently shared."
-                        }
                       ]
                     },
-                    "description": "Returns active banner carousel slots 1-5. Slot 1 is the hero section; slots 2-5 are feature cards. Optional astppId must belong to an existing customer (otherwise 404); banners are currently shared. Requires X-API-Key only."
+                    "description": "Returns active banner carousel slots 1-5. Slot 1 is the hero section; slots 2-5 are feature cards. Requires X-Astpp-Id and a matching X-Astpp-Token. X-Fcm-Token is optional and is not used as authentication. The ASTPP ID must belong to an existing customer. Banners are currently shared."
                   },
                   "status": "OK",
                   "code": 200,
