@@ -8,6 +8,7 @@ import {
   FeatureFlag,
   PageLayout,
 } from '../dto/app-config.dto';
+import { BannerAudience } from '../../../core/auth/optional-astpp-banner.guard';
 
 interface BannerRecord {
   card_uuid: string;
@@ -45,9 +46,7 @@ export class AppConfigService {
     };
   }
 
-  async getBanners(astppId: string): Promise<BannersResponse> {
-    await this.assertCustomerExists(astppId);
-
+  async getBanners(_audience?: BannerAudience): Promise<BannersResponse> {
     const banners = await this.db.query<BannerRecord>(
       `SELECT
         fc.card_uuid,
@@ -100,21 +99,5 @@ export class AppConfigService {
       layout_version: '2026-09-30-v1',
       page_layout: pageLayout,
     };
-  }
-
-  private async assertCustomerExists(astppId?: string): Promise<void> {
-    const normalizedAstppId = astppId?.trim();
-    if (!normalizedAstppId) {
-      return;
-    }
-
-    const customer = await this.db.queryOne<{ id: number }>(
-      'SELECT id FROM customers WHERE astpp_id = $1 LIMIT 1',
-      [normalizedAstppId]
-    );
-
-    if (!customer) {
-      throw new NotFoundException('Customer not found.');
-    }
   }
 }

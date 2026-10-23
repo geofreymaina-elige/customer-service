@@ -5,29 +5,30 @@ const crypto = require('node:crypto');
 const { test } = require('node:test');
 const { AppConfigService } = require('../dist/src/modules/app-config/services/app-config.service.js');
 const { AppConfigController } = require('../dist/src/modules/app-config/controllers/app-config.controller.js');
-const { AstppTokenGuard } = require('../dist/src/core/auth/astpp-token.guard.js');
+const { OptionalAstppBannerGuard } = require('../dist/src/core/auth/optional-astpp-banner.guard.js');
 
-test('app config has no ASTPP ID and banners pass the optional X-Astpp-Id header to the service', async () => {
+test('app config has no ASTPP ID and banners pass only validated audience context to the service', async () => {
   const calls = [];
   const service = {
     getAppConfig: async (...args) => {
       calls.push(['app-config', ...args]);
       return { status: 'success' };
     },
-    getBanners: async (astppId) => {
-      calls.push(['banners', astppId]);
+    getBanners: async (...args) => {
+      calls.push(['banners', ...args]);
       return { status: 'success' };
     },
   };
   const controller = new AppConfigController(service);
+  const audience = { astppId: '1862533', fcmToken: 'fcm-registration-token' };
 
   await controller.getAppConfig();
-  await controller.getBanners('1862533');
-  await controller.getBanners();
+  await controller.getBanners({ bannerAudience: audience });
+  await controller.getBanners({ bannerAudience: undefined });
 
   assert.deepEqual(calls, [
     ['app-config'],
-    ['banners', '1862533'],
+    ['banners', audience],
     ['banners', undefined],
   ]);
 });
@@ -50,19 +51,19 @@ test('app config returns the shared config without checking an ASTPP customer', 
   });
 });
 
-test('banners use the ASTPP token guard', () => {
+test('banners use the optional ASTPP authentication guard', () => {
   const guards = Reflect.getMetadata('__guards__', AppConfigController.prototype.getBanners);
 
-  assert.ok(guards.includes(AstppTokenGuard));
+  assert.ok(guards.includes(OptionalAstppBannerGuard));
 });
 
-test('ASTPP token guard validates the X-Astpp-Token against X-Astpp-Id', () => {
+test('banner guard falls back to general banners when ASTPP credentials are missing or invalid', async () => {
   const originalTokenKey = process.env.ASTPP_TOKEN_KEY;
   const originalIvKey = process.env.ASTPP_IV_KEY;
   const originalTokenKeyHex = process.env.ASTPP_TOKEN_KEY_HEX;
   const originalIvHex = process.env.ASTPP_IV_HEX;
-  process.env.ASTPP_TOKEN_KEY = 'app-config-test-token-key';
-  process.env.ASTPP_IV_KEY = 'app-config-test-iv-key';
+  process.env.ASTPP_TOKEN_KEY = 'banner-guard-test-token-key';
+  process.env.ASTPP_IV_KEY = 'banner-guard-test-iv-key';
   delete process.env.ASTPP_TOKEN_KEY_HEX;
   delete process.env.ASTPP_IV_HEX;
 
@@ -78,33 +79,26 @@ test('ASTPP token guard validates the X-Astpp-Token against X-Astpp-Id', () => {
     cipher.update(astppId, 'utf8'),
     cipher.final(),
   ]).toString('base64');
-  const astppToken = Buffer.from(encryptedId, 'utf8').toString('base64');
-  const guard = new AstppTokenGuard({ get: () => 'Invalid ASTPP token' });
-  const contextFor = (headers) => ({
-    switchToHttp: () => ({
-      getRequest: () => ({ headers, params: {}, query: {}, body: {} }),
-    }),
-  });
+  const token = Buffer.from(encryptedId, 'utf8').toString('base64');
 
   try {
-    assert.equal(
-      guard.canActivate(contextFor({
-        'x-astpp-id': astppId,
-        'x-astpp-token': astppToken,
-      })),
-      true
-    );
-    assert.throws(
-      () => guard.canActivate(contextFor({
-        'x-astpp-id': '9999999',
-        'x-astpp-token': astppToken,
-      })),
-      { status: 400 }
-    );
-    assert.throws(
-      () => guard.canActivate(contextFor({ 'x-astpp-id': astppId })),
-      { status: 400 }
-    );
+    for (const headers of [
+      {},
+      { 'x-astpp-id': astppId },
+      { 'x-astpp-id': astppId, 'x-astpp-token': 'invalid-token' },
+    ]) {
+      const request = { headers, params: {}, query: {}, body: {} };
+      const guard = new OptionalAstppBannerGuard({
+        queryOne: async () => {
+          assert.fail('incomplete or invalid credentials must not query customer identity');
+        },
+      });
+
+      assert.equal(await guard.canActivate({
+        switchToHttp: () => ({ getRequest: () => request }),
+      }), true);
+      assert.equal(request.bannerAudience, undefined);
+    }
   } finally {
     if (originalTokenKey === undefined) delete process.env.ASTPP_TOKEN_KEY;
     else process.env.ASTPP_TOKEN_KEY = originalTokenKey;
@@ -117,39 +111,117 @@ test('ASTPP token guard validates the X-Astpp-Token against X-Astpp-Id', () => {
   }
 });
 
-test('banners use shared banners without an ASTPP ID', async () => {
-  const db = {
-    queryOne: async () => {
-      assert.fail('banners without an ASTPP ID should not query customers');
-    },
-    query: async (sql) => {
-      assert.match(sql, /fc\.display_order AS slot/);
-      return { rows: [] };
-    },
-  };
+test('banner guard exposes ASTPP and FCM identity only after token and customer validation', async () => {
+  const originalTokenKey = process.env.ASTPP_TOKEN_KEY;
+  const originalIvKey = process.env.ASTPP_IV_KEY;
+  const originalTokenKeyHex = process.env.ASTPP_TOKEN_KEY_HEX;
+  const originalIvHex = process.env.ASTPP_IV_HEX;
+  process.env.ASTPP_TOKEN_KEY = 'banner-guard-test-token-key';
+  process.env.ASTPP_IV_KEY = 'banner-guard-test-iv-key';
+  delete process.env.ASTPP_TOKEN_KEY_HEX;
+  delete process.env.ASTPP_IV_HEX;
 
-  await assert.rejects(
-    new AppConfigService(db).getBanners(),
-    { message: 'No active hero asset found' }
+  const astppId = '1862533';
+  const tokenKeyHex = crypto.createHash('sha256').update(process.env.ASTPP_TOKEN_KEY).digest('hex');
+  const iv = crypto.createHash('sha256').update(process.env.ASTPP_IV_KEY).digest('hex').slice(0, 16);
+  const cipher = crypto.createCipheriv(
+    'aes-256-cbc',
+    Buffer.from(tokenKeyHex.slice(0, 32), 'utf8'),
+    Buffer.from(iv, 'utf8')
   );
-});
-
-test('banners reject supplied ASTPP IDs without a matching customer', async () => {
-  const db = {
+  const encryptedId = Buffer.concat([
+    cipher.update(astppId, 'utf8'),
+    cipher.final(),
+  ]).toString('base64');
+  const token = Buffer.from(encryptedId, 'utf8').toString('base64');
+  const request = {
+    headers: {
+      'x-astpp-id': astppId,
+      'x-astpp-token': token,
+      'x-fcm-token': ' fcm-registration-token ',
+    },
+    params: {},
+    query: {},
+    body: {},
+  };
+  let queryParams;
+  const guard = new OptionalAstppBannerGuard({
     queryOne: async (sql, params) => {
       assert.match(sql, /FROM customers WHERE astpp_id = \$1/);
-      assert.deepEqual(params, ['1862533']);
-      return null;
+      queryParams = params;
+      return { id: 123 };
     },
-    query: async () => {
-      assert.fail('banner lookup should stop when the customer does not exist');
-    },
-  };
+  });
 
-  await assert.rejects(
-    new AppConfigService(db).getBanners('1862533'),
-    { message: 'Customer not found.' }
+  try {
+    assert.equal(await guard.canActivate({
+      switchToHttp: () => ({ getRequest: () => request }),
+    }), true);
+    assert.deepEqual(queryParams, [astppId]);
+    assert.deepEqual(request.bannerAudience, {
+      astppId,
+      fcmToken: 'fcm-registration-token',
+    });
+  } finally {
+    if (originalTokenKey === undefined) delete process.env.ASTPP_TOKEN_KEY;
+    else process.env.ASTPP_TOKEN_KEY = originalTokenKey;
+    if (originalIvKey === undefined) delete process.env.ASTPP_IV_KEY;
+    else process.env.ASTPP_IV_KEY = originalIvKey;
+    if (originalTokenKeyHex === undefined) delete process.env.ASTPP_TOKEN_KEY_HEX;
+    else process.env.ASTPP_TOKEN_KEY_HEX = originalTokenKeyHex;
+    if (originalIvHex === undefined) delete process.env.ASTPP_IV_HEX;
+    else process.env.ASTPP_IV_HEX = originalIvHex;
+  }
+});
+
+test('banner guard falls back to general banners when the ASTPP account is unknown', async () => {
+  const originalTokenKey = process.env.ASTPP_TOKEN_KEY;
+  const originalIvKey = process.env.ASTPP_IV_KEY;
+  const originalTokenKeyHex = process.env.ASTPP_TOKEN_KEY_HEX;
+  const originalIvHex = process.env.ASTPP_IV_HEX;
+  process.env.ASTPP_TOKEN_KEY = 'banner-guard-test-token-key';
+  process.env.ASTPP_IV_KEY = 'banner-guard-test-iv-key';
+  delete process.env.ASTPP_TOKEN_KEY_HEX;
+  delete process.env.ASTPP_IV_HEX;
+
+  const astppId = '1862533';
+  const tokenKeyHex = crypto.createHash('sha256').update(process.env.ASTPP_TOKEN_KEY).digest('hex');
+  const iv = crypto.createHash('sha256').update(process.env.ASTPP_IV_KEY).digest('hex').slice(0, 16);
+  const cipher = crypto.createCipheriv(
+    'aes-256-cbc',
+    Buffer.from(tokenKeyHex.slice(0, 32), 'utf8'),
+    Buffer.from(iv, 'utf8')
   );
+  const encryptedId = Buffer.concat([
+    cipher.update(astppId, 'utf8'),
+    cipher.final(),
+  ]).toString('base64');
+  const token = Buffer.from(encryptedId, 'utf8').toString('base64');
+  const request = {
+    headers: { 'x-astpp-id': astppId, 'x-astpp-token': token },
+    params: {},
+    query: {},
+    body: {},
+  };
+  const guard = new OptionalAstppBannerGuard({
+    queryOne: async () => null,
+  });
+
+  try {
+    assert.equal(await guard.canActivate({
+      switchToHttp: () => ({ getRequest: () => request }),
+    }), true);
+    assert.equal(request.bannerAudience, undefined);
+  } finally {
+    if (originalTokenKey === undefined) delete process.env.ASTPP_TOKEN_KEY;
+    else process.env.ASTPP_TOKEN_KEY = originalTokenKey;
+    if (originalIvKey === undefined) delete process.env.ASTPP_IV_KEY;
+    else process.env.ASTPP_IV_KEY = originalIvKey;
+    if (originalTokenKeyHex === undefined) delete process.env.ASTPP_TOKEN_KEY_HEX;
+    else process.env.ASTPP_TOKEN_KEY_HEX = originalTokenKeyHex;
+    if (originalIvHex === undefined) delete process.env.ASTPP_IV_HEX;
+    else process.env.ASTPP_IV_HEX = originalIvHex;
+  }
 });
 
 test('app config returns feature flags with descriptions and disabled messages only', async () => {
@@ -229,10 +301,8 @@ test('banners promote slot 1 to hero and return slots 2-5 as feature cards', asy
     })),
   ];
   const db = {
-    queryOne: async (sql, params) => {
-      assert.match(sql, /FROM customers WHERE astpp_id = \$1/);
-      assert.deepEqual(params, ['1862533']);
-      return { id: 123 };
+    queryOne: async () => {
+      assert.fail('banner lookup should not query customers');
     },
     query: async (sql) => {
       assert.match(sql, /fc\.display_order AS slot/);
@@ -244,7 +314,7 @@ test('banners promote slot 1 to hero and return slots 2-5 as feature cards', asy
     },
   };
 
-  const response = await new AppConfigService(db).getBanners('1862533');
+  const response = await new AppConfigService(db).getBanners();
 
   assert.deepEqual(response, {
     status: 'success',
@@ -278,12 +348,11 @@ test('banners promote slot 1 to hero and return slots 2-5 as feature cards', asy
 
 test('banners fail when the active slot 1 hero banner is missing', async () => {
   const db = {
-    queryOne: async () => ({ id: 123 }),
     query: async () => ({ rows: [] }),
   };
 
   await assert.rejects(
-    new AppConfigService(db).getBanners('1862533'),
+    new AppConfigService(db).getBanners(),
     { message: 'No active hero asset found' }
   );
 });

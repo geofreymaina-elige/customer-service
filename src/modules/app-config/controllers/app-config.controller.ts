@@ -1,7 +1,11 @@
-import { Controller, Get, Headers, UseGuards } from '@nestjs/common';
+import { Controller, Get, Req, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiSecurity, ApiHeader } from '@nestjs/swagger';
+import { Request } from 'express';
 import { AppConfigService } from '../services/app-config.service';
-import { AstppTokenGuard } from '../../../core/auth/astpp-token.guard';
+import {
+  BannerAudience,
+  OptionalAstppBannerGuard,
+} from '../../../core/auth/optional-astpp-banner.guard';
 
 @ApiTags('Configuration and Banners')
 @ApiSecurity('API-Key')
@@ -63,20 +67,25 @@ export class AppConfigController {
   @Get('banners')
   @ApiHeader({
     name: 'X-Astpp-Id',
-    required: true,
-    description: 'ASTPP subscriber/account ID. The X-Astpp-Token must be valid for this account.',
+    required: false,
+    description: 'ASTPP account ID used with X-Astpp-Token for optional banner authentication.',
     example: '1862533',
+  })
+  @ApiHeader({
+    name: 'X-Astpp-Token',
+    required: false,
+    description: 'Optional ASTPP token. If missing or invalid, general banners are returned.',
+    example: 'encrypted-astpp-token',
   })
   @ApiHeader({
     name: 'X-Fcm-Token',
     required: false,
-    description: 'Optional Firebase registration token for future app-installation-level banner targeting.',
+    description: 'Optional Firebase registration token, used for future authenticated device-level banner targeting.',
     example: 'fcm-registration-token',
   })
-  @ApiSecurity('ASTPP-Token')
   @ApiOperation({
     summary: 'Get App Banners',
-    description: 'Retrieve active banner carousel slots 1-5. Requires an X-Astpp-Token valid for the X-Astpp-Id account. X-Fcm-Token is an optional app-installation identity for future targeting. Slot 1 is returned as the hero section; slots 2-5 are returned as feature cards.',
+    description: 'Retrieve banner carousel slots 1-5. Only X-API-Key is required. When X-Astpp-Id and X-Astpp-Token authenticate an existing customer, their identity (and optional X-Fcm-Token) is available for targeting. Missing/invalid authentication or an unknown customer falls back to general banners. Slot 1 is returned as the hero section; slots 2-5 are returned as feature cards.',
   })
   @ApiResponse({
     status: 200,
@@ -131,16 +140,8 @@ export class AppConfigController {
     status: 401,
     description: 'Unauthorized - Invalid or missing API key',
   })
-  @ApiResponse({
-    status: 400,
-    description: 'Invalid or missing ASTPP token or account ID',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Customer not found for the provided ASTPP account ID, or no active banner configuration found',
-  })
-  @UseGuards(AstppTokenGuard)
-  async getBanners(@Headers('x-astpp-id') astppId: string) {
-    return this.appConfigService.getBanners(astppId);
+  @UseGuards(OptionalAstppBannerGuard)
+  async getBanners(@Req() request: Request & { bannerAudience?: BannerAudience }) {
+    return this.appConfigService.getBanners(request.bannerAudience);
   }
 }

@@ -7872,7 +7872,7 @@
         },
         {
           "name": "App Config",
-          "description": "Mobile app service configuration, feature flags, and banner content. App config requires X-API-Key. Banners require X-API-Key, X-Astpp-Id, and a matching X-Astpp-Token; X-Fcm-Token is optional.",
+          "description": "Mobile app service configuration, feature flags, and banner content. X-API-Key is required. Banner authentication is attempted when ASTPP ID/token are supplied; invalid or missing auth and unknown accounts fall back to general banners.",
           "item": [
             {
               "name": "Get app config",
@@ -8001,19 +8001,19 @@
                     "key": "X-Astpp-Id",
                     "value": "{{astppId}}",
                     "type": "text",
-                    "description": "Required subscriber/account ID matched against X-Astpp-Token."
+                    "description": "Optional ASTPP account ID for authentication and future banner targeting."
                   },
                   {
                     "key": "X-Astpp-Token",
                     "value": "{{astppToken}}",
                     "type": "text",
-                    "description": "Required ASTPP token validated for X-Astpp-Id."
+                    "description": "Optional ASTPP token. If invalid or missing, general banners are returned."
                   },
                   {
                     "key": "X-Fcm-Token",
                     "value": "{{fcmToken}}",
                     "type": "text",
-                    "description": "Optional Firebase registration token for app-installation identity."
+                    "description": "Optional Firebase registration token. Used only for future targeting after successful ASTPP authentication."
                   }
                 ],
                 "auth": {
@@ -8030,7 +8030,7 @@
                     "banners"
                   ]
                 },
-                "description": "Returns active banner carousel slots 1-5. Slot 1 is the hero section; slots 2-5 are feature cards. Requires X-Astpp-Id and a matching X-Astpp-Token. X-Fcm-Token is optional and is not used as authentication. The ASTPP ID must belong to an existing customer. Banners are currently shared."
+                "description": "Returns banner carousel slots 1-5. Only X-API-Key is required. If X-Astpp-Id and X-Astpp-Token authenticate a customer in this service, that identity and optional X-Fcm-Token are available for future banner targeting. Missing/invalid credentials or an unknown account fall back to general banners."
               },
               "response": [
                 {
@@ -8048,19 +8048,19 @@
                         "key": "X-Astpp-Id",
                         "value": "{{astppId}}",
                         "type": "text",
-                        "description": "Required subscriber/account ID matched against X-Astpp-Token."
+                        "description": "Optional ASTPP account ID for authentication and future banner targeting."
                       },
                       {
                         "key": "X-Astpp-Token",
                         "value": "{{astppToken}}",
                         "type": "text",
-                        "description": "Required ASTPP token validated for X-Astpp-Id."
+                        "description": "Optional ASTPP token. If invalid or missing, general banners are returned."
                       },
                       {
                         "key": "X-Fcm-Token",
                         "value": "{{fcmToken}}",
                         "type": "text",
-                        "description": "Optional Firebase registration token for app-installation identity."
+                        "description": "Optional Firebase registration token. Used only for future targeting after successful ASTPP authentication."
                       }
                     ],
                     "auth": {
@@ -8077,7 +8077,7 @@
                         "banners"
                       ]
                     },
-                    "description": "Returns active banner carousel slots 1-5. Slot 1 is the hero section; slots 2-5 are feature cards. Requires X-Astpp-Id and a matching X-Astpp-Token. X-Fcm-Token is optional and is not used as authentication. The ASTPP ID must belong to an existing customer. Banners are currently shared."
+                    "description": "Returns banner carousel slots 1-5. Only X-API-Key is required. If X-Astpp-Id and X-Astpp-Token authenticate a customer in this service, that identity and optional X-Fcm-Token are available for future banner targeting. Missing/invalid credentials or an unknown account fall back to general banners."
                   },
                   "status": "OK",
                   "code": 200,

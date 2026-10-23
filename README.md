@@ -158,9 +158,9 @@ See [docs/transaction-token-auth.md](docs/transaction-token-auth.md) for the tra
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/api/v1/app-config` | Retrieve service availability and feature flags (X-API-Key) |
-| `GET` | `/api/v1/banners` | Retrieve the active banner layout (X-API-Key + X-Astpp-Id + matching X-Astpp-Token; optional X-Fcm-Token) |
+| `GET` | `/api/v1/banners` | Retrieve banners (X-API-Key; optional ASTPP ID/token and FCM token) |
 
-The banners endpoint requires `X-Astpp-Id` and `X-Astpp-Token`; the ASTPP middleware validates that the token matches the account ID. When supplied, the account ID is also checked against existing customers. `X-Fcm-Token` (app-installation identity) is optional and is not used as authentication. The API currently returns shared banner content; customer/device-specific targeting is future work. App config does not require ASTPP authentication.
+The banners endpoint always permits a request with the global `X-API-Key`. When `X-Astpp-Id` and `X-Astpp-Token` are supplied, the API attempts ASTPP authentication and checks for a matching customer record. Successful authentication makes the ASTPP ID and optional `X-Fcm-Token` available to the banner service for future targeting. If credentials are missing/invalid or the ASTPP account is not in `customers`, the request falls back to the general banners. App config does not require ASTPP authentication.
 
 **TODO — customer-specific configuration and banners**
 - Add ASTPP account ownership/mapping for app configuration and banner records.
