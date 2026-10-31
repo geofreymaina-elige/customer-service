@@ -97,6 +97,23 @@ npm run pm2:start
 |---|---|---|
 | `GET` | `/health` | Liveness & database connection probe |
 
+### 📊 Segment Membership (Internal)
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/v1/admin/segments/customers/:astppId/memberships` | Current active-segment memberships ordered by priority rank |
+
+This endpoint requires the admin API key in the `x-api-key` header. It reads only
+the latest successful membership snapshot from ClickHouse; it does not calculate
+segment membership or return a join/leave timeline. `primarySegment` is the
+highest-priority membership, or `null` when the account has no active membership.
+ClickHouse connection settings (`CLICKHOUSE_HOST`, `CLICKHOUSE_USER`, and
+optionally `CLICKHOUSE_PASSWORD`) are optional at service startup. The database
+is fixed to `analytics`; `CLICKHOUSE_PORT` defaults to `8123`,
+`CLICKHOUSE_PROTOCOL` defaults to `http`, and `CLICKHOUSE_TIMEOUT_MS` defaults
+to `3000`. If ClickHouse is unconfigured or unavailable, this endpoint returns
+HTTP `503` with code `ANALYTICS_DB_UNAVAILABLE`; this does not affect other
+routes or service startup.
+
 ### 🚀 Onboarding
 | Method | Endpoint | Description |
 |---|---|---|

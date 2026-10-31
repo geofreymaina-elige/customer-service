@@ -22,6 +22,7 @@ import { OperationsModule } from './modules/operations/operations.module';
 import { HealthModule } from './modules/health/health.module';
 import { WorkersModule } from './workers/workers.module';
 import { AppConfigModule } from './modules/app-config/app-config.module';
+import { SegmentsModule } from './modules/segments/segments.module';
 
 @Module({
   imports: [
@@ -59,6 +60,7 @@ import { AppConfigModule } from './modules/app-config/app-config.module';
     HealthModule,
     WorkersModule,
     AppConfigModule,
+    SegmentsModule,
   ],
   providers: [
     {
