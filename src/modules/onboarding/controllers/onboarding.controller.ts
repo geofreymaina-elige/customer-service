@@ -54,12 +54,14 @@ export class OnboardingController {
    */
   @ApiTags('Onboarding')
   @ApiOperation({
-    summary: 'Register device and start wallet creation',
-    description: `Register a new device and initiate wallet creation process.
+    summary: 'Register device and start wallet creation / session refresh',
+    description: `Register a new device or refresh a returning customer session.
+
+**CRITICAL:** Always call this endpoint every time the customer returns to or opens the app. It returns a fresh general App Access Token in \`token.accessToken\` required for subsequent API requests.
 
 **Purpose**
-This endpoint is called after checking onboarding status when nextAction is "start_onboarding".
-It registers the device and triggers SasaPay wallet creation which sends an OTP to the customer's phone.
+- For new customers (or when onboarding status is "start_onboarding"): registers the device and initiates wallet creation (sending OTP).
+- For returning customers: authenticates the device and returns a fresh App Access Token.
 
 **Authentication** X-API-Key + X-Astpp-Token
 
@@ -68,11 +70,11 @@ It registers the device and triggers SasaPay wallet creation which sends an OTP 
 - otpPending: false → Wallet already exists, check isWalletPinSet
   - isWalletPinSet: false → Redirect to PIN setup screen  
   - isWalletPinSet: true → Proceed to home screen
-- token.accessToken → App access token for subsequent API calls
+- token.accessToken → Fresh App Access Token for subsequent API calls
 
 **Flow**
 1. Call this endpoint with device details
-2. System creates wallet and sends OTP (if no wallet exists)
+2. System creates wallet and sends OTP (if no wallet exists), or returns a fresh access token
 3. Store the accessToken for future API calls
 4. If otpPending=true, show OTP screen
 5. If otpPending=false and isWalletPinSet=false, show PIN setup screen`

@@ -160,10 +160,11 @@ Authorization: Bearer transaction_token
 
 ---
 
-### Step 2: Device Registration
+### Step 2: Device Registration / Session Refresh
 **Endpoint** \`POST /api/v2/auth/sessions/device\`
 
-**Purpose** Register device and start wallet creation process. This triggers SasaPay wallet creation and OTP sending.
+**Purpose** Register device and start wallet creation (new customers), or refresh the customer session.
+**IMPORTANT:** Always call this API every time a customer returns to or opens the app. It issues a fresh general App Access Token required for all subsequent API requests.
 
 **Authentication** X-API-Key + X-Astpp-Token
 
@@ -173,7 +174,7 @@ Authorization: Bearer transaction_token
   - If false → Redirect to PIN setup screen
   - If true → Proceed to home screen
 
-**Returns** App access token for subsequent API calls
+**Returns** Fresh App Access Token for subsequent API calls
 
 ---
 
@@ -252,9 +253,11 @@ Authorization: Bearer transaction_token
 ## Workflow Decision Tree
 
 \`\`\`
-Start App
+App Launch / Returning Customer
     ↓
-GET /onboarding-status
+POST /sessions/device (Always call to get a fresh App Access Token)
+    ↓
+GET /onboarding-status (Check onboarding state & next screen)
     ↓
 nextAction?
     ├─ start_onboarding → POST /sessions/device
