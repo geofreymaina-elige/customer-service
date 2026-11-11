@@ -238,11 +238,13 @@ Authorization: Bearer transaction_token
 
 ### App Access Token
 - **Purpose** General wallet operations
+- **Obtained from** Response of \`/sessions/device\`
 - **Scopes** \`app:access\`
 
 ### Transaction Token
 - **Validity** ${transactionValidity}
 - **Purpose** Sensitive operations (balance, transfers)
+- **Obtained from** PIN validations
 - **Scopes** \`wallet:transact\`
 
 ---
@@ -306,7 +308,7 @@ nextAction?
         type: 'http',
         scheme: 'bearer',
         bearerFormat: 'JWT',
-        description: 'App Access Token (Header: Authorization: Bearer <token>)',
+        description: 'App Access Token (Header: Authorization: Bearer <token>). Obtained from the response of /sessions/device.',
       },
       'AppAccessToken',
     )
@@ -315,7 +317,7 @@ nextAction?
         type: 'http',
         scheme: 'bearer',
         bearerFormat: 'JWT',
-        description: 'Transaction Token (Header: Authorization: Bearer <token>)',
+        description: 'Transaction Token (Header: Authorization: Bearer <token>). Obtained from PIN validations (POST /api/v2/auth/transaction-tokens).',
       },
       'TransactionToken',
     )
