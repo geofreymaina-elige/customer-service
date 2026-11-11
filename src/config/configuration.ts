@@ -49,15 +49,6 @@ export default () => ({
     },
     imagesPath: process.env.ASTPP_IMAGES_PATH,
   },
-  clickhouse: {
-    protocol: process.env.CLICKHOUSE_PROTOCOL || 'http',
-    host: process.env.CLICKHOUSE_HOST,
-    port: Number(process.env.CLICKHOUSE_PORT || 8123),
-    database: process.env.CLICKHOUSE_DATABASE || 'analytics',
-    user: process.env.CLICKHOUSE_USER,
-    password: process.env.CLICKHOUSE_PASSWORD || '',
-    timeoutMs: Number(process.env.CLICKHOUSE_TIMEOUT_MS || 3000),
-  },
   kafka: {
     brokers: process.env.KAFKA_BROKERS.split(',').map((broker) => broker.trim()),
     clientId: process.env.KAFKA_CLIENT_ID,
