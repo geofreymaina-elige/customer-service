@@ -68,7 +68,7 @@ It registers the device and triggers SasaPay wallet creation which sends an OTP 
 - otpPending: false → Wallet already exists, check isWalletPinSet
   - isWalletPinSet: false → Redirect to PIN setup screen  
   - isWalletPinSet: true → Proceed to home screen
-- token.accessToken → 30-day app access token for subsequent API calls
+- token.accessToken → App access token for subsequent API calls
 
 **Flow**
 1. Call this endpoint with device details

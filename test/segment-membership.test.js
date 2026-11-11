@@ -2,7 +2,7 @@
 
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
-const { BadRequestException, ServiceUnavailableException } = require('@nestjs/common');
+const { BadRequestException } = require('@nestjs/common');
 const { GUARDS_METADATA } = require('@nestjs/common/constants');
 const axios = require('axios');
 const { SegmentMembershipController } = require('../dist/src/modules/segments/segment-membership.controller.js');
@@ -126,27 +126,27 @@ test('rejects invalid ASTPP IDs before making a ClickHouse request', async () =>
   }
 });
 
-test('reports ClickHouse errors as analytics unavailable rather than an empty result', async () => {
+test('returns empty memberships when ClickHouse is unavailable, without throwing', async () => {
   const originalError = console.error;
   console.error = () => {};
 
   try {
-    await withClickHouseResponse(
+    const result = await withClickHouseResponse(
       Object.assign(new Error('database connection refused'), { code: 'ECONNREFUSED' }),
-      async () => {
-        await assert.rejects(
-          createService().getMemberships('12345'),
-          (error) => error instanceof ServiceUnavailableException &&
-            error.getResponse().code === 'ANALYTICS_DB_UNAVAILABLE',
-        );
-      },
+      () => createService().getMemberships('12345'),
     );
+
+    assert.deepEqual(result, {
+      astppId: '12345',
+      memberships: [],
+      primarySegment: null,
+    });
   } finally {
     console.error = originalError;
   }
 });
 
-test('does not make the analytics database configurable outside the contract', async () => {
+test('returns empty memberships when ClickHouse config is invalid, without throwing', async () => {
   const originalPost = axios.post;
   const originalError = console.error;
   let called = false;
@@ -161,11 +161,13 @@ test('does not make the analytics database configurable outside the contract', a
       get: (key) => key === 'clickhouse.database' ? 'other' : settings[key],
     });
 
-    await assert.rejects(
-      service.getMemberships('12345'),
-      (error) => error instanceof ServiceUnavailableException &&
-        error.getResponse().code === 'ANALYTICS_DB_UNAVAILABLE',
-    );
+    const result = await service.getMemberships('12345');
+
+    assert.deepEqual(result, {
+      astppId: '12345',
+      memberships: [],
+      primarySegment: null,
+    });
     assert.equal(called, false);
   } finally {
     axios.post = originalPost;

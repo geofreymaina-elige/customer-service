@@ -46,8 +46,9 @@ const swaggerCustomScript = `
     title: 'API Information',
     rows: [
       ['Version', '2.0'],
-      ['Last Updated', 'October 2026'],
-      ['Base URL', 'Use the configured server URL shown in the OpenAPI document.']
+      ['Last Updated', 'November 2026'],
+      ['Production Base URL', 'https://api.ambiapay.com'],
+      ['Staging Base URL', 'Not set yet']
     ],
     copyright: '\\u00A9 2026 AmbiaPay. All rights reserved.'
   };
@@ -98,11 +99,13 @@ export function createSwaggerConfig(
   publicUrl: string,
   appAccessExpiresInSeconds: number,
   transactionExpiresInSeconds: number,
+  stagingUrl?: string,
 ) {
-  const appAccessValidity = formatDuration(appAccessExpiresInSeconds);
   const transactionValidity = formatDuration(transactionExpiresInSeconds);
+  const productionUrl = 'https://api.ambiapay.com';
+  const resolvedStagingUrl = stagingUrl || process.env.STAGING_URL || 'https://staging-api.ambiapay.com';
 
-  return new DocumentBuilder()
+  const builder = new DocumentBuilder()
     .setTitle('AmbiaPay Customer Service API')
     .setDescription(`
 # Mobile App Customer Service API
@@ -127,7 +130,7 @@ X-API-Key: your_api_key_here
 X-Astpp-Token: encrypted_astpp_token
 \`\`\`
 
-**App Access Token** - For general wallet operations (${appAccessValidity} validity)
+**App Access Token** - For general wallet operations
 \`\`\`
 Authorization: Bearer app_access_token
 \`\`\`
@@ -151,7 +154,7 @@ Authorization: Bearer transaction_token
 **Response determines next action**
 - \`nextAction.type: "start_onboarding"\` → No wallet, proceed to device registration
 - \`nextAction.type: "verify_otp"\` → Wallet creation pending, show OTP screen
-- \`nextAction.type: "upload_kyc_documents"\` → Wallet active, need KYC upload
+- \`nextAction.type: "upload_kyc_documents"\` → Secondary KYC required (for customers whose KYC was rejected for SasaPay KYC fitness)
 - \`nextAction.type: "set_pin"\` → Wallet approved, need PIN setup
 - \`nextAction.type: "make_transaction"\` → Fully onboarded, show home screen
 
@@ -170,7 +173,7 @@ Authorization: Bearer transaction_token
   - If false → Redirect to PIN setup screen
   - If true → Proceed to home screen
 
-**Returns** App access token (${appAccessValidity} validity) for subsequent API calls
+**Returns** App access token for subsequent API calls
 
 ---
 
@@ -185,12 +188,12 @@ Authorization: Bearer transaction_token
 
 ---
 
-### Step 4: KYC Document Upload (if nextAction=upload_kyc_documents)
+### Step 4: Secondary KYC Document Upload (if nextAction=upload_kyc_documents)
 **Endpoint** \`GET /api/v2/customers/kyc/requirements\` - Get required documents
 
 **Endpoint** \`POST /api/v2/customers/kyc/submissions/images\` - Upload documents
 
-**Purpose** Submit KYC documents for compliance approval
+**Purpose** Secondary KYC verification for customers whose initial KYC was rejected for SasaPay KYC fitness. Allows submitting clear identity documents (front, back, selfie) for re-verification and compliance review.
 
 **Authentication** X-API-Key + Bearer (app access token)
 
@@ -218,21 +221,6 @@ Authorization: Bearer transaction_token
 
 ---
 
-## Response Format
-
-All responses follow this structure
-
-\`\`\`json
-{
-  "success": true | false,
-  "message": "Human-readable message",
-  "data": { /* response data */ },
-  "code": "ERROR_CODE"  // Only on errors
-}
-\`\`\`
-
----
-
 ## Common Status Codes
 
 - **200** - Success
@@ -249,15 +237,12 @@ All responses follow this structure
 ## Token Lifecycle
 
 ### App Access Token
-- **Validity** ${appAccessValidity}
 - **Purpose** General wallet operations
-- **Obtained from** Device registration endpoint
 - **Scopes** \`app:access\`
 
 ### Transaction Token
 - **Validity** ${transactionValidity}
 - **Purpose** Sensitive operations (balance, transfers)
-- **Obtained from** PIN verification endpoint
 - **Scopes** \`wallet:transact\`
 
 ---
@@ -276,7 +261,7 @@ nextAction?
     │                        ├─ true → POST /wallet-verifications
     │                        └─ false → Check isWalletPinSet
     │
-    ├─ upload_kyc_documents → POST /kyc/submissions/images
+    ├─ upload_kyc_documents → POST /kyc/submissions/images (Secondary KYC)
     │
     ├─ set_pin → POST /customers/me/pin
     │
@@ -290,13 +275,20 @@ nextAction?
 \`\`\`
     `)
     .setVersion('2.0')
-    .addServer(publicUrl, 'Configured environment')
+    .addServer(productionUrl, 'Production')
+    .addServer(resolvedStagingUrl, 'Staging (Not set yet)');
+
+  if (publicUrl && publicUrl !== productionUrl && publicUrl !== resolvedStagingUrl) {
+    builder.addServer(publicUrl, 'Local / Current Server');
+  }
+
+  return builder
     .addApiKey(
       {
         type: 'apiKey',
         name: 'X-API-Key',
         in: 'header',
-        description: '**[REQUIRED]** API key for all requests. Obtain from AmbiaPay dashboard.',
+        description: 'API key (Header: X-API-Key)',
       },
       'API-Key',
     )
@@ -305,7 +297,7 @@ nextAction?
         type: 'apiKey',
         name: 'X-Astpp-Token',
         in: 'header',
-        description: '**[REQUIRED for initial calls]** ASTPP encrypted token for customer identification. Provided by ASTPP system.',
+        description: 'ASTPP customer identification token (Header: X-Astpp-Token)',
       },
       'ASTPP-Token',
     )
@@ -314,7 +306,7 @@ nextAction?
         type: 'http',
         scheme: 'bearer',
         bearerFormat: 'JWT',
-        description: `**App Access Token** - ${appAccessValidity} validity JWT for general wallet operations. Obtained from device registration.`,
+        description: 'App Access Token (Header: Authorization: Bearer <token>)',
       },
       'AppAccessToken',
     )
@@ -323,7 +315,7 @@ nextAction?
         type: 'http',
         scheme: 'bearer',
         bearerFormat: 'JWT',
-        description: `**Transaction Token** - ${transactionValidity} validity JWT for sensitive operations (balance, transfers). Obtained from PIN verification.`,
+        description: 'Transaction Token (Header: Authorization: Bearer <token>)',
       },
       'TransactionToken',
     )
@@ -344,10 +336,11 @@ export function setupSwagger(
   appAccessExpiresInSeconds: number,
   transactionExpiresInSeconds: number,
   path = 'docs',
+  stagingUrl?: string,
 ) {
   const document = SwaggerModule.createDocument(
     app,
-    createSwaggerConfig(publicUrl, appAccessExpiresInSeconds, transactionExpiresInSeconds),
+    createSwaggerConfig(publicUrl, appAccessExpiresInSeconds, transactionExpiresInSeconds, stagingUrl),
   );
 
   SwaggerModule.setup(path, app, document, {

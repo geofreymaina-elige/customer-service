@@ -28,9 +28,9 @@ export class SasaPayKycController {
 
   @Get('requirements')
   @ApiOperation({
-    summary: 'Get all document requirements',
+    summary: 'Get all document requirements (Secondary KYC)',
     description: `
-Returns all available KYC document types and their requirements.
+Returns all available secondary KYC document types and requirements for customers whose initial KYC was rejected for SasaPay KYC fitness.
 
 **Use this to**
 - Show customer which document types they can submit
@@ -170,9 +170,10 @@ Returns the customer's current KYC status with prioritized data.
 
   @Post('submissions/images')
   @ApiOperation({
-    summary: 'Upload KYC document images',
+    summary: 'Upload KYC document images (Secondary KYC)',
     description: `
-Upload KYC document images for verification.
+Secondary KYC image upload for customers whose KYC was rejected for SasaPay KYC fitness.
+Allows customers to upload required document images for re-verification and compliance review.
 
 **Important**
 - Use \`multipart/form-data\` encoding
@@ -198,22 +199,6 @@ Upload KYC document images for verification.
 - \`document_front\` - Front of ID/passport
 - \`document_back\` - Back of ID/passport
 - \`selfie\` - Passport photo/selfie
-
-**Example** (using FormData in JavaScript)
-\`\`\`javascript
-const formData = new FormData();
-formData.append('document_front', frontImage, 'id_front.jpg');
-formData.append('document_back', backImage, 'id_back.jpg');
-formData.append('selfie', selfieImage, 'selfie.jpg');
-
-fetch('/api/v2/customers/kyc/submissions/images', {
-  method: 'POST',
-  headers: {
-    'Authorization': 'Bearer YOUR_JWT_TOKEN'
-  },
-  body: formData
-});
-\`\`\`
     `,
   })
   @ApiConsumes('multipart/form-data')

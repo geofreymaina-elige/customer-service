@@ -87,6 +87,7 @@ export default () => ({
     enabled: process.env.SENTRY_ENABLED === 'true',
   },
   publicUrl: process.env.PUBLIC_URL,
+  stagingUrl: process.env.STAGING_URL,
   apiKey: process.env.API_KEY,
   adminApiKey: process.env.ADMIN_API_KEY,
   cors: {

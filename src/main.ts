@@ -85,10 +85,12 @@ async function bootstrap() {
 
   // Swagger API Documentation
   const publicUrl = configService.getOrThrow<string>('publicUrl');
+  const stagingUrl = configService.get<string>('stagingUrl');
   const swaggerConfig = createSwaggerConfig(
     publicUrl,
     configService.getOrThrow<number>('jwt.appAccessExpiresInSeconds'),
     configService.getOrThrow<number>('jwt.expiresInSeconds'),
+    stagingUrl,
   );
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api/docs', app, document, {

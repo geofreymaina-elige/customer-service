@@ -2,7 +2,6 @@ import {
   BadRequestException,
   Injectable,
   Logger,
-  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
@@ -22,6 +21,13 @@ interface ClickHouseResponse {
 
 const UINT64_MAX = 18446744073709551615n;
 
+/** Returned when ClickHouse is unavailable or the query fails for any reason. */
+const EMPTY_RESULT = (astppId: string) => ({
+  astppId,
+  memberships: [],
+  primarySegment: null,
+});
+
 @Injectable()
 export class SegmentMembershipService {
   private readonly logger = new Logger(SegmentMembershipService.name);
@@ -31,9 +37,22 @@ export class SegmentMembershipService {
   async getMemberships(astppId: string) {
     this.validateAstppId(astppId);
 
+    let url: string;
+    try {
+      url = this.getClickHouseUrl();
+    } catch (error) {
+      this.logger.error(JSON.stringify({
+        event: 'clickhouse_segment_lookup_failed',
+        astppId,
+        errorCode: 'CLICKHOUSE_CONFIG_ERROR',
+        detail: (error as Error).message,
+      }));
+      return EMPTY_RESULT(astppId);
+    }
+
     try {
       const { data } = await axios.post<ClickHouseResponse>(
-        this.getClickHouseUrl(),
+        url,
         `SELECT
     segment.segment_id AS segmentId,
     segment.slug AS slug,
@@ -99,10 +118,9 @@ FORMAT JSON`,
         upstreamStatus: providerError.response?.status,
       }));
 
-      throw new ServiceUnavailableException({
-        code: 'ANALYTICS_DB_UNAVAILABLE',
-        message: 'Segment membership data is temporarily unavailable.',
-      });
+      // Segment failures must never surface as errors to the caller.
+      // Return an empty result so other server operations are not affected.
+      return EMPTY_RESULT(astppId);
     }
   }
 

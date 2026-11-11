@@ -66,7 +66,7 @@ Determines the customer's current onboarding state and returns the next action t
 **Workflow Decision Tree**
 - nextAction: "start_onboarding" → Customer has no wallet, call POST /sessions/device
 - nextAction: "verify_otp" → Wallet creation initiated, show OTP verification screen
-- nextAction: "upload_kyc_documents" → Wallet active but pending KYC approval
+- nextAction: "upload_kyc_documents" → Secondary KYC required (customer KYC rejected for SasaPay KYC fitness)
 - nextAction: "set_pin" → Wallet approved but PIN not set
 - nextAction: "make_transaction" → Fully onboarded, show home screen
 
