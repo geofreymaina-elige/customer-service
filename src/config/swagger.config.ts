@@ -250,6 +250,33 @@ Authorization: Bearer transaction_token
 
 ---
 
+## Device and Logout Management
+
+A customer can have only one active device session at a time. Use
+\`GET /api/v2/customers/me/sessions\` with the current device's App Access Token
+to view the customer's device sessions.
+
+To move to a new device, the recommended flow is:
+
+1. While still signed in on the current device, call
+   \`DELETE /api/v2/auth/sessions/current\` with its valid, unexpired App Access
+   Token. This revokes all active sessions. A missing or invalid token returns
+   a "No active sessions to revoke" response and does not sign the customer out.
+2. Sign in or register the new device using the normal device registration flow.
+
+If the customer cannot access the current device or its valid token, use device
+recovery instead:
+
+1. Call \`POST /api/v2/auth/sessions/recovery\` with the ASTPP ID, registered
+   KYC identity document number, PIN, and new-device details. Include the
+   required X-Astpp-Token. An OTP is sent to the customer's registered phone.
+2. Call \`POST /api/v2/auth/sessions/recovery-otp\` with the recovery session
+   token, OTP, and new-device details.
+3. After successful OTP verification, previous active sessions are revoked,
+   the new device is activated, and a new App Access Token is returned.
+
+---
+
 ## Workflow Decision Tree
 
 \`\`\`
@@ -327,6 +354,7 @@ nextAction?
     .addTag('Onboarding', 'Customer onboarding, device registration, and authentication')
     .addTag('KYC', 'Document submission for compliance')
     .addTag('PIN Management', 'PIN management and verification')
+    .addTag('Device and Logout Management', 'View device sessions, sign out, and recover access on a new device')
     .addTag('Wallet Balance', 'Wallet balance and information')
     .addTag('Configuration and Banners', 'App configuration and banner images')
     .build();

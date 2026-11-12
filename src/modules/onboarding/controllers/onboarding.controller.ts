@@ -260,10 +260,50 @@ Returns a 10-minute transaction token that grants access to sensitive endpoints.
    * Sign in new phone (recovery, start OTP) - moved from DeviceController
    * Requires astpp_id in body and X-Astpp-Token header
    */
-  @ApiExcludeEndpoint()
   @Post('api/v2/auth/sessions/recovery')
   @UseGuards(AstppTokenGuard)
   @HttpCode(HttpStatus.OK)
+  @ApiTags('Device and Logout Management')
+  @ApiSecurity('API-Key')
+  @ApiSecurity('ASTPP-Token')
+  @ApiOperation({
+    summary: 'Start new-device recovery',
+    description: 'Use this when the customer cannot sign out from their current device. Requires the customer ASTPP ID, registered KYC identity document number, PIN, and details for the new device. A one-time code is sent to the registered phone. This step does not yet revoke the previous device; complete recovery by verifying the OTP.',
+  })
+  @ApiBody({
+    description: 'Customer identity verification and new device details.',
+    schema: {
+      example: {
+        astpp_id: '31553',
+        id_number: '12345678',
+        pin: '1234',
+        device: {
+          device_identifier: 'SAM-S23-DEVICE-UUID-10492',
+          device_model: 'Samsung Galaxy S23',
+          device_os: 'Android 14',
+          mobile_type: 'android',
+          app_version: '2.4.1',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Identity verified. An OTP was sent to the registered phone; submit it to the recovery OTP endpoint.',
+    schema: {
+      example: {
+        success: true,
+        message: 'Device logout initiated. OTP sent to your registered phone.',
+        data: {
+          sessionToken: 'recovery-session-token',
+          maskedPhone: '****0771',
+          expiresInMinutes: 5,
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'ASTPP token, identity document number, or PIN is invalid.' })
+  @ApiResponse({ status: 423, description: 'Customer PIN is locked.' })
   async initiateLogout(@Body() dto: InitiateDeviceLogoutDto) {
     const data = await this.deviceLogoutService.initiateLogout(dto);
     
@@ -277,9 +317,49 @@ Returns a 10-minute transaction token that grants access to sensitive endpoints.
   /**
    * Recovery OTP verify + new device register - moved from DeviceController
    */
-  @ApiExcludeEndpoint()
   @Post('api/v2/auth/sessions/recovery-otp')
   @HttpCode(HttpStatus.OK)
+  @ApiTags('Device and Logout Management')
+  @ApiSecurity('API-Key')
+  @ApiOperation({
+    summary: 'Verify recovery OTP and activate the new device',
+    description: 'Completes new-device recovery using the session token and OTP returned by the recovery start endpoint. On success, the prior active device sessions are revoked, the submitted device becomes the single active device, and a new App Access Token is returned.',
+  })
+  @ApiBody({
+    description: 'Recovery session token, six-digit OTP, and the same new-device details provided when starting recovery.',
+    schema: {
+      example: {
+        sessionToken: 'recovery-session-token',
+        otp: '123456',
+        device: {
+          device_identifier: 'SAM-S23-DEVICE-UUID-10492',
+          device_model: 'Samsung Galaxy S23',
+          device_os: 'Android 14',
+          mobile_type: 'android',
+          app_version: '2.4.1',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'OTP verified, previous active devices revoked, and new device activated.',
+    schema: {
+      example: {
+        success: true,
+        message: 'Device recovery completed successfully.',
+        data: {
+          loggedOut: true,
+          token: {
+            accessToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+            tokenType: 'Bearer',
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'OTP or recovery session is invalid or expired.' })
+  @ApiResponse({ status: 401, description: 'OTP verification failed.' })
   async verifyLogout(@Body() dto: VerifyDeviceLogoutDto, @Req() req: Request) {
     const ip = (req.headers['x-forwarded-for'] as string)?.split(',').shift()?.trim() || req.ip || '127.0.0.1';
     const result = await this.deviceLogoutService.verifyOtpAndLogout(dto, ip);
@@ -295,9 +375,25 @@ Returns a 10-minute transaction token that grants access to sensitive endpoints.
    * Sign out all devices (revokes all active sessions for this customer)
    * Idempotent - succeeds even if session is already revoked
    */
-  @ApiExcludeEndpoint()
   @Delete('api/v2/auth/sessions/current')
   @HttpCode(HttpStatus.OK)
+  @ApiTags('Device and Logout Management')
+  @ApiSecurity('API-Key')
+  @ApiSecurity('AppAccessToken')
+  @ApiOperation({
+    summary: 'Sign out and revoke all customer device sessions',
+    description: 'Call this from the currently signed-in device with its valid, unexpired App Access Token to revoke all active sessions. The customer should then sign in on the new device. If the current device or its token is unavailable, use the new-device recovery flow instead. For safety, a missing or invalid token returns a success-shaped “No active sessions to revoke” response but does not revoke sessions.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Sessions revoked, or no sessions were revoked because there was no valid token or no active session.',
+    schema: {
+      example: {
+        success: true,
+        message: 'All sessions revoked successfully (1 device)',
+      },
+    },
+  })
   async revokeAllSessions(@Req() req: Request) {
     // Manually extract and verify token (without requiring active device)
     const authHeader = req.headers['authorization'];
