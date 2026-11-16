@@ -152,11 +152,13 @@ Authorization: Bearer transaction_token
 **Authentication** X-API-Key + X-Astpp-Token
 
 **Response determines next action**
-- \`nextAction.type: "start_onboarding"\` → No wallet, proceed to device registration
-- \`nextAction.type: "verify_otp"\` → Wallet creation pending, show OTP screen
-- \`nextAction.type: "upload_kyc_documents"\` → Secondary KYC required (for customers whose KYC was rejected for SasaPay KYC fitness)
-- \`nextAction.type: "set_pin"\` → Wallet approved, need PIN setup
+- Top-level \`message\` provides a short status summary. Until the application is approved it reflects application/KYC status, such as \`Pending approval\` or \`KYC details required\`; after approval it reflects wallet status, such as \`Wallet active\` or \`Wallet locked\`.
+- \`nextAction.type: "start_onboarding"\` → No wallet exists; register the device and start onboarding
+- \`nextAction.type: "upload_required_documents"\` or \`"upload_kyc_documents"\` → Upload requested KYC documents
+- \`nextAction.type: "wait_for_kyc_review"\` or \`"wait_for_wallet_activation"\` → Show a pending state
+- \`nextAction.type: "set_pin"\` → Wallet is active but no PIN is set
 - \`nextAction.type: "make_transaction"\` → Fully onboarded, show home screen
+- \`nextAction.type: "contact_support"\` → Show support instructions
 
 ---
 

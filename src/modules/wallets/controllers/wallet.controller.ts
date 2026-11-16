@@ -64,11 +64,14 @@ export class WalletController {
 Determines the customer's current onboarding state and returns the next action they need to take.
 
 **Workflow Decision Tree**
-- nextAction: "start_onboarding" → Customer has no wallet, call POST /sessions/device
-- nextAction: "verify_otp" → Wallet creation initiated, show OTP verification screen
-- nextAction: "upload_kyc_documents" → Secondary KYC required (customer KYC rejected for SasaPay KYC fitness)
-- nextAction: "set_pin" → Wallet approved but PIN not set
-- nextAction: "make_transaction" → Fully onboarded, show home screen
+- nextAction: "start_onboarding" → No wallet exists; register the device and start onboarding
+- nextAction: "upload_required_documents" or "upload_kyc_documents" → Upload requested KYC documents
+- nextAction: "wait_for_kyc_review" or "wait_for_wallet_activation" → Show a pending state
+- nextAction: "set_pin" → Wallet is active but no PIN is set
+- nextAction: "make_transaction" → Fully onboarded; show the home screen
+- nextAction: "contact_support" → Show support instructions
+
+**Message** The top-level \`message\` is a short status summary. It reports application/KYC status until the application is approved; after approval, it reports wallet status (for example, \`Wallet active\` or \`Wallet locked\`).
 
 **Authentication** X-API-Key + X-Astpp-Token
 
@@ -92,6 +95,7 @@ Determines the customer's current onboarding state and returns the next action t
           description: 'Fully Onboarded Customer',
           example: {
             success: true,
+            message: 'Wallet active',
             data: {
               applicationStatus: 'approved',
               wallet: {
@@ -117,9 +121,10 @@ Determines the customer's current onboarding state and returns the next action t
           }
         },
         {
-          description: 'Wallet Created, Pending KYC Approval',
+          description: 'Application Pending Approval',
           example: {
             success: true,
+            message: 'Pending approval',
             data: {
               applicationStatus: 'pending',
               wallet: {
@@ -146,16 +151,73 @@ Determines the customer's current onboarding state and returns the next action t
           }
         },
         {
-          description: 'OTP Verification Pending',
+          description: 'KYC Documents Required',
           example: {
             success: true,
+            message: 'KYC details required',
             data: {
-              applicationStatus: 'pending',
+              applicationStatus: 'requires_kyc_upload',
+              wallet: {
+                walletId: '1a9fe575-500d-444f-99bd-90a22977639c',
+                accountNumber: '1881181',
+                currency: 'KES',
+                status: 'locked',
+                createdAt: '2026-09-23T12:59:25.937Z'
+              },
+              application: {
+                sasapayRequestId: '7ca09f78-4378-4c65-91bb-dc2cad8f3a8a',
+                sasapayAccountNumber: '1881181',
+                sasapayAccountStatus: 'AWAITING_KYC_UPLOAD',
+                submittedAt: '2026-09-23T12:59:58.274Z',
+                approvedAt: null,
+                rejectedAt: null
+              },
+              requiredDocuments: ['document_front', 'document_back'],
+              nextAction: {
+                type: 'upload_required_documents',
+                method: 'POST',
+                endpoint: '/api/v2/customers/kyc/submissions/images'
+              }
+            }
+          }
+        },
+        {
+          description: 'Onboarding Not Started',
+          example: {
+            success: true,
+            message: 'Onboarding required',
+            data: {
+              applicationStatus: 'not_started',
               wallet: null,
               application: null,
               requiredDocuments: [],
               nextAction: {
-                type: 'verify_otp'
+                type: 'start_onboarding',
+                method: 'POST',
+                endpoint: '/api/v2/auth/sessions/device'
+              }
+            }
+          }
+        },
+        {
+          description: 'Application Rejected',
+          example: {
+            success: true,
+            message: 'Application rejected',
+            data: {
+              applicationStatus: 'rejected',
+              wallet: null,
+              application: {
+                sasapayRequestId: null,
+                sasapayAccountNumber: null,
+                sasapayAccountStatus: null,
+                submittedAt: null,
+                approvedAt: null,
+                rejectedAt: '2026-09-23T12:59:58.274Z'
+              },
+              requiredDocuments: [],
+              nextAction: {
+                type: 'contact_support'
               }
             }
           }
@@ -187,9 +249,10 @@ Determines the customer's current onboarding state and returns the next action t
   })
   @UseGuards(AstppTokenGuard)
   async getWalletOnboardingStatus(@Query('astppId') astppId: string) {
-    const data = await this.walletService.getWalletOnboardingStatusByAstppId(astppId);
+    const { message, ...data } = await this.walletService.getWalletOnboardingStatusByAstppId(astppId);
     return {
       success: true,
+      message,
       data,
     };
   }

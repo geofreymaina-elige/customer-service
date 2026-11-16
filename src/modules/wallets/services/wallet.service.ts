@@ -237,7 +237,14 @@ export class WalletService {
       nextAction = { type: 'make_transaction' };
     }
 
+    const message = this.getOnboardingStatusMessage(
+      applicationStatus,
+      wallet?.status,
+      requiredDocuments.length > 0,
+    );
+
     return {
+      message,
       applicationStatus,
       wallet: wallet ? {
         walletId: wallet.uuid,
@@ -257,6 +264,31 @@ export class WalletService {
       requiredDocuments,
       nextAction,
     };
+  }
+
+  private getOnboardingStatusMessage(
+    applicationStatus: string,
+    walletStatus: string | undefined,
+    hasRequiredDocuments: boolean,
+  ): string {
+    if (applicationStatus === 'approved') {
+      const status = walletStatus?.replace(/_/g, ' ') || 'pending';
+      return this.messages.get('wallets.onboarding.statusMessages.walletStatus', { status });
+    }
+
+    if (applicationStatus === 'requires_kyc_upload' || hasRequiredDocuments) {
+      return this.messages.get('wallets.onboarding.statusMessages.kycDetailsRequired');
+    }
+
+    if (applicationStatus === 'rejected') {
+      return this.messages.get('wallets.onboarding.statusMessages.applicationRejected');
+    }
+
+    if (applicationStatus === 'not_started') {
+      return this.messages.get('wallets.onboarding.statusMessages.notStarted');
+    }
+
+    return this.messages.get('wallets.onboarding.statusMessages.pendingApproval');
   }
 
   /**

@@ -83,7 +83,14 @@
       "processingKyc": "Your wallet KYC documents are being processed. This may take a few minutes.",
       "inProgress": "Wallet onboarding is in progress. Please wait for approval.",
       "approved": "Your wallet has been successfully approved and is ready to use.",
-      "rejected": "Your wallet application was rejected. Please contact support for assistance."
+      "rejected": "Your wallet application was rejected. Please contact support for assistance.",
+      "statusMessages": {
+        "notStarted": "Onboarding required",
+        "pendingApproval": "Pending approval",
+        "kycDetailsRequired": "KYC details required",
+        "applicationRejected": "Application rejected",
+        "walletStatus": "Wallet {status}"
+      }
     }
   },
   "operations": {
