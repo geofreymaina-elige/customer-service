@@ -76,6 +76,8 @@
       "notStarted": "Wallet onboarding not started. Ready to begin.",
       "readyToStart": "Ready to start wallet onboarding process.",
       "awaitingOtp": "Wallet onboarding initiated. Please verify the OTP sent to {phoneNumber}.",
+      "otpVerificationFailed": "We could not verify this OTP. Please check the code and try again.",
+      "otpVerificationUnavailable": "We could not verify your OTP right now. Please try again.",
       "walletLimitReached": {
         "title": "Wallet limit reached",
         "body": "We could not create your wallet because the maximum number of wallets allowed for your identity has been reached. Please contact customer support for assistance."

@@ -550,6 +550,16 @@ Success indicates wallet activation is being processed. Customer should wait bri
     }
   })
   @ApiResponse({ status: 409, description: "Identity document has reached SasaPay's wallet limit." })
+  @ApiResponse({
+    status: 502,
+    description: 'SasaPay could not verify the OTP.',
+    schema: {
+      example: {
+        success: false,
+        message: 'We could not verify this OTP. Please check the code and try again.',
+      },
+    },
+  })
   @Post('api/v2/auth/wallet-verifications')
   @UseGuards(AuthGuard)
   @HttpCode(HttpStatus.ACCEPTED)
@@ -610,7 +620,7 @@ Success indicates wallet activation is being processed. Customer should wait bri
       providerConfirmation = await this.sasapayWaas.confirmPersonalOnboardingByRequestId(requestId, dto.otp);
     } catch (error) {
       if (!this.sasapayWaas.isWalletLimitExceeded(error)) {
-        throw new BadGatewayException('Unable to verify your OTP with SasaPay. Please try again.');
+        throw new BadGatewayException(this.messages.get('wallets.onboarding.otpVerificationUnavailable'));
       }
 
       await this.onboardingService.recordWalletLimitReached(customerId, 'otp_verification');
@@ -627,7 +637,7 @@ Success indicates wallet activation is being processed. Customer should wait bri
     }
 
     if (!providerConfirmation.status) {
-      throw new BadGatewayException(providerConfirmation.message || 'SasaPay could not verify the OTP.');
+      throw new BadGatewayException(this.messages.get('wallets.onboarding.otpVerificationFailed'));
     }
 
     // The provider has accepted the OTP. Persist its result asynchronously so

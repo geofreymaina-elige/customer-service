@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
-const { ConflictException } = require('@nestjs/common');
+const { BadGatewayException, ConflictException } = require('@nestjs/common');
 const { OnboardingController } = require('../dist/src/modules/onboarding/controllers/onboarding.controller');
 const { OnboardingService } = require('../dist/src/modules/onboarding/services/onboarding.service');
 const { SasaPayWaasService } = require('../dist/src/modules/onboarding/services/sasapay-waas.service');
@@ -122,4 +122,107 @@ test('OTP endpoint returns wallet-limit conflict and does not enqueue persistenc
   );
   assert.equal(limitRecorded, true);
   assert.equal(jobEnqueued, false);
+});
+
+test('OTP provider failure returns the configured temporary-failure message', async () => {
+  const controller = Object.create(OnboardingController.prototype);
+  controller.db = {
+    queryOne: async () => ({
+      pg_app_id: 12,
+      sasapay_request_id: 'request-123',
+      sasapay_account_number: null,
+      astpp_id: 89459,
+      customer_id: 41,
+    }),
+  };
+  controller.sasapayWaas = {
+    confirmPersonalOnboardingByRequestId: async () => {
+      throw new Error('provider connection refused');
+    },
+    isWalletLimitExceeded: () => false,
+  };
+  controller.messages = {
+    get: (key) => key === 'wallets.onboarding.otpVerificationUnavailable'
+      ? 'Configured temporary OTP error.'
+      : key,
+  };
+  controller.jobService = { enqueue: async () => assert.fail('Should not enqueue after provider failure') };
+
+  await assert.rejects(
+    controller.confirmPersonalOnboarding({ id: 41 }, { otp: '123456' }),
+    (error) => error instanceof BadGatewayException && error.message === 'Configured temporary OTP error.',
+  );
+});
+
+test('rejected OTP returns the configured message rather than the provider response text', async () => {
+  const controller = Object.create(OnboardingController.prototype);
+  controller.db = {
+    queryOne: async () => ({
+      pg_app_id: 12,
+      sasapay_request_id: 'request-123',
+      sasapay_account_number: null,
+      astpp_id: 89459,
+      customer_id: 41,
+    }),
+  };
+  controller.sasapayWaas = {
+    confirmPersonalOnboardingByRequestId: async () => ({
+      status: false,
+      message: 'Internal provider diagnostic',
+      data: {},
+    }),
+    isWalletLimitExceeded: () => false,
+  };
+  controller.messages = {
+    get: (key) => key === 'wallets.onboarding.otpVerificationFailed'
+      ? 'Configured invalid OTP message.'
+      : key,
+  };
+  controller.jobService = { enqueue: async () => assert.fail('Should not enqueue a rejected OTP') };
+
+  await assert.rejects(
+    controller.confirmPersonalOnboarding({ id: 41 }, { otp: '123456' }),
+    (error) => error instanceof BadGatewayException && error.message === 'Configured invalid OTP message.',
+  );
+});
+
+test('accepted OTP queues processing without running KYC image submission in the request', async () => {
+  const controller = Object.create(OnboardingController.prototype);
+  const queuedJobs = [];
+  controller.db = {
+    queryOne: async () => ({
+      pg_app_id: 12,
+      sasapay_request_id: 'request-123',
+      sasapay_account_number: null,
+      astpp_id: 89459,
+      customer_id: 41,
+    }),
+  };
+  controller.sasapayWaas = {
+    confirmPersonalOnboardingByRequestId: async () => ({
+      status: true,
+      responseCode: '0',
+      message: 'OTP confirmed',
+      data: {
+        accountNumber: '1881181',
+        accountStatus: 'AWAITING_KYC_UPLOAD',
+      },
+    }),
+    isWalletLimitExceeded: () => false,
+  };
+  controller.messages = { get: (key) => key };
+  controller.writeAuditLog = async () => {};
+  controller.jobService = {
+    enqueue: async (jobType, payload) => {
+      queuedJobs.push({ jobType, payload });
+      return 'job-123';
+    },
+  };
+  controller.logger = { log: () => {} };
+
+  const response = await controller.confirmPersonalOnboarding({ id: 41 }, { otp: '123456' });
+
+  assert.equal(response.success, true);
+  assert.equal(response.data.status, 'processing');
+  assert.deepEqual(queuedJobs.map((job) => job.jobType), ['sasapay_otp_confirmation']);
 });
