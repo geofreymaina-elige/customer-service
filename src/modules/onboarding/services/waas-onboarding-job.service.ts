@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DatabaseService } from '../../../core/database/database.service';
 import { AstppMysqlService } from '../../../core/astpp-mysql/astpp-mysql.service';
@@ -38,7 +38,7 @@ interface OnboardingJobState {
 }
 
 @Injectable()
-export class WaasOnboardingJobService {
+export class WaasOnboardingJobService implements OnModuleInit {
   private readonly logger = new Logger(WaasOnboardingJobService.name);
 
   private async writeAuditLog(customerId: number, eventType: string, details: Record<string, unknown>): Promise<void> {
@@ -64,16 +64,17 @@ export class WaasOnboardingJobService {
     private readonly jobService: JobService,
     private readonly config: ConfigService,
   ) {
-    this.sshHost = this.config.getOrThrow<string>('astpp.ssh.host');
-    this.sshPort = this.config.getOrThrow<number>('astpp.ssh.port');
-    this.sshUsername = this.config.getOrThrow<string>('astpp.ssh.username');
+    this.sshHost = this.config.get<string>('astpp.ssh.host') || '';
+    this.sshPort = this.config.get<number>('astpp.ssh.port') || 0;
+    this.sshUsername = this.config.get<string>('astpp.ssh.username') || '';
     this.sshPrivateKey = this.config.get<string>('astpp.ssh.privateKey');
     this.sshPrivateKeyPath = this.config.get<string>('astpp.ssh.privateKeyPath');
-    this.astppImagesPath = this.config.getOrThrow<string>('astpp.imagesPath');
+    this.astppImagesPath = this.config.get<string>('astpp.imagesPath') || '';
+  }
 
-    if (!this.astppImagesPath.startsWith('/')) {
-      throw new Error(`astpp.imagesPath must be an absolute path, got: "${this.astppImagesPath}"`);
-    }
+  onModuleInit(): void {
+    this.logger.log('[SSH CONNECTIVITY] Starting ASTPP SSH check (non-blocking).');
+    void this.checkSshConnectivityAtStartup();
   }
 
   /**
@@ -835,6 +836,13 @@ export class WaasOnboardingJobService {
     }
 
     const astppApplicationId = bestRow.astpp_application_id;
+    if (!this.sshHost || !Number.isInteger(this.sshPort) || this.sshPort < 1 || !this.sshUsername) {
+      throw new Error('ASTPP SSH host, port, and username must be configured before KYC image transfer.');
+    }
+    if (!this.astppImagesPath.startsWith('/')) {
+      throw new Error('ASTPP_IMAGES_PATH must be configured as an absolute remote path before KYC image transfer.');
+    }
+
     const remoteDir = `${this.astppImagesPath}/${astppApplicationId}`;
 
     const localTempDir = path.join(os.tmpdir(), `kyc_${payload.customerId}_${astppApplicationId}`);
@@ -994,6 +1002,91 @@ export class WaasOnboardingJobService {
   // SSH Helper
   // ---------------------------------------------------------------------------
 
+  private async checkSshConnectivityAtStartup(): Promise<void> {
+    const startedAt = Date.now();
+    const keySource = this.sshPrivateKeyPath
+      ? 'ASTPP_SSH_PRIVATE_KEY_PATH'
+      : this.sshPrivateKey
+        ? 'ASTPP_SSH_PRIVATE_KEY'
+        : 'not configured';
+    this.logger.log(
+      `[SSH CONNECTIVITY] Target: ${this.sshHost || 'not configured'}:${this.sshPort || 'not configured'}; ` +
+      `user: ${this.sshUsername || 'not configured'}; key source: ${keySource}`,
+    );
+
+    try {
+      if (!this.sshHost || !Number.isInteger(this.sshPort) || this.sshPort < 1 || !this.sshUsername) {
+        throw new Error('SSH host, valid port, or username is missing/invalid.');
+      }
+
+      const privateKey = this.getPrivateKey();
+      await new Promise<void>((resolve, reject) => {
+        const connection = new SSHClient();
+        let settled = false;
+        let timeout: NodeJS.Timeout;
+        const finish = (error?: Error) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          connection.end();
+          if (error) reject(error);
+          else resolve();
+        };
+        timeout = setTimeout(() => finish(new Error('SSH connection/check timed out after 8 seconds.')), 8000);
+
+        connection.on('ready', () => {
+          this.logger.log(`[SSH CONNECTIVITY] PASS: SSH authentication succeeded (${Date.now() - startedAt} ms).`);
+          if (!this.astppImagesPath) {
+            this.logger.warn('[SSH CONNECTIVITY] ASTPP_IMAGES_PATH is not configured; remote directory check skipped.');
+            finish();
+            return;
+          }
+          if (!this.astppImagesPath.startsWith('/')) {
+            finish(new Error('ASTPP_IMAGES_PATH is not an absolute remote path.'));
+            return;
+          }
+
+          const command = `test -d ${this.shellQuote(this.astppImagesPath)} && test -r ${this.shellQuote(this.astppImagesPath)}`;
+          connection.exec(command, (execError, stream) => {
+            if (execError) {
+              finish(execError);
+              return;
+            }
+            let stderr = '';
+            stream.stderr.on('data', (chunk: Buffer) => {
+              stderr += chunk.toString();
+            });
+            stream.on('error', finish);
+            stream.on('close', (code: number) => {
+              if (code === 0) {
+                this.logger.log('[SSH CONNECTIVITY] PASS: ASTPP image directory exists and is readable.');
+                finish();
+              } else {
+                finish(new Error(stderr.trim() || `Remote image directory check exited with code ${code}.`));
+              }
+            });
+          });
+        });
+        connection.on('error', finish);
+        connection.connect({
+          host: this.sshHost,
+          port: this.sshPort,
+          username: this.sshUsername,
+          privateKey,
+          readyTimeout: 8000,
+          keepaliveInterval: 5000,
+          keepaliveCountMax: 1,
+        });
+      });
+      this.logger.log(`[SSH CONNECTIVITY] COMPLETE: checks passed in ${Date.now() - startedAt} ms.`);
+    } catch (error) {
+      const details = error instanceof Error ? error.message : String(error);
+      this.logger.error(
+        `[SSH CONNECTIVITY] FAIL: ${details} (server startup will continue; KYC image transfer may be unavailable).`,
+      );
+    }
+  }
+
   private downloadIfMissing(remotePath: string, localPath: string): Promise<void> {
     if (fs.existsSync(localPath)) {
       this.logger.log(`[STEP 2] Reusing staged KYC file ${path.basename(localPath)}`);
@@ -1055,6 +1148,7 @@ export class WaasOnboardingJobService {
         port: this.sshPort,
         username: this.sshUsername,
         privateKey: this.getPrivateKey(),
+        readyTimeout: 8000,
       });
     });
   }

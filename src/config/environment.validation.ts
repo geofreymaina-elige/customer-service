@@ -44,10 +44,6 @@ const requiredVariables = [
   'ASTPP_MYSQL_KEEP_ALIVE_INITIAL_DELAY_MS',
   'ASTPP_MYSQL_KEEP_ALIVE',
   'ASTPP_MYSQL_WAIT_FOR_CONNECTIONS',
-  'ASTPP_SSH_HOST',
-  'ASTPP_SSH_PORT',
-  'ASTPP_SSH_USERNAME',
-  'ASTPP_IMAGES_PATH',
   'KAFKA_BROKERS',
   'KAFKA_CLIENT_ID',
   'KAFKA_GROUP_ID',
@@ -79,7 +75,6 @@ const numericRules: Record<string, { min: number; max: number }> = {
   MAX_PIN_ATTEMPTS: { min: 1, max: Number.MAX_SAFE_INTEGER },
   TEMPORARY_LOCKOUT_MINUTES: { min: 1, max: Number.MAX_SAFE_INTEGER },
   ASTPP_PORT: { min: 1, max: 65535 },
-  ASTPP_SSH_PORT: { min: 1, max: 65535 },
   ASTPP_MYSQL_CONNECTION_LIMIT: { min: 1, max: Number.MAX_SAFE_INTEGER },
   ASTPP_MYSQL_QUEUE_LIMIT: { min: 0, max: Number.MAX_SAFE_INTEGER },
   ASTPP_MYSQL_KEEP_ALIVE_INITIAL_DELAY_MS: { min: 0, max: Number.MAX_SAFE_INTEGER },
@@ -207,13 +202,20 @@ export function validateEnvironment(env: Environment): Environment {
     },
     results,
   );
-  validateAlternative(
-    env,
-    'ASTPP SSH private key',
-    ['ASTPP_SSH_PRIVATE_KEY', 'ASTPP_SSH_PRIVATE_KEY_PATH'],
-    (_name, value) => value.trim().length > 0,
-    results,
-  );
+  const sshConfiguration = [
+    'ASTPP_SSH_HOST',
+    'ASTPP_SSH_PORT',
+    'ASTPP_SSH_USERNAME',
+    'ASTPP_IMAGES_PATH',
+  ];
+  const missingSshConfiguration = sshConfiguration.filter((name) => !nonEmpty(env[name]));
+  const hasSshKey = ['ASTPP_SSH_PRIVATE_KEY', 'ASTPP_SSH_PRIVATE_KEY_PATH']
+    .some((name) => nonEmpty(env[name]));
+  if (missingSshConfiguration.length || !hasSshKey) {
+    const missing = [...missingSshConfiguration];
+    if (!hasSshKey) missing.push('ASTPP_SSH_PRIVATE_KEY or ASTPP_SSH_PRIVATE_KEY_PATH');
+    console.warn(`[CONFIG] SSH/KYC image transfer is not fully configured: ${missing.join(', ')}. Server startup will continue.`);
+  }
 
   const poolMin = Number(env.DATABASE_POOL_MIN);
   const poolMax = Number(env.DATABASE_POOL_MAX);

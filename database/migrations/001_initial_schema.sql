@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS customers (
     
     -- ASTPP Integration (CDC Sync)
     astpp_id INTEGER UNIQUE, -- From ASTPP accounts.id
-    phone_number VARCHAR(32) NOT NULL UNIQUE, -- From ASTPP accounts.number (account_number and phone_number are same)
+    phone_number VARCHAR(32) NOT NULL, -- From ASTPP accounts.number; historical ASTPP accounts may reuse a number
     country_id INTEGER, -- From ASTPP accounts.country_id
     country_code VARCHAR(10),
     currency_id INTEGER, -- From ASTPP accounts.currency_id
@@ -68,7 +68,7 @@ CREATE INDEX IF NOT EXISTS idx_customers_deleted ON customers(deleted_at) WHERE 
 
 COMMENT ON TABLE customers IS 'Core customer records - synced from ASTPP accounts table via Kafka CDC';
 COMMENT ON COLUMN customers.astpp_id IS 'Primary key from ASTPP accounts.id - used for CDC sync';
-COMMENT ON COLUMN customers.phone_number IS 'Customer phone number - same as ASTPP accounts.number (account_number and phone_number are identical in ASTPP)';
+COMMENT ON COLUMN customers.phone_number IS 'Phone number from ASTPP accounts.number; historical customer rows may share this value';
 COMMENT ON COLUMN customers.sync_version IS 'Kafka event timestamp for idempotency - prevents out-of-order updates';
 
 -- ============================================================================

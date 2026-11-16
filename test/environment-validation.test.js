@@ -73,9 +73,11 @@ function validEnvironment() {
 function captureConfigurationLogs(callback) {
   const originalInfo = console.info;
   const originalError = console.error;
+  const originalWarn = console.warn;
   const lines = [];
   console.info = (line) => lines.push(line);
   console.error = (line) => lines.push(line);
+  console.warn = (line) => lines.push(line);
 
   try {
     return { result: callback(), lines };
@@ -84,6 +86,7 @@ function captureConfigurationLogs(callback) {
   } finally {
     console.info = originalInfo;
     console.error = originalError;
+    console.warn = originalWarn;
   }
 }
 
@@ -111,4 +114,19 @@ test('reports every missing or invalid requirement before rejecting startup', ()
   assert.ok(lines.includes('[CONFIG] MISSING/INVALID: API_KEY'));
   assert.ok(lines.includes('[CONFIG] MISSING/INVALID: DATABASE_POOL_MIN must not exceed DATABASE_POOL_MAX'));
   assert.ok(lines.some((line) => line.includes('Startup configuration validation failed:')));
+});
+
+test('allows startup when optional ASTPP SSH settings are missing', () => {
+  const env = validEnvironment();
+  delete env.ASTPP_SSH_HOST;
+  delete env.ASTPP_SSH_PORT;
+  delete env.ASTPP_SSH_USERNAME;
+  delete env.ASTPP_SSH_PRIVATE_KEY_PATH;
+  delete env.ASTPP_IMAGES_PATH;
+
+  const { result, lines } = captureConfigurationLogs(() => validateEnvironment(env));
+
+  assert.equal(result, env);
+  assert.ok(lines.some((line) => line.includes('SSH/KYC image transfer is not fully configured')));
+  assert.ok(lines.some((line) => line.includes('Server startup will continue.')));
 });

@@ -105,6 +105,9 @@
     "unauthorized": "Authentication required to access this resource.",
     "forbidden": "You do not have permission to perform this action.",
     "notFound": "Requested resource was not found.",
+    "astppCustomerNotFound": "No active ASTPP account was found for this ID.",
+    "astppUnavailable": "Customer registration is temporarily unavailable. Please try again.",
+    "invalidAstppCustomer": "ASTPP returned incomplete or mismatched customer details.",
     "internalError": "An unexpected server error occurred. Please try again later."
   }
 }

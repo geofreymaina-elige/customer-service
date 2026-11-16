@@ -138,11 +138,23 @@ export class WalletService {
    */
   async getWalletOnboardingStatusByAstppId(astppId: string) {
     const customer = await this.db.queryOne(
-      `SELECT id, phone_number FROM customers WHERE astpp_id = $1::bigint`,
+      `SELECT id, phone_number FROM customers
+       WHERE astpp_id = $1::bigint AND deleted_at IS NULL`,
       [astppId]
     );
     if (!customer) {
-      throw new NotFoundException(this.messages.get('common.notFound'));
+      return {
+        message: this.messages.get('wallets.onboarding.statusMessages.notStarted'),
+        applicationStatus: 'not_started',
+        wallet: null,
+        application: null,
+        requiredDocuments: [],
+        nextAction: {
+          type: 'start_onboarding',
+          method: 'POST',
+          endpoint: '/api/v2/auth/sessions/device',
+        },
+      };
     }
     return this.getWalletOnboardingStatus(customer.id);
   }

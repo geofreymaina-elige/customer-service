@@ -1,6 +1,14 @@
-import { Injectable, ConflictException, Logger, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  ConflictException,
+  Logger,
+  NotFoundException,
+  ServiceUnavailableException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { DatabaseService } from '../../../core/database/database.service';
-import { AstppAdapterService } from '../../astpp/astpp-adapter.service';
+import { AstppAdapterService, AstppCustomerRecord } from '../../astpp/astpp-adapter.service';
 import { DeviceGatekeeperService } from '../../devices/services/device-gatekeeper.service';
 import { SecureJwtService } from '../../../core/auth/jwt.service';
 import { MessageService } from '../../../core/messages/message.service';
@@ -101,102 +109,36 @@ export class OnboardingService {
     token: any;
     otpPending: boolean;
   }> {
-    // 1. Sync from ASTPP or check existing customer (with 3-second timeout safety)
-    let astppCustomer = null;
+    // ASTPP is the source of truth for registration; never create a placeholder profile.
+    let astppCustomer;
+    let lookupTimeout: NodeJS.Timeout | undefined;
     try {
       astppCustomer = await Promise.race([
         this.astppAdapter.lookupCustomer(dto.astpp_id),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
+        new Promise<null>((_resolve, reject) => {
+          lookupTimeout = setTimeout(() => reject(new Error('ASTPP customer lookup timed out.')), 3000);
+        }),
       ]);
-    } catch {
-      astppCustomer = null;
+    } catch (error) {
+      const details = error instanceof Error ? error.message : String(error);
+      this.logger.error(`ASTPP lookup failed for account ${dto.astpp_id}: ${details}`);
+      throw new ServiceUnavailableException(this.messages.get('common.astppUnavailable'));
+    } finally {
+      if (lookupTimeout) clearTimeout(lookupTimeout);
     }
 
-    // If ASTPP DB not accessible or no record, check local DB
-    let customer = await this.db.queryOne(
-      `SELECT id, uuid, astpp_id, voip_number, phone_number, first_name, last_name, email, date_of_birth, status, timezone, deleted_at
-       FROM customers
-       WHERE astpp_id = $1`,
-      [dto.astpp_id]
-    );
-
-    if (!customer) {
-      if (!astppCustomer) {
-        // Fallback for demonstration / initialization
-        astppCustomer = {
-          accountId: parseInt(dto.astpp_id, 10) || 1001,
-          accountNumber: `2547000${dto.astpp_id}`,
-          firstName: 'Customer',
-          lastName: 'User',
-          email: `user_${dto.astpp_id}@example.com`,
-          phoneNumber: `+2547000${dto.astpp_id}`,
-          voipNumber: `2547000${dto.astpp_id}`,
-          timezone: 'Africa/Nairobi',
-          identityDocumentType: 0,
-          identityDocumentNumber: `ID${dto.astpp_id}`,
-          applicationStatus: 2,
-        };
-      }
-
-      // Create new customer record in PostgreSQL
-      customer = await this.db.queryOne(
-        `INSERT INTO customers (
-          astpp_id, voip_number, phone_number, email, first_name,
-          last_name, timezone, status, created_at, updated_at
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', NOW(), NOW())
-        RETURNING id, uuid, astpp_id, voip_number, phone_number, first_name, last_name, email, date_of_birth, status, timezone`,
-        [
-          dto.astpp_id,
-          astppCustomer.voipNumber,
-          astppCustomer.phoneNumber,
-          astppCustomer.email,
-          astppCustomer.firstName,
-          astppCustomer.lastName,
-          astppCustomer.timezone || 'Africa/Nairobi',
-        ]
-      );
-
-      // Create the primary KYC application and identity details.
-      const docTypeEnum = astppCustomer.identityDocumentType === 3 ? 'PASSPORT' :
-                          astppCustomer.identityDocumentType === 2 ? 'ALIEN_CARD' :
-                          astppCustomer.identityDocumentType === 1 ? 'SERVICE_CARD' : 'NATIONAL_ID';
-
-      const appResult = await this.db.query(
-        `INSERT INTO customer_applications (
-          customer_id, astpp_id, application_id, kyc_status, created_at, updated_at
-        )
-        VALUES ($1, $2, NULL, 'approved', NOW(), NOW())
-        ON CONFLICT (application_id) DO UPDATE SET
-          kyc_status = EXCLUDED.kyc_status,
-          updated_at = NOW()
-        RETURNING id`,
-        [customer.id, dto.astpp_id]
-      );
-
-      const customerApplicationId = appResult.rows[0].id;
-
-      await this.db.query(
-        `INSERT INTO customer_applicant_details (
-          customer_application_id, customer_id, astpp_id, name,
-          identity_document_type, identity_document_number, application_type, synced_at, created_at, updated_at
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, 'primary_kyc', NOW(), NOW(), NOW())
-        ON CONFLICT (customer_application_id, application_type) DO UPDATE SET
-          identity_document_type = EXCLUDED.identity_document_type,
-          identity_document_number = EXCLUDED.identity_document_number,
-          updated_at = NOW()`,
-        [
-          customerApplicationId,
-          customer.id,
-          dto.astpp_id,
-          `${astppCustomer.firstName || ''} ${astppCustomer.lastName || ''}`.trim() || 'Customer',
-          docTypeEnum,
-          astppCustomer.identityDocumentNumber || `ID${dto.astpp_id}`,
-        ]
-      );
+    if (!astppCustomer) {
+      throw new NotFoundException(this.messages.get('common.astppCustomerNotFound'));
+    }
+    if (String(astppCustomer.accountId) !== String(dto.astpp_id)) {
+      throw new BadRequestException(this.messages.get('common.invalidAstppCustomer'));
+    }
+    if (!astppCustomer.accountNumber?.trim()) {
+      throw new BadRequestException(this.messages.get('common.invalidAstppCustomer'));
     }
 
+    // Reconcile the current ASTPP account and its same-phone predecessor atomically.
+    const customer = await this.syncCustomerFromAstpp(astppCustomer);
     if (customer.deleted_at || customer.status === 'closed' || customer.status === 'suspended') {
       throw new UnauthorizedException('Customer account is inactive or deleted.');
     }
@@ -281,5 +223,175 @@ export class OnboardingService {
       token,
       otpPending,
     };
+  }
+
+  private async syncCustomerFromAstpp(astppCustomer: AstppCustomerRecord) {
+    return this.db.transaction(async (client) => {
+      const superseded = await client.query(
+        `UPDATE customers
+         SET deleted_at = COALESCE(deleted_at, NOW()), updated_at = NOW()
+         WHERE phone_number = $1
+           AND astpp_id <> $2
+           AND deleted_at IS NULL
+         RETURNING astpp_id`,
+        [astppCustomer.accountNumber, astppCustomer.accountId],
+      );
+
+      const supersededIds = superseded.rows.map((row) => row.astpp_id);
+      if (supersededIds.length) {
+        await client.query(
+          `UPDATE customer_wallets
+           SET status = 'inactive',
+               is_locked = false,
+               lock_reason = 'Customer replaced by active ASTPP account',
+               locked_by = 'SYSTEM_ASTPP_SYNC',
+               locked_at = NULL,
+               freeze_type = NULL,
+               updated_at = NOW()
+           WHERE astpp_id = ANY($1::bigint[]) AND status != 'closed'`,
+          [supersededIds],
+        );
+      }
+
+      const customerResult = await client.query(
+        `INSERT INTO customers (
+           astpp_id, phone_number, voip_number, email, first_name, last_name,
+           country_id, country_code, currency_id, account_type, timezone, astpp_created_at,
+           status, deleted_at, synced_at, created_at, updated_at
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'active', NULL, NOW(), NOW(), NOW())
+         ON CONFLICT (astpp_id) DO UPDATE SET
+           phone_number = EXCLUDED.phone_number,
+           voip_number = EXCLUDED.voip_number,
+           email = EXCLUDED.email,
+           first_name = EXCLUDED.first_name,
+           last_name = EXCLUDED.last_name,
+           country_id = EXCLUDED.country_id,
+           country_code = COALESCE(EXCLUDED.country_code, customers.country_code),
+           currency_id = EXCLUDED.currency_id,
+           account_type = EXCLUDED.account_type,
+           timezone = EXCLUDED.timezone,
+           astpp_created_at = EXCLUDED.astpp_created_at,
+           deleted_at = NULL,
+           synced_at = NOW(),
+           updated_at = NOW()
+         RETURNING id, uuid, astpp_id, voip_number, phone_number, first_name,
+                   last_name, email, date_of_birth, status, timezone, deleted_at`,
+        [
+          astppCustomer.accountId,
+          astppCustomer.accountNumber,
+          astppCustomer.voipNumber || astppCustomer.accountNumber,
+          astppCustomer.email || null,
+          astppCustomer.firstName || '',
+          astppCustomer.lastName || '',
+          astppCustomer.countryId ?? null,
+          astppCustomer.countryCode ?? null,
+          astppCustomer.currencyId ?? null,
+          astppCustomer.accountType ?? null,
+          astppCustomer.timezone || 'Africa/Nairobi',
+          astppCustomer.createdAt || null,
+        ],
+      );
+      const customer = customerResult.rows[0];
+      const applicationStatus = this.mapAstppApplicationStatus(astppCustomer.applicationStatus);
+      const applicationResult = await client.query(
+        `INSERT INTO customer_applications (
+           customer_id, astpp_id, application_id, application_number,
+           kyc_status, approved_at, rejected_at, synced_at, created_at, updated_at
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW(), NOW())
+         ON CONFLICT (customer_id) DO UPDATE SET
+           astpp_id = EXCLUDED.astpp_id,
+           application_id = COALESCE(EXCLUDED.application_id, customer_applications.application_id),
+           application_number = COALESCE(EXCLUDED.application_number, customer_applications.application_number),
+           kyc_status = EXCLUDED.kyc_status,
+           approved_at = EXCLUDED.approved_at,
+           rejected_at = EXCLUDED.rejected_at,
+           synced_at = NOW(),
+           updated_at = NOW()
+         RETURNING id`,
+        [
+          customer.id,
+          astppCustomer.accountId,
+          astppCustomer.applicationId ?? null,
+          astppCustomer.applicationNumber ?? null,
+          applicationStatus,
+          astppCustomer.approvedAt ?? null,
+          astppCustomer.rejectedAt ?? null,
+        ],
+      );
+      const customerApplicationId = applicationResult.rows[0].id;
+      const applicant = astppCustomer.applicantDetails;
+      if (applicant?.identityDocumentNumber?.trim()) {
+        await client.query(
+          `INSERT INTO customer_applicant_details (
+             customer_application_id, customer_id, astpp_id, name,
+             identity_document_type, identity_document_number,
+             date_of_birth, gender, nationality, physical_address,
+             passport_photo_url, doc_front_url, doc_back_url,
+             application_type, synced_at, created_at, updated_at
+           )
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'primary_kyc', NOW(), NOW(), NOW())
+           ON CONFLICT (customer_application_id, application_type) DO UPDATE SET
+             name = EXCLUDED.name,
+             identity_document_type = EXCLUDED.identity_document_type,
+             identity_document_number = EXCLUDED.identity_document_number,
+             date_of_birth = EXCLUDED.date_of_birth,
+             gender = EXCLUDED.gender,
+             nationality = EXCLUDED.nationality,
+             physical_address = EXCLUDED.physical_address,
+             passport_photo_url = EXCLUDED.passport_photo_url,
+             doc_front_url = EXCLUDED.doc_front_url,
+             doc_back_url = EXCLUDED.doc_back_url,
+             synced_at = NOW(),
+             updated_at = NOW()`,
+          [
+            customerApplicationId,
+            customer.id,
+            astppCustomer.accountId,
+            applicant.name || `${astppCustomer.firstName} ${astppCustomer.lastName}`.trim(),
+            this.mapAstppDocumentType(applicant.identityDocumentType),
+            applicant.identityDocumentNumber.trim(),
+            applicant.dateOfBirth ?? null,
+            this.mapAstppGender(applicant.gender),
+            applicant.nationality ?? null,
+            applicant.physicalAddress ?? null,
+            applicant.passportPhotoUrl ?? null,
+            applicant.documentFrontUrl ?? null,
+            applicant.documentBackUrl ?? null,
+          ],
+        );
+      }
+
+      return customer;
+    });
+  }
+
+  private mapAstppApplicationStatus(status: number): string {
+    switch (Number(status)) {
+      case 2: return 'approved';
+      case 3: return 'rejected';
+      default: return 'pending';
+    }
+  }
+
+  private mapAstppDocumentType(type: number): string {
+    switch (Number(type)) {
+      case 1: return 'PASSPORT';
+      case 2: return 'ALIEN_CARD';
+      case 3: return 'SERVICE_CARD';
+      default: return 'NATIONAL_ID';
+    }
+  }
+
+  private mapAstppGender(gender?: number): string | null {
+    if (gender === undefined || Number(gender) === 0) return null;
+
+    switch (Number(gender)) {
+      case 1: return 'male';
+      case 2: return 'female';
+      default:
+        return 'other';
+    }
   }
 }

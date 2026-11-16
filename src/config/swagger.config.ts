@@ -153,6 +153,7 @@ Authorization: Bearer transaction_token
 
 **Response determines next action**
 - Top-level \`message\` provides a short status summary. Until the application is approved it reflects application/KYC status, such as \`Pending approval\` or \`KYC details required\`; after approval it reflects wallet status, such as \`Wallet active\` or \`Wallet locked\`.
+- If the customer has not yet been synchronized to PostgreSQL, this endpoint still returns HTTP 200 with \`message: "Registration required"\` and \`nextAction.type: "start_onboarding"\`. It does not query ASTPP MySQL; device registration performs the sync.
 - \`nextAction.type: "start_onboarding"\` → No wallet exists; register the device and start onboarding
 - \`nextAction.type: "upload_required_documents"\` or \`"upload_kyc_documents"\` → Upload requested KYC documents
 - \`nextAction.type: "wait_for_kyc_review"\` or \`"wait_for_wallet_activation"\` → Show a pending state

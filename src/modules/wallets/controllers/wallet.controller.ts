@@ -182,7 +182,7 @@ Determines the customer's current onboarding state and returns the next action t
           }
         },
         {
-          description: 'Onboarding Not Started',
+          description: 'Registration Required (Customer Not Yet Synced Locally)',
           example: {
             success: true,
             message: 'Registration required',
@@ -233,17 +233,6 @@ Determines the customer's current onboarding state and returns the next action t
         success: false,
         message: 'Missing required X-API-Key header.',
         code: 'MISSING_API_KEY'
-      }
-    }
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Customer not found',
-    schema: {
-      example: {
-        success: false,
-        message: 'Customer not found.',
-        code: 'NOT_FOUND'
       }
     }
   })

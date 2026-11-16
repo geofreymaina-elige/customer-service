@@ -235,12 +235,37 @@ export class SnapshotWorker {
       const kycStatus = this.mapKycStatus(application?.status);
 
       // Determine deleted_at from ASTPP deleted flag
-      const deletedAt = account.deleted === 1 ? new Date() : null;
+      const deletedAt = Number(account.deleted) === 1 ? new Date() : null;
 
       // Resolve country_code from in-memory map (loaded once at run start)
       const countryCode = account.country_id
         ? (this.countryCodeMap.get(Number(account.country_id)) ?? null)
         : null;
+
+      if (Number(account.deleted) !== 1 && account.number) {
+        const superseded = await client.query(
+          `UPDATE customers
+           SET deleted_at = COALESCE(deleted_at, NOW()), updated_at = NOW()
+           WHERE phone_number = $1 AND astpp_id <> $2 AND deleted_at IS NULL
+           RETURNING astpp_id`,
+          [account.number, account.id],
+        );
+        const supersededIds = superseded.rows.map((row) => row.astpp_id);
+        if (supersededIds.length) {
+          await client.query(
+            `UPDATE customer_wallets SET
+               status = 'inactive',
+               is_locked = false,
+               lock_reason = 'Customer replaced by active ASTPP account',
+               locked_by = 'SYSTEM_SNAPSHOT',
+               locked_at = NULL,
+               freeze_type = NULL,
+               updated_at = NOW()
+             WHERE astpp_id = ANY($1::bigint[]) AND status != 'closed'`,
+            [supersededIds],
+          );
+        }
+      }
 
       // 1. Upsert customer
       await client.query(`

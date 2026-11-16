@@ -221,12 +221,16 @@ export class CdcConsumerWorker implements OnModuleInit, OnModuleDestroy {
       }
 
       // Determine deleted_at from ASTPP deleted flag
-      const deletedAt = deleted === 1 ? new Date() : null;
+      const deletedAt = Number(deleted) === 1 ? new Date() : null;
 
       // Resolve country_code from in-memory map
       const countryCode = country_id
         ? (this.countryCodeMap.get(Number(country_id)) ?? null)
         : null;
+
+      if (Number(deleted) !== 1 && number) {
+        await this.softDeletePhoneReplacements(String(number), astpp_id, client);
+      }
 
       // Upsert customer
       await client.query(`
@@ -266,7 +270,7 @@ export class CdcConsumerWorker implements OnModuleInit, OnModuleDestroy {
       ]);
 
       // If deleted flag changed to true, mark wallet inactive
-      if (deleted === 1) {
+      if (Number(deleted) === 1) {
         await this.disableWallet(astpp_id, 'Customer deleted in ASTPP', client);
       }
 
@@ -525,6 +529,24 @@ export class CdcConsumerWorker implements OnModuleInit, OnModuleDestroy {
         updated_at = NOW()
       WHERE astpp_id = $1 AND status != 'closed'
     `, [astpp_id, reason]);
+  }
+
+  private async softDeletePhoneReplacements(phoneNumber: string, astpp_id: number, client: any) {
+    const result = await client.query(
+      `UPDATE customers
+       SET deleted_at = COALESCE(deleted_at, NOW()), updated_at = NOW()
+       WHERE phone_number = $1 AND astpp_id <> $2 AND deleted_at IS NULL
+       RETURNING astpp_id`,
+      [phoneNumber, astpp_id],
+    );
+
+    for (const row of result.rows) {
+      await this.disableWallet(
+        Number(row.astpp_id),
+        'Customer replaced by active ASTPP account',
+        client,
+      );
+    }
   }
 
   /**
