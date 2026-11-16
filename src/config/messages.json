@@ -85,7 +85,7 @@
       "approved": "Your wallet has been successfully approved and is ready to use.",
       "rejected": "Your wallet application was rejected. Please contact support for assistance.",
       "statusMessages": {
-        "notStarted": "Onboarding required",
+        "notStarted": "Registration required",
         "pendingApproval": "Pending approval",
         "kycDetailsRequired": "KYC details required",
         "applicationRejected": "Application rejected",

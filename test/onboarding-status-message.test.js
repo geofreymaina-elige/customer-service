@@ -54,7 +54,7 @@ for (const scenario of [
   },
   {
     name: 'application not started',
-    expectedMessage: 'Onboarding required',
+    expectedMessage: 'Registration required',
   },
   {
     name: 'rejected application',

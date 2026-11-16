@@ -185,7 +185,7 @@ Determines the customer's current onboarding state and returns the next action t
           description: 'Onboarding Not Started',
           example: {
             success: true,
-            message: 'Onboarding required',
+            message: 'Registration required',
             data: {
               applicationStatus: 'not_started',
               wallet: null,
