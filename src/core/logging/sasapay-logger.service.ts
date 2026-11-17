@@ -16,6 +16,19 @@ export interface SasaPayLogEntry {
   metadata?: Record<string, unknown>;
 }
 
+const SENSITIVE_LOG_FIELDS = new Set([
+  'password',
+  'token',
+  'accesstoken',
+  'refreshtoken',
+  'idtoken',
+  'authorization',
+  'clientsecret',
+  'secret',
+  'otp',
+  'confirmationcode',
+]);
+
 /**
  * Dedicated logger for SasaPay API interactions
  * Logs all requests, responses, callbacks, and errors to a separate file
@@ -120,7 +133,10 @@ export class SasaPayLogger {
 
     this.writeLog(entry);
     if (error) {
-      console.error(`[SASAPAY-KYC] Image upload failed for customer ${customerId}:`, error);
+      console.error(
+        `[SASAPAY-KYC] Image upload failed for customer ${customerId}:`,
+        this.sanitizePayload(error),
+      );
     } else {
       console.log(`[SASAPAY-KYC] Image upload completed for customer ${customerId} [${statusCode}]`);
     }
@@ -130,57 +146,59 @@ export class SasaPayLogger {
    * Log an error during SasaPay operations
    */
   logError(operation: string, error: unknown, metadata?: Record<string, unknown>): void {
+    const errorInfo = this.sanitizePayload(this.extractErrorInfo(error));
     const entry: SasaPayLogEntry = {
       timestamp: new Date().toISOString(),
       operation,
-      error: this.extractErrorInfo(error),
+      error: errorInfo,
       statusCode: this.extractStatusCode(error),
       metadata,
     };
 
     this.writeLog(entry);
-    console.error(`[SASAPAY-ERROR] ${operation}:`, error);
+    console.error(`[SASAPAY-ERROR] ${operation}:`, errorInfo);
   }
 
   /**
    * Sanitize sensitive data from payloads
    */
-  private sanitizePayload(payload: unknown): unknown {
-    if (!payload) return payload;
+  sanitizePayload(payload: unknown): unknown {
+    return this.sanitizeValue(payload, new WeakSet<object>());
+  }
+
+  private sanitizeValue(payload: unknown, seen: WeakSet<object>): unknown {
+    if (typeof payload === 'string') {
+      try {
+        return this.sanitizeValue(JSON.parse(payload), seen);
+      } catch {
+        return payload;
+      }
+    }
+
+    if (payload === null || typeof payload !== 'object') {
+      return payload;
+    }
+
+    if (seen.has(payload)) {
+      return '[Circular]';
+    }
+    seen.add(payload);
 
     try {
-      const serialized = typeof payload === 'string' ? payload : JSON.stringify(payload);
-      const parsed = typeof payload === 'string' ? JSON.parse(payload) : payload;
-
-      if (typeof parsed === 'object' && parsed !== null) {
-        const sanitized = { ...parsed };
-
-        // Redact sensitive fields
-        const sensitiveFields = [
-          'password',
-          'token',
-          'access_token',
-          'accessToken',
-          'Authorization',
-          'client_secret',
-          'clientSecret',
-          'otp',
-          'confirmationCode',
-        ];
-
-        for (const field of sensitiveFields) {
-          if (field in sanitized) {
-            sanitized[field] = '[REDACTED]';
-          }
-        }
-
-        return sanitized;
+      if (Array.isArray(payload)) {
+        return payload.map((value) => this.sanitizeValue(value, seen));
       }
 
-      return parsed;
-    } catch {
-      // If we can't parse it, return as-is
-      return payload;
+      const sanitized: Record<string, unknown> = {};
+      for (const [field, value] of Object.entries(payload)) {
+        const normalizedField = field.replace(/[^a-z0-9]/gi, '').toLowerCase();
+        sanitized[field] = SENSITIVE_LOG_FIELDS.has(normalizedField)
+          ? '[REDACTED]'
+          : this.sanitizeValue(value, seen);
+      }
+      return sanitized;
+    } finally {
+      seen.delete(payload);
     }
   }
 
@@ -221,7 +239,7 @@ export class SasaPayLogger {
    */
   private writeLog(entry: SasaPayLogEntry): void {
     try {
-      const logLine = JSON.stringify(entry) + '\n';
+      const logLine = JSON.stringify(this.sanitizePayload(entry)) + '\n';
       appendFileSync(this.logFile, logLine, 'utf8');
     } catch (error) {
       console.error('[SASAPAY-LOGGER] Failed to write log:', error);

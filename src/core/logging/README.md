@@ -62,6 +62,7 @@ The logger automatically **redacts sensitive fields**:
 - `otp`, `confirmationCode`
 
 These fields are replaced with `[REDACTED]` in the logs.
+Redaction is recursive and applies to both the JSONL logger and the Nest console logs.
 
 ## Usage Examples
 

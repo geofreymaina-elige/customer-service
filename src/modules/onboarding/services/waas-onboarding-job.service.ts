@@ -956,6 +956,14 @@ export class WaasOnboardingJobService {
            AND sasapay_submission_status = 'processing_psp_upload'`,
         [state.images.submissionId, uploadRequestId],
       );
+      await this.db.query(
+        `UPDATE customer_applications
+         SET sasapay_account_status = 'AWAITING_APPROVAL',
+             updated_at = NOW()
+         WHERE customer_id = $1
+           AND sasapay_account_status = 'AWAITING_KYC_UPLOAD'`,
+        [payload.customerId],
+      );
       await this.writeAuditLog(payload.customerId, 'SASAPAY_KYC_RESUBMISSION_SENT', {
         submissionId: state.images.submissionId,
         documentTypes: requiredDocuments,
@@ -973,7 +981,15 @@ export class WaasOnboardingJobService {
 
     await this.db.query(
       `UPDATE customer_applications
-       SET kyc_status = 'approved', updated_at = NOW()
+       SET kyc_status = CASE
+             WHEN sasapay_account_status = 'REJECTED' THEN kyc_status
+             ELSE 'approved'
+           END,
+           sasapay_account_status = CASE
+             WHEN sasapay_account_status = 'AWAITING_KYC_UPLOAD' THEN 'AWAITING_APPROVAL'
+             ELSE sasapay_account_status
+           END,
+           updated_at = NOW()
        WHERE customer_id = $1`,
       [payload.customerId],
     );

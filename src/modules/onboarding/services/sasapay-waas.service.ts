@@ -416,31 +416,34 @@ export class SasaPayWaasService {
 
   private logProviderRequest(method: string, url: string, payload?: unknown): void {
     const operation = this.extractOperationFromUrl(url);
-    this.sasaPayLogger.logRequest(operation, method, url, payload);
+    const safePayload = this.sasaPayLogger.sanitizePayload(payload);
+    this.sasaPayLogger.logRequest(operation, method, url, safePayload);
     
     // Also log to standard logger for console visibility
-    const payloadLog = payload === undefined ? '' : `: ${this.formatLogData(payload)}`;
+    const payloadLog = safePayload === undefined ? '' : `: ${this.formatLogData(safePayload)}`;
     this.logger.log(`[SASAPAY] Request ${method} ${url}${payloadLog}`);
   }
 
   private logProviderResponse(url: string, status: number, data: unknown): void {
     const operation = this.extractOperationFromUrl(url);
-    this.sasaPayLogger.logResponse(operation, url, status, data);
+    const safeData = this.sasaPayLogger.sanitizePayload(data);
+    this.sasaPayLogger.logResponse(operation, url, status, safeData);
     
     // Also log to standard logger for console visibility
-    this.logger.log(`[SASAPAY] Response ${status} ${url}: ${this.formatLogData(data)}`);
+    this.logger.log(`[SASAPAY] Response ${status} ${url}: ${this.formatLogData(safeData)}`);
   }
 
   private logProviderError(error: any, fallbackUrl?: string): void {
     const url = error?.config?.url || fallbackUrl || 'unknown URL';
     const status = error?.response?.status || 'NO_STATUS';
     const data = error?.response?.data ?? { message: error?.message || 'Unknown provider error' };
+    const safeData = this.sasaPayLogger.sanitizePayload(data);
     const operation = this.extractOperationFromUrl(url);
     
     this.sasaPayLogger.logError(operation, error);
     
     // Also log to standard logger for console visibility
-    this.logger.error(`[SASAPAY] Response ${status} ${url}: ${this.formatLogData(data)}`);
+    this.logger.error(`[SASAPAY] Response ${status} ${url}: ${this.formatLogData(safeData)}`);
   }
 
   private formatLogData(data: unknown): string {

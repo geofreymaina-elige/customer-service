@@ -75,7 +75,8 @@ export class JobService {
   async markCompleted(jobId: number): Promise<void> {
     const result = await this.db.query(
       `UPDATE jobs
-       SET status = 'COMPLETED', completed_at = NOW(), locked_at = NULL, locked_by = NULL, updated_at = NOW()
+       SET status = 'COMPLETED', last_error = NULL, completed_at = NOW(),
+           locked_at = NULL, locked_by = NULL, updated_at = NOW()
        WHERE id = $1 AND status = 'RUNNING'
        RETURNING id, uuid, job_type`,
       [jobId]
