@@ -317,7 +317,7 @@ export class SasaPayWaasService {
       const url = `${this.baseUrl}/api/v2/waas/personal-onboarding/kyc/`;
       this.logProviderRequest('POST', url, {
         merchantCode: this.merchantCode,
-        customerMobileNumber,
+        customerMobileNumber: '[REDACTED]',
         documentImageFront: frontImagePath ? '[FILE]' : undefined,
         documentImageBack: backImagePath ? '[FILE]' : undefined,
         passportSizePhoto: selfieImagePath ? '[FILE]' : undefined,

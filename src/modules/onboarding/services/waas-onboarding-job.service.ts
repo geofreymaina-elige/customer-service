@@ -9,6 +9,7 @@ import * as fsPromises from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
 import { parseDateOrNull, parseTimestampOrNull } from '../../../core/utils/date.util';
+import { normalizePhoneNumber } from '../../../core/utils/phone-number.util';
 
 export interface OnboardingJobPayload {
   customerId: number;
@@ -316,19 +317,18 @@ export class WaasOnboardingJobService {
     );
 
     // --- 1c. Call SasaPay WaaS /personal-onboarding/ ---
-    // Use country_code stored on the customer (ISO 2-letter, e.g. 'KE'). SasaPay
-    // expects the numeric phone dialing code, but country_code here is the ISO code
-    // that we can map or pass as-is depending on the SasaPay API spec.
-    // We pass it directly; fall back to an empty string if not set.
-    const sasapayCountryCode = customer.country_code ?? '';
+    if (!customer.country_code) {
+      throw new Error(`Customer ${customer.id} has no country code for phone number validation.`);
+    }
+    const customerPhone = normalizePhoneNumber(customer.phone_number, customer.country_code);
 
     const result = await this.sasapayWaas.initiatePersonalOnboardingAuto({
       customerId: customer.id,
       firstName: customer.first_name,
       middleName: '',
       lastName: customer.last_name,
-      countryCode: sasapayCountryCode,
-      mobileNumber: customer.phone_number.replace(/^\+?254/, '0'),
+      countryCode: customerPhone.countryCallingCode,
+      mobileNumber: customerPhone.nationalNumber,
       documentType: this.mapDocTypeToSasaPay(kycDetails?.identity_document_type || 'NATIONAL_ID'),
       documentNumber: kycDetails?.identity_document_number || `ID${customer.astpp_id}`,
       email: customer.email,
@@ -888,10 +888,20 @@ export class WaasOnboardingJobService {
     }
 
     // Get customer phone number
-    const customer = await this.db.queryOne(
-      `SELECT phone_number FROM customers WHERE id = $1`,
+    const customer = await this.db.queryOne<{ phone_number: string; country_code: string | null }>(
+      `SELECT phone_number, country_code FROM customers WHERE id = $1`,
       [payload.customerId],
     );
+    if (!customer) {
+      throw new Error(`Customer ${payload.customerId} was not found for SasaPay KYC upload.`);
+    }
+    if (!customer.country_code) {
+      throw new Error(`Customer ${payload.customerId} has no country code for phone number validation.`);
+    }
+    const customerMobileNumber = normalizePhoneNumber(
+      customer.phone_number,
+      customer.country_code,
+    ).internationalDigits;
 
     let uploadRequestId: string | null = null;
     try {
@@ -902,7 +912,7 @@ export class WaasOnboardingJobService {
       });
 
       const uploadResult = await this.sasapayWaas.uploadKycDocuments(
-        customer.phone_number.replace(/^\+?254/, ''),
+        customerMobileNumber,
         state.images.front,
         state.images.back,
         state.images.selfie,
