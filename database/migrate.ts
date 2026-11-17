@@ -67,4 +67,4 @@ async function runMigrations() {
   }
 }
 
-runMigrations();
+// runMigrations();

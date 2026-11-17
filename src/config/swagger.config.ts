@@ -153,13 +153,11 @@ Authorization: Bearer transaction_token
 
 **Response determines next action**
 - Top-level \`message\` provides a short status summary. Until the application is approved it reflects application/KYC status, such as \`Pending approval\` or \`KYC details required\`; after approval it reflects wallet status, such as \`Wallet active\` or \`Wallet locked\`.
-- If the customer has not yet been synchronized to PostgreSQL, this endpoint still returns HTTP 200 with \`message: "Registration required"\` and \`nextAction.type: "start_onboarding"\`. It does not query ASTPP MySQL; device registration performs the sync.
-- \`nextAction.type: "start_onboarding"\` → No wallet exists; register the device and start onboarding
-- \`nextAction.type: "upload_required_documents"\` or \`"upload_kyc_documents"\` → Upload requested KYC documents
-- \`nextAction.type: "wait_for_kyc_review"\` or \`"wait_for_wallet_activation"\` → Show a pending state
-- \`nextAction.type: "set_pin"\` → Wallet is active but no PIN is set
-- \`nextAction.type: "make_transaction"\` → Fully onboarded, show home screen
-- \`nextAction.type: "contact_support"\` → Show support instructions
+- \`nextAction.type: "start_onboarding"\` → Register or refresh the device session to begin onboarding
+- \`nextAction.type: "verify_otp"\` → A SasaPay OTP is awaiting customer verification
+- \`nextAction.type: "upload_kyc_documents"\` → An active secondary KYC submission is awaiting documents
+- \`nextAction.type: "set_pin"\` → Application is approved and wallet is active, but no PIN is set
+- \`nextAction.type: "make_transaction"\` → Application is approved, wallet is active, and PIN/device are ready
 
 ---
 

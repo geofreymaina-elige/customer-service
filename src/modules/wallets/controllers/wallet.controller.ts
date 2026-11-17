@@ -64,12 +64,11 @@ export class WalletController {
 Determines the customer's current onboarding state and returns the next action they need to take.
 
 **Workflow Decision Tree**
-- nextAction: "start_onboarding" → No wallet exists; register the device and start onboarding
-- nextAction: "upload_required_documents" or "upload_kyc_documents" → Upload requested KYC documents
-- nextAction: "wait_for_kyc_review" or "wait_for_wallet_activation" → Show a pending state
-- nextAction: "set_pin" → Wallet is active but no PIN is set
-- nextAction: "make_transaction" → Fully onboarded; show the home screen
-- nextAction: "contact_support" → Show support instructions
+- \`start_onboarding\` → Register or refresh the device session to begin onboarding
+- \`verify_otp\` → A SasaPay OTP is awaiting customer verification
+- \`upload_kyc_documents\` → An active secondary KYC submission is awaiting documents
+- \`set_pin\` → Application is approved and wallet is active, but no PIN is set
+- \`make_transaction\` → Application is approved, wallet is active, and PIN/device are ready
 
 **Message** The top-level \`message\` is a short status summary. It reports application/KYC status until the application is approved; after approval, it reports wallet status (for example, \`Wallet active\` or \`Wallet locked\`).
 
@@ -143,10 +142,7 @@ Determines the customer's current onboarding state and returns the next action t
                 rejectedAt: null
               },
               requiredDocuments: [],
-              nextAction: {
-                type: 'upload_kyc_documents',
-                message: 'Wallet created. Please upload KYC documents for approval.'
-              }
+              nextAction: null
             }
           }
         },
@@ -174,7 +170,7 @@ Determines the customer's current onboarding state and returns the next action t
               },
               requiredDocuments: ['document_front', 'document_back'],
               nextAction: {
-                type: 'upload_required_documents',
+                type: 'upload_kyc_documents',
                 method: 'POST',
                 endpoint: '/api/v2/customers/kyc/submissions/images'
               }
@@ -182,7 +178,7 @@ Determines the customer's current onboarding state and returns the next action t
           }
         },
         {
-          description: 'Registration Required (Customer Not Yet Synced Locally)',
+          description: 'Registration Required',
           example: {
             success: true,
             message: 'Registration required',
@@ -216,9 +212,7 @@ Determines the customer's current onboarding state and returns the next action t
                 rejectedAt: '2026-09-23T12:59:58.274Z'
               },
               requiredDocuments: [],
-              nextAction: {
-                type: 'contact_support'
-              }
+              nextAction: null
             }
           }
         }

@@ -201,52 +201,60 @@ export class WalletService {
       [customerId],
     );
 
-    let nextAction: Record<string, string>;
-    if (kycSubmission?.status === 'awaiting_documents' && requiredDocuments.length) {
-      nextAction = {
-        type: 'upload_required_documents',
-        method: 'POST',
-        endpoint: `/api/v2/customers/kyc/submissions/images`,
-      };
-    } else if (kycSubmission?.status === 'psp_upload_failed') {
-      nextAction = { type: 'contact_support' };
-    } else if ([
-      'submitted_for_review',
-      'approved_for_psp',
-      'processing_psp_upload',
-      'awaiting_psp_result',
-    ].includes(kycSubmission?.status)) {
-      nextAction = { type: 'wait_for_kyc_review' };
-    } else if (!wallet) {
-      // No wallet means we need to start onboarding (which includes OTP verification)
-      nextAction = {
-        type: 'start_onboarding',
-        method: 'POST',
-        endpoint: '/api/v2/auth/sessions/device',
-      };
-    } else if (wallet.status !== 'active') {
-      // Wallet exists but not active - waiting for activation
-      nextAction = { type: 'wait_for_wallet_activation' };
-    } else if (applicationStatus === 'pending') {
-      // Wallet is active but application pending - need KYC upload
+    let nextAction: { type: string; method?: string; endpoint?: string } | null = null;
+    if (!wallet) {
+      if (application?.sasapay_request_id && !application.sasapay_account_number) {
+        const otpJob = await this.db.queryOne(
+          `SELECT id
+           FROM jobs
+           WHERE job_type = 'sasapay_otp_confirmation'
+             AND payload->>'customerId' = $1
+             AND payload->>'requestId' = $2
+           ORDER BY created_at DESC
+           LIMIT 1`,
+          [String(customerId), application.sasapay_request_id],
+        );
+
+        if (!otpJob) {
+          nextAction = {
+            type: 'verify_otp',
+            method: 'POST',
+            endpoint: '/api/v2/auth/wallet-verifications',
+          };
+        }
+      } else if (!application?.sasapay_account_number) {
+        nextAction = {
+          type: 'start_onboarding',
+          method: 'POST',
+          endpoint: '/api/v2/auth/sessions/device',
+        };
+      }
+    } else if (
+      application?.sasapay_account_number
+      && kycSubmission?.status === 'awaiting_documents'
+      && requiredDocuments.length
+    ) {
       nextAction = {
         type: 'upload_kyc_documents',
-        message: 'Wallet created. Please upload KYC documents for approval.',
-      };
-    } else if (applicationStatus === 'requires_kyc_upload') {
-      nextAction = { type: 'wait_for_kyc_requirements' };
-    } else if (applicationStatus === 'rejected') {
-      nextAction = { type: 'contact_support' };
-    } else if (!pin) {
-      nextAction = { type: 'set_pin' };
-    } else if (!device) {
-      nextAction = {
-        type: 'register_device',
         method: 'POST',
-        endpoint: '/api/v2/auth/sessions/device',
+        endpoint: '/api/v2/customers/kyc/submissions/images',
       };
-    } else {
-      nextAction = { type: 'make_transaction' };
+    } else if (applicationStatus === 'approved' && wallet.status === 'active') {
+      if (!device) {
+        nextAction = {
+          type: 'start_onboarding',
+          method: 'POST',
+          endpoint: '/api/v2/auth/sessions/device',
+        };
+      } else if (!pin) {
+        nextAction = {
+          type: 'set_pin',
+          method: 'POST',
+          endpoint: '/api/v2/customers/me/pin',
+        };
+      } else {
+        nextAction = { type: 'make_transaction' };
+      }
     }
 
     const message = this.getOnboardingStatusMessage(

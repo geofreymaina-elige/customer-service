@@ -28,6 +28,33 @@ function createWalletService({ applicationStatus, walletStatus, requiredDocument
   return new WalletService(database, new MessageService(), {}, {}, kycService);
 }
 
+function createNextActionWalletService({
+  application = null,
+  wallet = null,
+  kycStatus = null,
+  requiredDocuments = [],
+  pinSet = false,
+  activeDevice = true,
+  otpJob = null,
+}) {
+  const database = {
+    queryOne: async (sql) => {
+      if (sql.includes('FROM customer_wallets')) return wallet;
+      if (sql.includes('FROM customer_applications')) return application;
+      if (sql.includes('FROM customer_pins')) return pinSet ? { id: 1 } : null;
+      if (sql.includes('FROM customer_devices')) return activeDevice ? { id: 1 } : null;
+      if (sql.includes('FROM jobs')) return otpJob;
+      return null;
+    },
+  };
+  const kycService = {
+    ensureSystemCase: async () => {},
+    getCurrentStatus: async () => kycStatus ? { status: kycStatus, requiredDocuments } : null,
+  };
+
+  return new WalletService(database, new MessageService(), {}, {}, kycService);
+}
+
 for (const scenario of [
   {
     name: 'pending application',
@@ -113,6 +140,96 @@ test('missing local customer returns registration instructions instead of a not-
       endpoint: '/api/v2/auth/sessions/device',
     },
   });
+});
+
+test('onboarding next actions use only the five app workflow actions', async (t) => {
+  const scenarios = [
+    {
+      name: 'requests OTP verification only after SasaPay issued a request',
+      input: {
+        application: { kyc_status: 'pending', sasapay_request_id: 'request-1' },
+      },
+      expected: 'verify_otp',
+    },
+    {
+      name: 'does not request OTP again while accepted OTP processing is queued',
+      input: {
+        application: { kyc_status: 'pending', sasapay_request_id: 'request-1' },
+        otpJob: { id: 8 },
+      },
+      expected: null,
+    },
+    {
+      name: 'requests only secondary KYC documents that are explicitly awaiting upload',
+      input: {
+        application: {
+          kyc_status: 'requires_kyc_upload',
+          sasapay_account_number: '1881181',
+        },
+        wallet: { uuid: 'wallet-id', status: 'locked' },
+        kycStatus: 'awaiting_documents',
+        requiredDocuments: ['document_front'],
+      },
+      expected: 'upload_kyc_documents',
+    },
+    {
+      name: 'does not treat a pending application by itself as a secondary KYC upload request',
+      input: {
+        application: { kyc_status: 'pending', sasapay_account_number: '1881181' },
+        wallet: { uuid: 'wallet-id', status: 'active' },
+      },
+      expected: null,
+    },
+    {
+      name: 'requests PIN setup only for an approved active wallet without a PIN',
+      input: {
+        application: { kyc_status: 'approved', sasapay_account_number: '1881181' },
+        wallet: { uuid: 'wallet-id', status: 'active' },
+        pinSet: false,
+      },
+      expected: 'set_pin',
+    },
+    {
+      name: 'allows transactions only when approval, active wallet, PIN, and device are ready',
+      input: {
+        application: { kyc_status: 'approved', sasapay_account_number: '1881181' },
+        wallet: { uuid: 'wallet-id', status: 'active' },
+        pinSet: true,
+        activeDevice: true,
+      },
+      expected: 'make_transaction',
+    },
+    {
+      name: 'uses device onboarding rather than a new register-device action',
+      input: {
+        application: { kyc_status: 'approved', sasapay_account_number: '1881181' },
+        wallet: { uuid: 'wallet-id', status: 'active' },
+        activeDevice: false,
+      },
+      expected: 'start_onboarding',
+    },
+    {
+      name: 'returns no customer action while secondary KYC is under review',
+      input: {
+        application: { kyc_status: 'pending', sasapay_account_number: '1881181' },
+        wallet: { uuid: 'wallet-id', status: 'locked' },
+        kycStatus: 'submitted_for_review',
+      },
+      expected: null,
+    },
+  ];
+
+  for (const scenario of scenarios) {
+    await t.test(scenario.name, async () => {
+      const result = await createNextActionWalletService(scenario.input).getWalletOnboardingStatus(7);
+      assert.equal(result.nextAction?.type ?? null, scenario.expected);
+      assert.ok(
+        result.nextAction === null
+          || ['start_onboarding', 'verify_otp', 'upload_kyc_documents', 'set_pin', 'make_transaction']
+            .includes(result.nextAction.type),
+      );
+    });
+  }
 });
 
 function createOnboardingService({ astppCustomer, astppError } = {}) {
