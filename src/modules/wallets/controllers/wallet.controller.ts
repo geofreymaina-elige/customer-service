@@ -142,12 +142,12 @@ Determines the customer's current onboarding state and returns the next action t
                 rejectedAt: null
               },
               requiredDocuments: [],
-              nextAction: null
+              nextAction: { type: 'wait_for_update' }
             }
           }
         },
         {
-          description: 'KYC Documents Required',
+          description: 'SasaPay Rejection Requires Replacement Documents',
           example: {
             success: true,
             message: 'KYC details required',
@@ -163,7 +163,7 @@ Determines the customer's current onboarding state and returns the next action t
               application: {
                 sasapayRequestId: '7ca09f78-4378-4c65-91bb-dc2cad8f3a8a',
                 sasapayAccountNumber: '1881181',
-                sasapayAccountStatus: 'AWAITING_KYC_UPLOAD',
+                sasapayAccountStatus: 'REJECTED',
                 submittedAt: '2026-09-23T12:59:58.274Z',
                 approvedAt: null,
                 rejectedAt: null
@@ -174,6 +174,33 @@ Determines the customer's current onboarding state and returns the next action t
                 method: 'POST',
                 endpoint: '/api/v2/customers/kyc/submissions/images'
               }
+            }
+          }
+        },
+        {
+          description: 'KYC Images Being Submitted to SasaPay',
+          example: {
+            success: true,
+            message: 'KYC submission processing',
+            data: {
+              applicationStatus: 'processing',
+              wallet: {
+                walletId: '1a9fe575-500d-444f-99bd-90a22977639c',
+                accountNumber: '1881181',
+                currency: 'KES',
+                status: 'locked',
+                createdAt: '2026-09-23T12:59:25.937Z'
+              },
+              application: {
+                sasapayRequestId: '7ca09f78-4378-4c65-91bb-dc2cad8f3a8a',
+                sasapayAccountNumber: '1881181',
+                sasapayAccountStatus: 'AWAITING_KYC_UPLOAD',
+                submittedAt: '2026-09-23T12:59:58.274Z',
+                approvedAt: null,
+                rejectedAt: null
+              },
+              requiredDocuments: [],
+              nextAction: { type: 'wait_for_update' }
             }
           }
         },
@@ -212,7 +239,7 @@ Determines the customer's current onboarding state and returns the next action t
                 rejectedAt: '2026-09-23T12:59:58.274Z'
               },
               requiredDocuments: [],
-              nextAction: null
+              nextAction: { type: 'wait_for_update' }
             }
           }
         }

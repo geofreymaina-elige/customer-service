@@ -1,11 +1,10 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import axios from 'axios';
 import { DatabaseService } from '../../../core/database/database.service';
 import { AstppMysqlService } from '../../../core/astpp-mysql/astpp-mysql.service';
 import { SasaPayWalletConfirmation, SasaPayWaasService } from './sasapay-waas.service';
 import { JobService } from '../../../core/jobs/job.service';
-import { Client as SSHClient } from 'ssh2';
-import * as fs from 'fs';
 import * as fsPromises from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
@@ -38,7 +37,7 @@ interface OnboardingJobState {
 }
 
 @Injectable()
-export class WaasOnboardingJobService implements OnModuleInit {
+export class WaasOnboardingJobService {
   private readonly logger = new Logger(WaasOnboardingJobService.name);
 
   private async writeAuditLog(customerId: number, eventType: string, details: Record<string, unknown>): Promise<void> {
@@ -49,13 +48,7 @@ export class WaasOnboardingJobService implements OnModuleInit {
     );
   }
 
-  // SSH Configuration for ASTPP server
-  private readonly sshHost: string;
-  private readonly sshPort: number;
-  private readonly sshUsername: string;
-  private readonly sshPrivateKey: string | undefined;
-  private readonly sshPrivateKeyPath: string | undefined;
-  private readonly astppImagesPath: string;
+  private readonly astppImagesBaseUrl: string;
 
   constructor(
     private readonly db: DatabaseService,
@@ -64,17 +57,7 @@ export class WaasOnboardingJobService implements OnModuleInit {
     private readonly jobService: JobService,
     private readonly config: ConfigService,
   ) {
-    this.sshHost = this.config.get<string>('astpp.ssh.host') || '';
-    this.sshPort = this.config.get<number>('astpp.ssh.port') || 0;
-    this.sshUsername = this.config.get<string>('astpp.ssh.username') || '';
-    this.sshPrivateKey = this.config.get<string>('astpp.ssh.privateKey');
-    this.sshPrivateKeyPath = this.config.get<string>('astpp.ssh.privateKeyPath');
-    this.astppImagesPath = this.config.get<string>('astpp.imagesPath') || '';
-  }
-
-  onModuleInit(): void {
-    this.logger.log('[SSH CONNECTIVITY] Starting ASTPP SSH check (non-blocking).');
-    void this.checkSshConnectivityAtStartup();
+    this.astppImagesBaseUrl = this.config.get<string>('astpp.imagesBaseUrl') || '';
   }
 
   /**
@@ -187,7 +170,7 @@ export class WaasOnboardingJobService implements OnModuleInit {
 
       await this.db.query(
         `UPDATE customer_applications
-         SET kyc_status = 'requires_kyc_upload', updated_at = NOW()
+         SET kyc_status = 'processing', updated_at = NOW()
          WHERE customer_id = $1`,
         [customerId],
       );
@@ -652,11 +635,11 @@ export class WaasOnboardingJobService implements OnModuleInit {
   }
 
   // ---------------------------------------------------------------------------
-  // AREA 3 — Fix KYC image lookup + implement SSH download
+  // AREA 3 — Fix KYC image lookup + implement HTTP download
   // ---------------------------------------------------------------------------
 
   /**
-   * Step 2: Fetch KYC Images via SSH from ASTPP Server.
+   * Step 2: Fetch KYC Images over HTTPS from ASTPP's image portal.
    *
    * Image resolution priority:
    *   - wallet_kyc row preferred over primary_kyc
@@ -664,11 +647,11 @@ export class WaasOnboardingJobService implements OnModuleInit {
    *     then fall back to images[] JSONB (wallet_kyc only — primary_kyc images[] is always empty)
    *   - If selfie missing in wallet_kyc → fall back to primary_kyc passport_photo_url
    */
-  async step2_FetchKycImagesViaSSH(
+  async step2_FetchKycImagesViaHttp(
     payload: OnboardingJobPayload,
     state: OnboardingJobState,
   ): Promise<OnboardingJobState> {
-    this.logger.log(`[STEP 2] Fetching KYC images via SSH for customer ${payload.customerId}`);
+    this.logger.log(`[STEP 2] Fetching KYC images over HTTPS for customer ${payload.customerId}`);
 
     if (payload.submissionId && this.config.get<boolean>('sasapay.kycEnabled') !== true) {
       throw new Error('SasaPay KYC feature is disabled for this submission job.');
@@ -835,35 +818,36 @@ export class WaasOnboardingJobService implements OnModuleInit {
       );
     }
 
-    const astppApplicationId = bestRow.astpp_application_id;
-    if (!this.sshHost || !Number.isInteger(this.sshPort) || this.sshPort < 1 || !this.sshUsername) {
-      throw new Error('ASTPP SSH host, port, and username must be configured before KYC image transfer.');
+    const astppApplicationId = String(bestRow.astpp_application_id ?? '');
+    if (!/^\d+$/.test(astppApplicationId)) {
+      throw new Error('ASTPP application ID is missing or invalid for KYC image download.');
     }
-    if (!this.astppImagesPath.startsWith('/')) {
-      throw new Error('ASTPP_IMAGES_PATH must be configured as an absolute remote path before KYC image transfer.');
+    if (!this.astppImagesBaseUrl) {
+      throw new Error('ASTPP_IMAGES_BASE_URL must be configured before KYC image transfer.');
     }
-
-    const remoteDir = `${this.astppImagesPath}/${astppApplicationId}`;
 
     const localTempDir = path.join(os.tmpdir(), `kyc_${payload.customerId}_${astppApplicationId}`);
     await fsPromises.mkdir(localTempDir, { recursive: true });
 
-    const localFrontPath = path.join(localTempDir, path.basename(frontFilename));
-    const localBackPath = path.join(localTempDir, path.basename(backFilename));
-    const localSelfiePath = path.join(localTempDir, path.basename(selfieFilename));
+    const frontName = this.getSafeImageFilename(frontFilename);
+    const backName = this.getSafeImageFilename(backFilename);
+    const selfieName = this.getSafeImageFilename(selfieFilename);
+    const localFrontPath = path.join(localTempDir, frontName);
+    const localBackPath = path.join(localTempDir, backName);
+    const localSelfiePath = path.join(localTempDir, selfieName);
 
     this.logger.log(`[STEP 2] Staging KYC files in ${localTempDir}`);
 
     await this.downloadIfMissing(
-      `${remoteDir}/${path.basename(frontFilename)}`,
+      this.buildAstppImageUrl(astppApplicationId, frontName),
       localFrontPath,
     );
     await this.downloadIfMissing(
-      `${remoteDir}/${path.basename(backFilename)}`,
+      this.buildAstppImageUrl(astppApplicationId, backName),
       localBackPath,
     );
     await this.downloadIfMissing(
-      `${remoteDir}/${path.basename(selfieFilename)}`,
+      this.buildAstppImageUrl(astppApplicationId, selfieName),
       localSelfiePath,
     );
 
@@ -998,197 +982,76 @@ export class WaasOnboardingJobService implements OnModuleInit {
     };
   }
 
-  // ---------------------------------------------------------------------------
-  // SSH Helper
-  // ---------------------------------------------------------------------------
+  private getSafeImageFilename(value: string): string {
+    let imagePath = value;
+    if (/^https?:\/\//i.test(value)) {
+      imagePath = new URL(value).pathname;
+    }
 
-  private async checkSshConnectivityAtStartup(): Promise<void> {
-    const startedAt = Date.now();
-    const keySource = this.sshPrivateKeyPath
-      ? 'ASTPP_SSH_PRIVATE_KEY_PATH'
-      : this.sshPrivateKey
-        ? 'ASTPP_SSH_PRIVATE_KEY'
-        : 'not configured';
-    this.logger.log(
-      `[SSH CONNECTIVITY] Target: ${this.sshHost || 'not configured'}:${this.sshPort || 'not configured'}; ` +
-      `user: ${this.sshUsername || 'not configured'}; key source: ${keySource}`,
-    );
+    const filename = path.posix.basename(imagePath.replace(/\\/g, '/'));
+    if (!filename || filename === '.' || filename === '..') {
+      throw new Error('ASTPP returned an invalid KYC image filename.');
+    }
+    return filename;
+  }
 
+  private buildAstppImageUrl(applicationId: string, filename: string): string {
+    let baseUrl: URL;
     try {
-      if (!this.sshHost || !Number.isInteger(this.sshPort) || this.sshPort < 1 || !this.sshUsername) {
-        throw new Error('SSH host, valid port, or username is missing/invalid.');
-      }
-
-      const privateKey = this.getPrivateKey();
-      await new Promise<void>((resolve, reject) => {
-        const connection = new SSHClient();
-        let settled = false;
-        let timeout: NodeJS.Timeout;
-        const finish = (error?: Error) => {
-          if (settled) return;
-          settled = true;
-          clearTimeout(timeout);
-          connection.end();
-          if (error) reject(error);
-          else resolve();
-        };
-        timeout = setTimeout(() => finish(new Error('SSH connection/check timed out after 8 seconds.')), 8000);
-
-        connection.on('ready', () => {
-          this.logger.log(`[SSH CONNECTIVITY] PASS: SSH authentication succeeded (${Date.now() - startedAt} ms).`);
-          if (!this.astppImagesPath) {
-            this.logger.warn('[SSH CONNECTIVITY] ASTPP_IMAGES_PATH is not configured; remote directory check skipped.');
-            finish();
-            return;
-          }
-          if (!this.astppImagesPath.startsWith('/')) {
-            finish(new Error('ASTPP_IMAGES_PATH is not an absolute remote path.'));
-            return;
-          }
-
-          const command = `test -d ${this.shellQuote(this.astppImagesPath)} && test -r ${this.shellQuote(this.astppImagesPath)}`;
-          connection.exec(command, (execError, stream) => {
-            if (execError) {
-              finish(execError);
-              return;
-            }
-            let stderr = '';
-            stream.stderr.on('data', (chunk: Buffer) => {
-              stderr += chunk.toString();
-            });
-            stream.on('error', finish);
-            stream.on('close', (code: number) => {
-              if (code === 0) {
-                this.logger.log('[SSH CONNECTIVITY] PASS: ASTPP image directory exists and is readable.');
-                finish();
-              } else {
-                finish(new Error(stderr.trim() || `Remote image directory check exited with code ${code}.`));
-              }
-            });
-          });
-        });
-        connection.on('error', finish);
-        connection.connect({
-          host: this.sshHost,
-          port: this.sshPort,
-          username: this.sshUsername,
-          privateKey,
-          readyTimeout: 8000,
-          keepaliveInterval: 5000,
-          keepaliveCountMax: 1,
-        });
-      });
-      this.logger.log(`[SSH CONNECTIVITY] COMPLETE: checks passed in ${Date.now() - startedAt} ms.`);
-    } catch (error) {
-      const details = error instanceof Error ? error.message : String(error);
-      this.logger.error(
-        `[SSH CONNECTIVITY] FAIL: ${details} (server startup will continue; KYC image transfer may be unavailable).`,
-      );
-    }
-  }
-
-  private downloadIfMissing(remotePath: string, localPath: string): Promise<void> {
-    if (fs.existsSync(localPath)) {
-      this.logger.log(`[STEP 2] Reusing staged KYC file ${path.basename(localPath)}`);
-      return Promise.resolve();
-    }
-
-    return new Promise((resolve, reject) => {
-      const conn = new SSHClient();
-
-      conn.on('ready', () => {
-        conn.exec(`/bin/cat ${this.shellQuote(remotePath)}`, (execError, stream) => {
-            if (execError) {
-              conn.end();
-              reject(execError);
-              return;
-            }
-
-            const writeStream = fs.createWriteStream(localPath);
-            let stderr = '';
-
-            stream.stderr.on('data', (chunk: Buffer) => {
-              stderr += chunk.toString();
-            });
-
-            stream.on('error', (error) => {
-              writeStream.destroy();
-              conn.end();
-              reject(error);
-            });
-
-            writeStream.on('error', (error) => {
-              stream.destroy();
-              conn.end();
-              reject(error);
-            });
-
-            stream.on('close', (code: number) => {
-              writeStream.end(() => {
-                conn.end();
-                if (code !== 0) {
-                  reject(new Error(`SSH image download failed for ${remotePath}: ${stderr.trim() || `exit code ${code}`}`));
-                  return;
-                }
-
-                resolve();
-              });
-            });
-
-            stream.pipe(writeStream);
-        });
-      });
-
-      conn.on('error', (err) => {
-        reject(err);
-      });
-
-      conn.connect({
-        host: this.sshHost,
-        port: this.sshPort,
-        username: this.sshUsername,
-        privateKey: this.getPrivateKey(),
-        readyTimeout: 8000,
-      });
-    });
-  }
-
-  private shellQuote(value: string): string {
-    return `'${value.replace(/'/g, `'\\''`)}'`;
-  }
-
-  /**
-   * Helper to retrieve and format the SSH private key from env.
-   * Supports base64 encoded strings, escaped newlines (\n), or raw PEM strings.
-   */
-  private getPrivateKey(): string | Buffer {
-    let key = this.sshPrivateKeyPath
-      ? fs.readFileSync(this.sshPrivateKeyPath, 'utf8').trim()
-      : (this.sshPrivateKey ?? '').trim();
-    if (!key) {
-      throw new Error('ASTPP_SSH_PRIVATE_KEY or ASTPP_SSH_PRIVATE_KEY_PATH is not configured');
-    }
-    if ((key.startsWith('"') && key.endsWith('"')) || (key.startsWith("'") && key.endsWith("'"))) {
-      key = key.slice(1, -1);
-    }
-    if (key.includes('\\n')) {
-      key = key.replace(/\\n/g, '\n');
-    }
-    if (key.startsWith('-----BEGIN')) {
-      return key;
-    }
-    if (/^(ssh-|ecdsa-)/.test(key)) {
-      throw new Error('ASTPP SSH key is a public key; configure the matching private key instead');
-    }
-    try {
-      const decoded = Buffer.from(key, 'base64').toString('utf8');
-      if (decoded.includes('-----BEGIN')) {
-        return decoded;
-      }
+      baseUrl = new URL(this.astppImagesBaseUrl);
     } catch {
-      // ignore
+      throw new Error('ASTPP_IMAGES_BASE_URL must be a valid HTTPS URL.');
     }
-    return key;
+
+    if (
+      baseUrl.protocol !== 'https:'
+      || baseUrl.username
+      || baseUrl.password
+      || baseUrl.search
+      || baseUrl.hash
+    ) {
+      throw new Error('ASTPP_IMAGES_BASE_URL must be an HTTPS URL without credentials, query, or fragment.');
+    }
+
+    baseUrl.pathname = `${baseUrl.pathname.replace(/\/+$/, '')}/application_images/${applicationId}/${encodeURIComponent(filename)}`;
+    return baseUrl.toString();
+  }
+
+  private async downloadIfMissing(imageUrl: string, localPath: string): Promise<void> {
+    try {
+      const existingFile = await fsPromises.stat(localPath);
+      if (existingFile.isFile() && existingFile.size > 0) {
+        this.logger.log(`[STEP 2] Reusing staged KYC file ${path.basename(localPath)}`);
+        return;
+      }
+      await fsPromises.rm(localPath, { force: true });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+
+    const response = await axios.get(imageUrl, {
+      responseType: 'arraybuffer',
+      timeout: 15000,
+      maxContentLength: 20 * 1024 * 1024,
+      maxBodyLength: 20 * 1024 * 1024,
+      maxRedirects: 0,
+      validateStatus: (status) => status === 200,
+    });
+    const contentType = String(response.headers['content-type'] || '')
+      .split(';')[0]
+      .trim()
+      .toLowerCase();
+    if (!contentType.startsWith('image/')) {
+      throw new Error(`ASTPP image endpoint returned an unsupported content type for ${path.basename(localPath)}.`);
+    }
+
+    const image = Buffer.isBuffer(response.data) ? response.data : Buffer.from(response.data);
+    if (image.length === 0) {
+      throw new Error(`ASTPP image endpoint returned an empty image for ${path.basename(localPath)}.`);
+    }
+
+    await fsPromises.writeFile(localPath, image, { mode: 0o600 });
+    this.logger.log(`[STEP 2] Downloaded KYC image ${path.basename(localPath)} over HTTPS.`);
   }
 
   // ---------------------------------------------------------------------------

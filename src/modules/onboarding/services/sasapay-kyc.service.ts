@@ -282,9 +282,9 @@ export class SasaPayKycService {
   }
 
   /**
-   * Create or update sasapay_kyc applicant details when system needs to request re-upload
+   * Create or update sasapay_kyc applicant details when an admin requests re-upload
    */
-  async ensureSystemCase(customerId: number, reason: string, pspReason?: string) {
+  async ensureSystemCase(customerId: number, reason: string, requireAllPolicyDocuments = false) {
     if (!this.config.get<boolean>('sasapay.kycEnabled')) return null;
 
     const application = await this.getCustomerApplicationAndDocument(customerId);
@@ -309,7 +309,7 @@ export class SasaPayKycService {
        LIMIT 1`,
       [application.id, policy.id],
     );
-    if (completedSubmission) return null;
+    if (completedSubmission && !requireAllPolicyDocuments) return null;
 
     const policyDocuments = this.withRequiredSelfie(policy.required_documents);
     const existingDocuments = new Set<KycDocumentType>();
@@ -323,14 +323,14 @@ export class SasaPayKycService {
     if (application.passport_photo_url || images.some((image) => ['passport_photo', 'selfie'].includes(image.image_type))) {
       existingDocuments.add('selfie');
     }
-    const requiredDocuments = pspReason
+    const requiredDocuments = requireAllPolicyDocuments
       ? policyDocuments
       : policyDocuments.filter((documentType) => !existingDocuments.has(documentType));
     if (!requiredDocuments.length) return null;
 
     // Check for open submission
     const openSubmission = await this.db.queryOne(
-      `SELECT id
+      `SELECT id, sasapay_submission_status
        FROM customer_applicant_details
        WHERE customer_application_id = $1
          AND application_type = 'sasapay_kyc'
@@ -339,7 +339,20 @@ export class SasaPayKycService {
        LIMIT 1`,
       [application.id],
     );
-    if (openSubmission) return openSubmission.id;
+    if (openSubmission) {
+      if (requireAllPolicyDocuments) {
+        await this.db.query(
+          `UPDATE customer_applicant_details
+           SET sasapay_submission_status = 'awaiting_documents',
+               required_documents = $1,
+               images = '[]'::jsonb,
+               updated_at = NOW()
+           WHERE id = $2 AND application_type = 'sasapay_kyc'`,
+          [policyDocuments, openSubmission.id],
+        );
+      }
+      return openSubmission.id;
+    }
 
     // Create or update sasapay_kyc applicant details
     const detail = await this.db.queryOne(
@@ -358,6 +371,7 @@ export class SasaPayKycService {
          policy_version = EXCLUDED.policy_version,
          sasapay_submission_status = 'awaiting_documents',
          required_documents = EXCLUDED.required_documents,
+         images = '[]'::jsonb,
          updated_at = NOW()
        RETURNING id`,
       [
@@ -386,11 +400,51 @@ export class SasaPayKycService {
       'system',
       {
         submissionStatus: 'awaiting_documents',
-        metadata: { reason, pspReason: pspReason || null },
+        metadata: { reason, replacementDocumentsRequested: requireAllPolicyDocuments },
       },
     );
 
     return detail.id;
+  }
+
+  async requestReplacementDocuments(customerId: number, reviewerId: string, reason: string) {
+    const application = await this.db.queryOne(
+      `SELECT sasapay_account_number
+       FROM customer_applications
+       WHERE customer_id = $1`,
+      [customerId],
+    );
+    if (!application?.sasapay_account_number) {
+      throw new BadRequestException('A confirmed SasaPay account is required before requesting replacement documents.');
+    }
+
+    const submissionId = await this.ensureSystemCase(
+      customerId,
+      reason,
+      true,
+    );
+    if (!submissionId) {
+      throw new ConflictException('Active SasaPay document requirements are not configured for this customer.');
+    }
+
+    await this.db.query(
+      `UPDATE customer_applicant_details
+       SET review_status = 'rejected',
+           review_decision = 'rejected',
+           reviewed_by = $1,
+           reviewed_at = NOW(),
+           review_reason = $2,
+           updated_at = NOW()
+       WHERE id = $3 AND application_type = 'sasapay_kyc'`,
+      [reviewerId, reason, submissionId],
+    );
+
+    const status = await this.getCurrentStatus(customerId);
+    if (!status || status.status !== 'awaiting_documents' || !status.requiredDocuments.length) {
+      throw new ConflictException('The replacement-document request could not be activated.');
+    }
+
+    return status;
   }
 
   /**
@@ -441,15 +495,7 @@ export class SasaPayKycService {
       )
       : null;
 
-    const newSubmissionId = callbackStatus === 'REJECTED'
-      ? await this.ensureSystemCase(
-        customerId,
-        'SasaPay rejected existing KYC images; replacement documents are required.',
-        reason,
-      )
-      : null;
-    
-    const submissionId = correlatedSubmission?.id || newSubmissionId;
+    let submissionId = correlatedSubmission?.id || null;
 
     // Update submission status if correlated
     if (correlatedSubmission) {
@@ -460,6 +506,11 @@ export class SasaPayKycService {
              sasapay_psp_reason = $3,
              sasapay_result_at = NOW(),
              sasapay_callback_payload = $4::jsonb,
+             review_status = CASE WHEN $1 = 'psp_rejected' THEN 'pending' ELSE review_status END,
+             review_decision = CASE WHEN $1 = 'psp_rejected' THEN NULL ELSE review_decision END,
+             reviewed_by = CASE WHEN $1 = 'psp_rejected' THEN NULL ELSE reviewed_by END,
+             reviewed_at = CASE WHEN $1 = 'psp_rejected' THEN NULL ELSE reviewed_at END,
+             review_reason = CASE WHEN $1 = 'psp_rejected' THEN NULL ELSE review_reason END,
              updated_at = NOW()
          WHERE id = $5 AND application_type = 'sasapay_kyc'`,
         [
@@ -734,11 +785,26 @@ export class SasaPayKycService {
         `UPDATE customer_applicant_details
          SET sasapay_submission_status = 'submitted_for_review', 
              sasapay_submitted_at = NOW(), 
+             review_status = 'pending',
+             review_decision = NULL,
+             reviewed_by = NULL,
+             reviewed_at = NULL,
+             review_reason = NULL,
              updated_at = NOW()
          WHERE id = $1 
            AND application_type = 'sasapay_kyc'
            AND sasapay_submission_status = 'awaiting_documents'`,
         [submissionId],
+      );
+
+      await client.query(
+        `UPDATE customer_applications
+         SET kyc_status = 'pending',
+             reviewed_by = NULL,
+             reviewed_at = NULL,
+             updated_at = NOW()
+         WHERE customer_id = $1`,
+        [customerId],
       );
       
       await client.query(

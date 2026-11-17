@@ -14,7 +14,7 @@ It is exclusively focused on managing customer onboarding, identity verification
   - SasaPay WaaS personal KYC registration and OTP verification integration.
 - **KYC & Identity Verification**:
   - Document management (National ID, Passport, Alien Card, Service Card, passport photo / selfie).
-  - Status lifecycle management (`unverified` &rarr; `pending` &rarr; `requires_kyc_upload` &rarr; `approved` / `rejected`).
+  - Explicit customer onboarding and SasaPay KYC lifecycle; see [Customer Lifecycle & Onboarding State](#customer-lifecycle--onboarding-state).
   - Tier levels (`TIER_0`, `TIER_1`, `TIER_2`, `TIER_3`) and compliance audit trail.
 - **Security & PIN Lifecycle**:
   - 4-digit bcrypt-hashed PIN creation and verification.
@@ -108,6 +108,7 @@ npm run pm2:start
 ### 👤 Customer Profile & KYC
 | Method | Endpoint | Description |
 |---|---|---|
+| `GET` | `/api/v2/customers/onboarding-status?astppId={astppId}` | Get customer lifecycle state and the next app action |
 | `GET` | `/api/v1/customers/me` | Retrieve authenticated customer profile with KYC & account status |
 | `PATCH` | `/api/v1/customers/me` | Update customer personal details (names, email, timezone) |
 | `POST` | `/api/v1/customers/kyc/documents` | Submit KYC identification document URLs for review |
@@ -125,6 +126,21 @@ npm run pm2:start
 | `POST` | `/api/v1/auth/reset-pin/complete` | Step 3: Set new 4-digit PIN |
 
 See [docs/transaction-token-auth.md](docs/transaction-token-auth.md) for the transaction token request, claims, expiry configuration, and wallet-service verification requirements.
+
+To run the real ASTPP image-download integration test independently, configure
+`DATABASE_*` and `ASTPP_IMAGES_BASE_URL` in `.env`, then pass the ASTPP customer ID:
+
+```bash
+npm run test:astpp-image-download -- 557
+```
+
+The test defaults to customer `557` if no ID is provided. It queries the selected
+customer's KYC filenames from PostgreSQL, downloads the images
+using the onboarding service's actual HTTPS downloader, verifies that all three files
+are non-empty, and removes its isolated temporary files. It does not upload images to
+SasaPay or print image contents. The configured PostgreSQL database must contain
+customer `557` and its primary/wallet KYC records. The normal `npm test` run skips
+this external integration test.
 
 ### 📱 Device Management
 | Method | Endpoint | Description |
@@ -150,7 +166,7 @@ See [docs/transaction-token-auth.md](docs/transaction-token-auth.md) for the tra
 | `GET` | `/api/v1/operations/customers` | Search, filter & paginate customer directory |
 | `GET` | `/api/v1/operations/customers/:uuid` | Complete administrative customer details |
 | `POST` | `/api/v1/operations/customers/:uuid/status` | Update customer status (`active`, `suspended`, `closed`) |
-| `POST` | `/api/v1/operations/customers/:uuid/kyc/review` | Review & approve/reject customer KYC documents |
+| `POST` | `/api/v1/operations/customers/:uuid/kyc/review` | Approve, reject, or request replacement KYC documents |
 | `POST` | `/api/v1/operations/customers/:uuid/pin/unlock` | Admin unlock permanently locked PIN |
 | `POST` | `/api/v1/operations/customers/:uuid/wallet/freeze` | Admin freeze or unfreeze account for compliance |
 
@@ -159,6 +175,77 @@ See [docs/transaction-token-auth.md](docs/transaction-token-auth.md) for the tra
 |---|---|---|
 | `GET` | `/api/v1/app-config` | Retrieve service availability and feature flags (X-API-Key) |
 | `GET` | `/api/v1/banners` | Retrieve banners (X-API-Key; optional ASTPP ID/token and FCM token) |
+
+### Customer Lifecycle & Onboarding State
+
+The onboarding-status endpoint returns a finite set of app actions. `applicationStatus`
+describes the application/KYC stage (or the approved wallet status); `nextAction.type`
+tells the app what to do. `wait_for_update` is an explicit action: the customer should
+not submit anything and the app should check the status again later. `nextAction` is
+not `null`.
+
+#### App actions and their conditions
+
+| `nextAction.type` | Condition | App behavior |
+|---|---|---|
+| `start_onboarding` | No wallet/account has been created and no SasaPay account is present; or the application and wallet are approved/active but the active device is missing | Register or refresh the device session |
+| `verify_otp` | SasaPay has issued an onboarding request, no SasaPay account number exists yet, and no OTP-confirmation job is queued | Ask the customer to verify the SasaPay OTP |
+| `upload_kyc_documents` | A SasaPay account exists and the secondary KYC submission is `awaiting_documents` with required documents still missing | Ask the customer to upload the listed `requiredDocuments` |
+| `set_pin` | Application approved, wallet active, device active, and no PIN is set | Ask the customer to set a PIN |
+| `make_transaction` | Application approved, wallet active, device active, and PIN set | Open the transaction-ready app |
+| `wait_for_update` | A known process is pending, processing, or under review, or no customer action is currently enabled | Keep the current/pending screen and check again later |
+
+#### Lifecycle transitions
+
+1. **Not started** — No SasaPay account or wallet exists. The app receives
+   `start_onboarding`.
+2. **OTP requested** — SasaPay has issued an OTP request. The app receives
+   `verify_otp` until confirmation processing is queued; while the job runs, it receives
+   `wait_for_update`.
+3. **Backend KYC processing** — The backend submits existing KYC images to SasaPay.
+   `applicationStatus` is `processing`; the app receives `wait_for_update`. This is not
+   a request for the customer to upload documents.
+4. **Awaiting SasaPay/admin review** — The customer has no action while application or
+   KYC review is pending. The app receives `wait_for_update`.
+5. **SasaPay rejects KYC** — The callback stores `customer_applications.sasapay_account_status
+   = 'REJECTED'` and puts the application in `pending` for admin review. When a matching
+   `sasapay_kyc` submission exists, it is recorded as `psp_rejected`, with the provider
+   result/reason and `review_status = 'pending'`. The customer receives
+   `wait_for_update`; rejection alone does not request replacement documents.
+6. **Admin requests replacement documents** — An admin reviews the rejection and calls
+   `POST /api/v1/operations/customers/{uuid}/kyc/review` with
+   `{"decision":"requires_kyc_upload","operatorId":"admin-id","rejectionReason":"Reason for requesting new documents"}`.
+   The service reopens/creates the `sasapay_kyc` submission as `awaiting_documents`,
+   applies the active document policy, clears prior rejected image references, and sets
+   `customer_applications.kyc_status = 'requires_kyc_upload'`. The app then receives
+   `upload_kyc_documents` and the missing document list.
+7. **Customer resubmits** — After upload, the submission moves to `submitted_for_review`
+   and the application returns to `pending`. The app receives `wait_for_update` while
+   the review proceeds.
+8. **Approved and ready** — Once the application is approved and the wallet is active,
+   the app receives `start_onboarding` if the device is missing, `set_pin` if the PIN is
+   missing, and `make_transaction` when all prerequisites are satisfied.
+9. **Admin rejects without requesting documents** — The application remains rejected
+   and the app receives `wait_for_update`; the admin/customer-support process must
+   determine any follow-up outside the upload flow.
+
+#### Where lifecycle state is stored
+
+The lifecycle is derived from these existing fields; there is no separate customer
+lifecycle column:
+
+| Table | Fields used | Purpose |
+|---|---|---|
+| `customer_applications` | `kyc_status`, `sasapay_account_status`, `sasapay_account_number`, `rejection_reason`, `reviewer_notes`, `reviewed_by`, `reviewed_at` | Application-level KYC decision, SasaPay account state, and general review details |
+| `customer_applicant_details` (`application_type = 'sasapay_kyc'`) | `sasapay_submission_status`, `sasapay_psp_status`, `sasapay_psp_reason`, `sasapay_result_at`, `review_status`, `review_decision`, `reviewed_by`, `reviewed_at`, `review_reason`, `required_documents`, `images` | Current secondary submission state, PSP outcome, admin decision, and customer document requirements |
+| `customer_wallets` | `status` | Whether the wallet is active or locked |
+| `customer_devices` / `customer_pins` | active device row / PIN hash | Whether device registration and PIN setup are complete |
+
+These are lifecycle states, not every possible combination of database fields. A
+combination outside the defined transitions should be treated as a data-integrity issue,
+not as an additional customer state. The API's `wait_for_update` fallback avoids
+presenting an invalid customer action, but it does not make inconsistent stored values a
+valid lifecycle state.
 
 The banners endpoint always permits a request with the global `X-API-Key`. When `X-Astpp-Id` and `X-Astpp-Token` are supplied, the API attempts ASTPP authentication and checks for a matching customer record. Successful authentication makes the ASTPP ID and optional `X-Fcm-Token` available to the banner service for future targeting. If credentials are missing/invalid or the ASTPP account is not in `customers`, the request falls back to the general banners. App config does not require ASTPP authentication.
 

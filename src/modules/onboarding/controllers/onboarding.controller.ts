@@ -711,10 +711,15 @@ Success indicates wallet activation is being processed. Customer should wait bri
     await this.db.query(
       `UPDATE customer_applications
        SET sasapay_account_status = $1,
+           kyc_status = CASE WHEN $1 = 'REJECTED' THEN 'pending' ELSE kyc_status END,
+           rejection_reason = CASE WHEN $1 = 'REJECTED' THEN $3 ELSE rejection_reason END,
+           reviewer_notes = CASE WHEN $1 = 'REJECTED' THEN NULL ELSE reviewer_notes END,
+           reviewed_by = CASE WHEN $1 = 'REJECTED' THEN NULL ELSE reviewed_by END,
+           reviewed_at = CASE WHEN $1 = 'REJECTED' THEN NULL ELSE reviewed_at END,
            updated_at = NOW()
          WHERE id = $2
          AND sasapay_account_number IS NOT NULL`,
-      [callbackAccountStatus, application.id],
+      [callbackAccountStatus, application.id, dto.description || null],
     );
 
     const callbackResult = await this.sasaPayKyc.recordCallbackEvent(
@@ -731,42 +736,16 @@ Success indicates wallet activation is being processed. Customer should wait bri
       [application.customer_id]
     );
 
-    // Send notification via Kafka (push + websocket)
-    if (customer && callbackResult.processed) {
-      const notificationStatus = callbackAccountStatus === 'APPROVED' ? 'approved' : 'rejected';
-      const kycStatus = callbackResult.submissionId
-        ? await this.sasaPayKyc.getCurrentStatus(application.customer_id)
-        : null;
-
-      if (notificationStatus === 'rejected' && kycStatus?.requiredDocuments?.length) {
-        await this.notifications.sendNotification({
-          astppId: String(customer.astpp_id),
-          channels: ['push', 'websocket'],
-          title: this.messages.get('kyc.additionalDocumentsRequired.title'),
-          body: this.messages.get('kyc.additionalDocumentsRequired.body', {
-            documents: kycStatus.requiredDocuments.join(', '),
-          }),
-          priority: 'high',
-          correlationId: `sasapay_kyc_required_${callbackResult.submissionId}`,
-          sourceService: 'customer_service',
-          type: 'kyc_documents_required',
-          notifyTopic: true,
-          context: {
-            submissionId: callbackResult.submissionId,
-            requiredDocuments: kycStatus.requiredDocuments,
-            policyVersion: kycStatus.policyVersion,
-          },
-        });
-      } else {
-        await this.notifications.sendWalletOnboardingNotification(
-          String(customer.astpp_id),
-          notificationStatus,
-          callbackAccountNumber,
-          dto.description || undefined,
-          customer.phone_number,
-          customer.email,
-        );
-      }
+    // A rejection is first reviewed by an admin; do not prompt the customer here.
+    if (customer && callbackResult.processed && callbackAccountStatus === 'APPROVED') {
+      await this.notifications.sendWalletOnboardingNotification(
+        String(customer.astpp_id),
+        'approved',
+        callbackAccountNumber,
+        dto.description || undefined,
+        customer.phone_number,
+        customer.email,
+      );
     }
 
     this.logger.log(

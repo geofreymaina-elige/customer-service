@@ -11,8 +11,12 @@ export class CustomerQueryDto {
   status?: string;
 
   @IsOptional()
-  @IsIn(['unverified', 'pending', 'requires_kyc_upload', 'approved', 'rejected'])
+  @IsIn(['unverified', 'pending', 'processing', 'requires_kyc_upload', 'approved', 'rejected'])
   kycStatus?: string;
+
+  @IsOptional()
+  @IsString()
+  sasapayAccountStatus?: string;
 
   @IsOptional()
   @Type(() => Number)
@@ -44,9 +48,11 @@ export class UpdateCustomerStatusDto {
 }
 
 export class ReviewKycDto {
-  @IsNotEmpty({ message: 'Decision is required (approved or rejected).' })
-  @IsIn(['approved', 'rejected'], { message: 'Decision must be approved or rejected.' })
-  decision: 'approved' | 'rejected';
+  @IsNotEmpty({ message: 'Decision is required (approved, rejected, or requires_kyc_upload).' })
+  @IsIn(['approved', 'rejected', 'requires_kyc_upload'], {
+    message: 'Decision must be approved, rejected, or requires_kyc_upload.',
+  })
+  decision: 'approved' | 'rejected' | 'requires_kyc_upload';
 
   @IsOptional()
   @IsString()

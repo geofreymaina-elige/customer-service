@@ -7,6 +7,15 @@ import { LockWalletDto, UnlockWalletDto } from '../dto/wallet.dto';
 import { SasaPayWaasService } from '../../onboarding/services/sasapay-waas.service';
 import { SasaPayKycService } from '../../onboarding/services/sasapay-kyc.service';
 
+type OnboardingNextAction =
+  | { type: 'wait_for_update' }
+  | { type: 'make_transaction' }
+  | {
+    type: 'start_onboarding' | 'verify_otp' | 'upload_kyc_documents' | 'set_pin';
+    method: 'POST';
+    endpoint: string;
+  };
+
 @Injectable()
 export class WalletService {
   private readonly logger = new Logger(WalletService.name);
@@ -181,16 +190,15 @@ export class WalletService {
       [customerId]
     );
 
-    const applicationStatus = application?.kyc_status || 'not_started';
-    await this.sasaPayKyc.ensureSystemCase(
-      customerId,
-      'The system detected missing or insufficient images for SasaPay requirements.',
-      ['REJECTED', 'REQUIRES_KYC_UPLOAD'].includes(application?.sasapay_account_status)
-        ? 'SasaPay rejected the existing KYC documents.'
-        : undefined,
-    );
+    let applicationStatus = application?.kyc_status || 'not_started';
+    if (application?.sasapay_account_status === 'REJECTED' && applicationStatus === 'approved') {
+      applicationStatus = 'pending';
+    }
     const kycSubmission = await this.sasaPayKyc.getCurrentStatus(customerId);
     const requiredDocuments: string[] = kycSubmission?.requiredDocuments || [];
+    if (kycSubmission?.status === 'awaiting_documents' && requiredDocuments.length) {
+      applicationStatus = 'requires_kyc_upload';
+    }
 
     const pin = await this.db.queryOne(
       `SELECT id FROM customer_pins WHERE customer_id = $1 AND pin_hash IS NOT NULL`,
@@ -201,8 +209,18 @@ export class WalletService {
       [customerId],
     );
 
-    let nextAction: { type: string; method?: string; endpoint?: string } | null = null;
-    if (!wallet) {
+    let nextAction: OnboardingNextAction = { type: 'wait_for_update' };
+    if (
+      application?.sasapay_account_number
+      && kycSubmission?.status === 'awaiting_documents'
+      && requiredDocuments.length
+    ) {
+      nextAction = {
+        type: 'upload_kyc_documents',
+        method: 'POST',
+        endpoint: '/api/v2/customers/kyc/submissions/images',
+      };
+    } else if (!wallet && applicationStatus !== 'rejected') {
       if (application?.sasapay_request_id && !application.sasapay_account_number) {
         const otpJob = await this.db.queryOne(
           `SELECT id
@@ -229,16 +247,6 @@ export class WalletService {
           endpoint: '/api/v2/auth/sessions/device',
         };
       }
-    } else if (
-      application?.sasapay_account_number
-      && kycSubmission?.status === 'awaiting_documents'
-      && requiredDocuments.length
-    ) {
-      nextAction = {
-        type: 'upload_kyc_documents',
-        method: 'POST',
-        endpoint: '/api/v2/customers/kyc/submissions/images',
-      };
     } else if (applicationStatus === 'approved' && wallet.status === 'active') {
       if (!device) {
         nextAction = {
@@ -298,6 +306,10 @@ export class WalletService {
 
     if (applicationStatus === 'requires_kyc_upload' || hasRequiredDocuments) {
       return this.messages.get('wallets.onboarding.statusMessages.kycDetailsRequired');
+    }
+
+    if (applicationStatus === 'processing') {
+      return this.messages.get('wallets.onboarding.statusMessages.kycSubmissionProcessing');
     }
 
     if (applicationStatus === 'rejected') {

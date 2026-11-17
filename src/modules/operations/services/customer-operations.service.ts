@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { DatabaseService } from '../../../core/database/database.service';
 import { MessageService } from '../../../core/messages/message.service';
 import { EventService } from '../../../core/events/event.service';
+import { SasaPayKycService } from '../../onboarding/services/sasapay-kyc.service';
 import {
   CustomerQueryDto,
   UpdateCustomerStatusDto,
@@ -16,6 +17,7 @@ export class CustomerOperationsService {
     private readonly db: DatabaseService,
     private readonly messages: MessageService,
     private readonly events: EventService,
+    private readonly sasaPayKyc: SasaPayKycService,
   ) { }
 
   /**
@@ -51,6 +53,11 @@ export class CustomerOperationsService {
       whereClauses.push(`ca.kyc_status = $${params.length}`);
     }
 
+    if (dto.sasapayAccountStatus) {
+      params.push(dto.sasapayAccountStatus);
+      whereClauses.push(`ca.sasapay_account_status = $${params.length}`);
+    }
+
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
     const countSql = `
@@ -73,6 +80,7 @@ export class CustomerOperationsService {
       SELECT DISTINCT ON (c.id) 
              c.id, c.uuid, c.astpp_id, c.phone_number, c.email,
              c.first_name, c.last_name, c.status, c.created_at,
+             ca.kyc_status, ca.sasapay_account_status,
              w.status AS wallet_status, w.is_locked AS wallet_is_locked
       FROM customers c
       LEFT JOIN customer_wallets w ON w.customer_id = c.id
@@ -204,8 +212,21 @@ export class CustomerOperationsService {
       throw new NotFoundException(this.messages.get('operations.customerNotFound'));
     }
 
-    const newKycStatus = dto.decision === 'approved' ? 'approved' : 'rejected';
+    const newKycStatus = dto.decision;
     const tierLevel = dto.tierLevel || 'TIER_1';
+    const reviewerId = dto.operatorId || 'OPERATOR';
+    const reviewReason = dto.rejectionReason || dto.reviewerNotes
+      || (dto.decision === 'requires_kyc_upload' ? 'Replacement documents requested by reviewer.' : 'Documents rejected by reviewer');
+    let requiredDocuments: string[] | undefined;
+
+    if (dto.decision === 'requires_kyc_upload') {
+      const request = await this.sasaPayKyc.requestReplacementDocuments(
+        customer.id,
+        reviewerId,
+        reviewReason,
+      );
+      requiredDocuments = request.requiredDocuments;
+    }
 
     await this.db.query(
       `UPDATE customer_applications
@@ -221,9 +242,9 @@ export class CustomerOperationsService {
       [
         newKycStatus,
         tierLevel,
-        dto.decision === 'rejected' ? dto.rejectionReason || 'Documents rejected by reviewer' : null,
+        dto.decision === 'approved' ? null : reviewReason,
         dto.reviewerNotes || null,
-        dto.operatorId || 'OPERATOR',
+        reviewerId,
         customer.id,
       ]
     );
@@ -234,23 +255,38 @@ export class CustomerOperationsService {
        VALUES ($1, $2, 'ADMIN', $3, $4::jsonb)`,
       [
         customer.id,
-        dto.decision === 'approved' ? 'KYC_APPROVED' : 'KYC_REJECTED',
-        dto.operatorId || 'OPERATOR',
+        dto.decision === 'approved'
+          ? 'KYC_APPROVED'
+          : dto.decision === 'requires_kyc_upload'
+            ? 'KYC_DOCUMENTS_REQUESTED'
+            : 'KYC_REJECTED',
+        reviewerId,
         JSON.stringify(dto),
       ]
     );
 
     await this.events.publish(
-      dto.decision === 'approved' ? 'customer.kyc_approved' : 'customer.kyc_rejected',
+      dto.decision === 'approved'
+        ? 'customer.kyc_approved'
+        : dto.decision === 'requires_kyc_upload'
+          ? 'customer.kyc_documents_required'
+          : 'customer.kyc_rejected',
       'CustomerIdentity',
       String(customer.id),
-      { customerId: customer.id, decision: dto.decision, operatorId: dto.operatorId }
+      { customerId: customer.id, decision: dto.decision, operatorId: reviewerId, requiredDocuments }
     );
 
     return {
       success: true,
-      message: dto.decision === 'approved' ? this.messages.get('kyc.approved') : this.messages.get('kyc.rejected'),
+      message: dto.decision === 'approved'
+        ? this.messages.get('kyc.approved')
+        : dto.decision === 'requires_kyc_upload'
+          ? this.messages.get('kyc.additionalDocumentsRequired.body', {
+            documents: requiredDocuments?.join(', ') || '',
+          })
+          : this.messages.get('kyc.rejected'),
       kycStatus: newKycStatus,
+      ...(requiredDocuments ? { requiredDocuments } : {}),
     };
   }
 

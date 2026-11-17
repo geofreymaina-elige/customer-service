@@ -38,6 +38,10 @@ export class OperationsController {
     return this.operationsService.updateCustomerStatus(uuid, dto);
   }
 
+  /**
+   * Approve, reject, or request replacement KYC documents.
+   * Use requires_kyc_upload to create a SasaPay document request after review.
+   */
   @Post('customers/:uuid/kyc/review')
   @HttpCode(HttpStatus.OK)
   async reviewKyc(@Param('uuid') uuid: string, @Body() dto: ReviewKycDto) {

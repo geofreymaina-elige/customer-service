@@ -89,6 +89,7 @@
       "statusMessages": {
         "notStarted": "Registration required",
         "pendingApproval": "Pending approval",
+        "kycSubmissionProcessing": "KYC submission processing",
         "kycDetailsRequired": "KYC details required",
         "applicationRejected": "Application rejected",
         "walletStatus": "Wallet {status}"

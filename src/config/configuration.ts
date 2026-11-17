@@ -40,14 +40,7 @@ export default () => ({
     mysqlKeepAliveInitialDelay: Number(process.env.ASTPP_MYSQL_KEEP_ALIVE_INITIAL_DELAY_MS),
     mysqlKeepAlive: process.env.ASTPP_MYSQL_KEEP_ALIVE === 'true',
     mysqlWaitForConnections: process.env.ASTPP_MYSQL_WAIT_FOR_CONNECTIONS === 'true',
-    ssh: {
-      host: process.env.ASTPP_SSH_HOST,
-      port: Number(process.env.ASTPP_SSH_PORT),
-      username: process.env.ASTPP_SSH_USERNAME,
-      privateKey: process.env.ASTPP_SSH_PRIVATE_KEY,
-      privateKeyPath: process.env.ASTPP_SSH_PRIVATE_KEY_PATH,
-    },
-    imagesPath: process.env.ASTPP_IMAGES_PATH,
+    imagesBaseUrl: process.env.ASTPP_IMAGES_BASE_URL,
   },
   kafka: {
     brokers: process.env.KAFKA_BROKERS.split(',').map((broker) => broker.trim()),

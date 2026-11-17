@@ -44,11 +44,7 @@ function validEnvironment() {
     ASTPP_MYSQL_KEEP_ALIVE_INITIAL_DELAY_MS: '0',
     ASTPP_MYSQL_KEEP_ALIVE: 'true',
     ASTPP_MYSQL_WAIT_FOR_CONNECTIONS: 'true',
-    ASTPP_SSH_HOST: 'astpp.example.test',
-    ASTPP_SSH_PORT: '22',
-    ASTPP_SSH_USERNAME: 'service',
-    ASTPP_SSH_PRIVATE_KEY_PATH: '/keys/astpp',
-    ASTPP_IMAGES_PATH: '/srv/astpp/images',
+    ASTPP_IMAGES_BASE_URL: 'https://msa-portal.example.test',
     KAFKA_BROKERS: 'kafka.example.test:9092',
     KAFKA_CLIENT_ID: 'customer-service',
     KAFKA_GROUP_ID: 'customer-service',
@@ -116,17 +112,13 @@ test('reports every missing or invalid requirement before rejecting startup', ()
   assert.ok(lines.some((line) => line.includes('Startup configuration validation failed:')));
 });
 
-test('allows startup when optional ASTPP SSH settings are missing', () => {
+test('allows startup when the optional ASTPP image URL is missing', () => {
   const env = validEnvironment();
-  delete env.ASTPP_SSH_HOST;
-  delete env.ASTPP_SSH_PORT;
-  delete env.ASTPP_SSH_USERNAME;
-  delete env.ASTPP_SSH_PRIVATE_KEY_PATH;
-  delete env.ASTPP_IMAGES_PATH;
+  delete env.ASTPP_IMAGES_BASE_URL;
 
   const { result, lines } = captureConfigurationLogs(() => validateEnvironment(env));
 
   assert.equal(result, env);
-  assert.ok(lines.some((line) => line.includes('SSH/KYC image transfer is not fully configured')));
+  assert.ok(lines.some((line) => line.includes('ASTPP_IMAGES_BASE_URL is not configured')));
   assert.ok(lines.some((line) => line.includes('Server startup will continue.')));
 });

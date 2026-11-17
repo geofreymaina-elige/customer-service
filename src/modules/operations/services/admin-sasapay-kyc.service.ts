@@ -192,7 +192,10 @@ export class AdminSasaPayKycService {
         documents,
         submittedAt: customer.sasapay_submitted_at,
         reviewedAt: customer.reviewed_at,
-        reviewStatus: customer.review_status,
+        reviewStatus: customer.review_status
+          || (customer.sasapay_account_status === 'REJECTED' && customer.kyc_status === 'pending'
+            ? 'pending'
+            : null),
         reviewDecision: customer.review_decision,
         reviewedBy: customer.reviewed_by,
         reviewReason: customer.review_reason,

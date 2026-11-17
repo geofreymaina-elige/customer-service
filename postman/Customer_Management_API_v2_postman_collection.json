@@ -96,7 +96,7 @@
                         }
                       ]
                     },
-                    "description": "Call this first, every time, before deciding what screen to show. The top-level `message` summarizes application/KYC status until approval, then wallet status. Use `data.nextAction.type` to decide what to do next."
+                    "description": "Call this first, every time, before deciding what screen to show. The top-level `message` summarizes application/KYC status until approval, then wallet status. Use `data.nextAction.type` to decide what to do next. `wait_for_update` means no customer action is required; retain the current screen and check again later."
                   },
                   "status": "OK",
                   "code": 200,
@@ -108,7 +108,7 @@
                     }
                   ],
                   "cookie": [],
-                  "body": "{\n  \"success\": true,\n  \"message\": \"KYC details required\",\n  \"data\": {\n    \"applicationStatus\": \"requires_kyc_upload\",\n    \"wallet\": {\n      \"walletId\": \"1a9fe575-500d-444f-99bd-90a22977639c\",\n      \"accountNumber\": \"1881181\",\n      \"currency\": \"KES\",\n      \"status\": \"locked\",\n      \"createdAt\": \"2026-09-23T12:59:25.937Z\"\n    },\n    \"application\": {\n      \"sasapayRequestId\": \"7ca09f78-4378-4c65-91bb-dc2cad8f3a8a\",\n      \"sasapayAccountNumber\": \"1881181\",\n      \"sasapayAccountStatus\": \"AWAITING_KYC_UPLOAD\",\n      \"submittedAt\": \"2026-09-23T12:59:58.274Z\",\n      \"approvedAt\": null,\n      \"rejectedAt\": null\n    },\n    \"requiredDocuments\": [\"document_front\", \"document_back\"],\n    \"nextAction\": {\n      \"type\": \"upload_kyc_documents\",\n      \"method\": \"POST\",\n      \"endpoint\": \"/api/v2/customers/kyc/submissions/images\"\n    }\n  }\n}"
+                  "body": "{\n  \"success\": true,\n  \"message\": \"KYC details required\",\n  \"data\": {\n    \"applicationStatus\": \"requires_kyc_upload\",\n    \"wallet\": {\n      \"walletId\": \"1a9fe575-500d-444f-99bd-90a22977639c\",\n      \"accountNumber\": \"1881181\",\n      \"currency\": \"KES\",\n      \"status\": \"locked\",\n      \"createdAt\": \"2026-09-23T12:59:25.937Z\"\n    },\n    \"application\": {\n      \"sasapayRequestId\": \"7ca09f78-4378-4c65-91bb-dc2cad8f3a8a\",\n      \"sasapayAccountNumber\": \"1881181\",\n      \"sasapayAccountStatus\": \"REJECTED\",\n      \"submittedAt\": \"2026-09-23T12:59:58.274Z\",\n      \"approvedAt\": null,\n      \"rejectedAt\": null\n    },\n    \"requiredDocuments\": [\"document_front\", \"document_back\"],\n    \"nextAction\": {\n      \"type\": \"upload_kyc_documents\",\n      \"method\": \"POST\",\n      \"endpoint\": \"/api/v2/customers/kyc/submissions/images\"\n    }\n  }\n}"
                 },
                 {
                   "name": "401 ASTPP_TOKEN_INVALID",

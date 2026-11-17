@@ -153,6 +153,8 @@ Authorization: Bearer transaction_token
 
 **Response determines next action**
 - Top-level \`message\` provides a short status summary. Until the application is approved it reflects application/KYC status, such as \`Pending approval\` or \`KYC details required\`; after approval it reflects wallet status, such as \`Wallet active\` or \`Wallet locked\`.
+- \`applicationStatus: "processing"\` means the backend is submitting existing KYC images to SasaPay; it does not ask the customer to upload documents.
+- \`nextAction.type: "wait_for_update"\` → No customer action is needed; keep the current screen/status and check again later.
 - \`nextAction.type: "start_onboarding"\` → Register or refresh the device session to begin onboarding
 - \`nextAction.type: "verify_otp"\` → A SasaPay OTP is awaiting customer verification
 - \`nextAction.type: "upload_kyc_documents"\` → An active secondary KYC submission is awaiting documents

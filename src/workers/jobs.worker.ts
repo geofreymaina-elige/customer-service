@@ -84,14 +84,14 @@ export class JobsWorker implements OnModuleInit, OnModuleDestroy {
         }
 
         // -----------------------------------------------------------------------
-        // SasaPay WaaS: Step 2+3 — Fetch KYC images via SSH and upload to SasaPay
+        // SasaPay WaaS: Step 2+3 — Fetch KYC images over HTTPS and upload to SasaPay
         // -----------------------------------------------------------------------
         case 'sasapay_waas_kyc_upload': {
           const payload = job.payload as OnboardingJobPayload;
           this.logger.log(`[WAAS JOB] Step 2+3 — KYC upload for customer ${payload.customerId}`);
 
-          // Step 2: download images from ASTPP via SSH
-          const stateAfterFetch = await this.waasOnboardingJob.step2_FetchKycImagesViaSSH(
+          // Step 2: download images from the ASTPP image portal
+          const stateAfterFetch = await this.waasOnboardingJob.step2_FetchKycImagesViaHttp(
             payload,
             { step: 'fetch_images' },
           );
@@ -106,7 +106,7 @@ export class JobsWorker implements OnModuleInit, OnModuleDestroy {
 
         case 'sasapay_kyc_submission_upload': {
           const payload = job.payload as OnboardingJobPayload & { submissionId: string };
-          const stateAfterFetch = await this.waasOnboardingJob.step2_FetchKycImagesViaSSH(
+          const stateAfterFetch = await this.waasOnboardingJob.step2_FetchKycImagesViaHttp(
             payload,
             { step: 'fetch_images' },
           );

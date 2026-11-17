@@ -128,10 +128,6 @@ function validateValue(env: Environment, name: string, value: string | undefined
     return value.trim().length >= 32;
   }
 
-  if (name === 'ASTPP_IMAGES_PATH') {
-    return value.startsWith('/') || /^[A-Za-z]:[\\/]/.test(value);
-  }
-
   if (name === 'CORS_ALLOWED_ORIGINS') {
     const origins = value.split(',').map((origin) => origin.trim());
     return origins.length > 0 && origins.every((origin) => {
@@ -202,19 +198,11 @@ export function validateEnvironment(env: Environment): Environment {
     },
     results,
   );
-  const sshConfiguration = [
-    'ASTPP_SSH_HOST',
-    'ASTPP_SSH_PORT',
-    'ASTPP_SSH_USERNAME',
-    'ASTPP_IMAGES_PATH',
-  ];
-  const missingSshConfiguration = sshConfiguration.filter((name) => !nonEmpty(env[name]));
-  const hasSshKey = ['ASTPP_SSH_PRIVATE_KEY', 'ASTPP_SSH_PRIVATE_KEY_PATH']
-    .some((name) => nonEmpty(env[name]));
-  if (missingSshConfiguration.length || !hasSshKey) {
-    const missing = [...missingSshConfiguration];
-    if (!hasSshKey) missing.push('ASTPP_SSH_PRIVATE_KEY or ASTPP_SSH_PRIVATE_KEY_PATH');
-    console.warn(`[CONFIG] SSH/KYC image transfer is not fully configured: ${missing.join(', ')}. Server startup will continue.`);
+  const imagesBaseUrl = env.ASTPP_IMAGES_BASE_URL;
+  if (!nonEmpty(imagesBaseUrl)) {
+    console.warn('[CONFIG] ASTPP_IMAGES_BASE_URL is not configured; KYC image download jobs may fail. Server startup will continue.');
+  } else if (!isValidUrl(imagesBaseUrl) || !imagesBaseUrl.startsWith('https://')) {
+    console.warn('[CONFIG] ASTPP_IMAGES_BASE_URL must be a valid HTTPS URL; KYC image download jobs may fail. Server startup will continue.');
   }
 
   const poolMin = Number(env.DATABASE_POOL_MIN);

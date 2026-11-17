@@ -36,6 +36,7 @@ function createNextActionWalletService({
   pinSet = false,
   activeDevice = true,
   otpJob = null,
+  ensureSystemCase = async () => {},
 }) {
   const database = {
     queryOne: async (sql) => {
@@ -48,7 +49,7 @@ function createNextActionWalletService({
     },
   };
   const kycService = {
-    ensureSystemCase: async () => {},
+    ensureSystemCase,
     getCurrentStatus: async () => kycStatus ? { status: kycStatus, requiredDocuments } : null,
   };
 
@@ -89,6 +90,12 @@ for (const scenario of [
     name: 'rejected application',
     applicationStatus: 'rejected',
     expectedMessage: 'Application rejected',
+  },
+  {
+    name: 'application whose KYC images are being submitted to SasaPay',
+    applicationStatus: 'processing',
+    walletStatus: 'locked',
+    expectedMessage: 'KYC submission processing',
   },
 ]) {
   test(`onboarding status message reflects ${scenario.name}`, async () => {
@@ -142,7 +149,7 @@ test('missing local customer returns registration instructions instead of a not-
   });
 });
 
-test('onboarding next actions use only the five app workflow actions', async (t) => {
+test('onboarding next actions use the app workflow actions without returning null', async (t) => {
   const scenarios = [
     {
       name: 'requests OTP verification only after SasaPay issued a request',
@@ -157,7 +164,7 @@ test('onboarding next actions use only the five app workflow actions', async (t)
         application: { kyc_status: 'pending', sasapay_request_id: 'request-1' },
         otpJob: { id: 8 },
       },
-      expected: null,
+      expected: 'wait_for_update',
     },
     {
       name: 'requests only secondary KYC documents that are explicitly awaiting upload',
@@ -171,6 +178,77 @@ test('onboarding next actions use only the five app workflow actions', async (t)
         requiredDocuments: ['document_front'],
       },
       expected: 'upload_kyc_documents',
+      expectedApplicationStatus: 'requires_kyc_upload',
+    },
+    {
+      name: 'does not report backend-to-PSP image transfer as customer-required KYC',
+      input: {
+        application: {
+          kyc_status: 'processing',
+          sasapay_account_status: 'AWAITING_KYC_UPLOAD',
+          sasapay_account_number: '1881181',
+        },
+        wallet: { uuid: 'wallet-id', status: 'locked' },
+      },
+      expected: 'wait_for_update',
+      expectedApplicationStatus: 'processing',
+      expectedMessage: 'KYC submission processing',
+    },
+    {
+      name: 'requests replacement documents when SasaPay KYC is rejected',
+      input: {
+        application: {
+          kyc_status: 'rejected',
+          sasapay_account_status: 'REJECTED',
+          sasapay_account_number: '1881181',
+        },
+        wallet: { uuid: 'wallet-id', status: 'locked' },
+        kycStatus: 'awaiting_documents',
+        requiredDocuments: ['document_front'],
+      },
+      expected: 'upload_kyc_documents',
+      expectedApplicationStatus: 'requires_kyc_upload',
+    },
+    {
+      name: 'does not return a null action for a rejection without a document request',
+      input: {
+        application: { kyc_status: 'rejected', sasapay_account_number: '1881181' },
+        wallet: { uuid: 'wallet-id', status: 'locked' },
+      },
+      expected: 'wait_for_update',
+    },
+    {
+      name: 'keeps a SasaPay rejection in admin review until documents are requested',
+      input: {
+        application: {
+          kyc_status: 'pending',
+          sasapay_account_status: 'REJECTED',
+          sasapay_account_number: '1881181',
+        },
+        wallet: { uuid: 'wallet-id', status: 'locked' },
+        kycStatus: 'psp_rejected',
+        ensureSystemCase: async () => {
+          throw new Error('Status lookup must not request documents before admin review');
+        },
+      },
+      expected: 'wait_for_update',
+      expectedMessage: 'Pending approval',
+    },
+    {
+      name: 'does not treat an admin-approved application as ready while SasaPay remains rejected',
+      input: {
+        application: {
+          kyc_status: 'approved',
+          sasapay_account_status: 'REJECTED',
+          sasapay_account_number: '1881181',
+        },
+        wallet: { uuid: 'wallet-id', status: 'active' },
+        pinSet: true,
+        activeDevice: true,
+      },
+      expected: 'wait_for_update',
+      expectedApplicationStatus: 'pending',
+      expectedMessage: 'Pending approval',
     },
     {
       name: 'does not treat a pending application by itself as a secondary KYC upload request',
@@ -178,7 +256,7 @@ test('onboarding next actions use only the five app workflow actions', async (t)
         application: { kyc_status: 'pending', sasapay_account_number: '1881181' },
         wallet: { uuid: 'wallet-id', status: 'active' },
       },
-      expected: null,
+      expected: 'wait_for_update',
     },
     {
       name: 'requests PIN setup only for an approved active wallet without a PIN',
@@ -215,18 +293,29 @@ test('onboarding next actions use only the five app workflow actions', async (t)
         wallet: { uuid: 'wallet-id', status: 'locked' },
         kycStatus: 'submitted_for_review',
       },
-      expected: null,
+      expected: 'wait_for_update',
     },
   ];
 
   for (const scenario of scenarios) {
     await t.test(scenario.name, async () => {
       const result = await createNextActionWalletService(scenario.input).getWalletOnboardingStatus(7);
-      assert.equal(result.nextAction?.type ?? null, scenario.expected);
+      assert.equal(result.nextAction.type, scenario.expected);
+      if (scenario.expectedApplicationStatus) {
+        assert.equal(result.applicationStatus, scenario.expectedApplicationStatus);
+      }
+      if (scenario.expectedMessage) {
+        assert.equal(result.message, scenario.expectedMessage);
+      }
       assert.ok(
-        result.nextAction === null
-          || ['start_onboarding', 'verify_otp', 'upload_kyc_documents', 'set_pin', 'make_transaction']
-            .includes(result.nextAction.type),
+        [
+          'start_onboarding',
+          'verify_otp',
+          'upload_kyc_documents',
+          'set_pin',
+          'make_transaction',
+          'wait_for_update',
+        ].includes(result.nextAction.type),
       );
     });
   }
