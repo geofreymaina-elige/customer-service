@@ -181,8 +181,8 @@ this external integration test.
 The onboarding-status endpoint returns a finite set of app actions. `applicationStatus`
 describes the application/KYC stage (or the approved wallet status); `nextAction.type`
 tells the app what to do. `wait_for_update` is an explicit action: the customer should
-not submit anything and the app should check the status again later. `nextAction` is
-not `null`.
+not submit anything; allow app preview while KYC is being processed, keep the current
+status visible, and check the status again later. `nextAction` is not `null`.
 
 #### App actions and their conditions
 
@@ -193,7 +193,7 @@ not `null`.
 | `upload_kyc_documents` | A SasaPay account exists and the secondary KYC submission is `awaiting_documents` with required documents still missing | Ask the customer to upload the listed `requiredDocuments` |
 | `set_pin` | Application approved, wallet active, device active, and no PIN is set | Ask the customer to set a PIN |
 | `make_transaction` | Application approved, wallet active, device active, and PIN set | Open the transaction-ready app |
-| `wait_for_update` | A known process is pending, processing, or under review, or no customer action is currently enabled | Keep the current/pending screen and check again later |
+| `wait_for_update` | A known process is pending, processing, or under review, or no customer action is currently enabled | Allow app preview while KYC is processed; keep the current status visible and check again later |
 
 #### Lifecycle transitions
 

@@ -64,6 +64,7 @@ export class WalletController {
 Determines the customer's current onboarding state and returns the next action they need to take.
 
 **Workflow Decision Tree**
+- \`wait_for_update\` → Allow app preview while KYC is being processed
 - \`start_onboarding\` → Register or refresh the device session to begin onboarding
 - \`verify_otp\` → A SasaPay OTP is awaiting customer verification
 - \`upload_kyc_documents\` → An active secondary KYC submission is awaiting documents
