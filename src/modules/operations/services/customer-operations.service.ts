@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { DatabaseService } from '../../../core/database/database.service';
 import { MessageService } from '../../../core/messages/message.service';
 import { EventService } from '../../../core/events/event.service';
+import { EventType } from '../../../core/events/event-type.enum';
 import { SasaPayKycService } from '../../onboarding/services/sasapay-kyc.service';
 import {
   CustomerQueryDto,
@@ -184,7 +185,7 @@ export class CustomerOperationsService {
       ]
     );
 
-    await this.events.publish('customer.status_changed', 'Customer', String(customer.id), {
+    await this.events.publish(EventType.CustomerStatusChanged, 'Customer', String(customer.id), {
       customerId: customer.id,
       previousStatus: customer.status,
       newStatus: dto.status,
@@ -267,10 +268,10 @@ export class CustomerOperationsService {
 
     await this.events.publish(
       dto.decision === 'approved'
-        ? 'customer.kyc_approved'
+        ? EventType.CustomerKycApproved
         : dto.decision === 'requires_kyc_upload'
-          ? 'customer.kyc_documents_required'
-          : 'customer.kyc_rejected',
+          ? EventType.CustomerKycDocumentsRequired
+          : EventType.CustomerKycRejected,
       'CustomerIdentity',
       String(customer.id),
       { customerId: customer.id, decision: dto.decision, operatorId: reviewerId, requiredDocuments }
@@ -317,7 +318,7 @@ export class CustomerOperationsService {
       [customer.id, dto.operatorId || 'OPERATOR', JSON.stringify({ reason: dto.reason })]
     );
 
-    await this.events.publish('customer.pin_unlocked_by_admin', 'CustomerPin', String(customer.id), {
+    await this.events.publish(EventType.CustomerPinUnlockedByAdmin, 'CustomerPin', String(customer.id), {
       customerId: customer.id,
       operatorId: dto.operatorId,
       reason: dto.reason,

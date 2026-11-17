@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { DatabaseService } from '../../../core/database/database.service';
 import { MessageService } from '../../../core/messages/message.service';
 import { EventService } from '../../../core/events/event.service';
+import { EventType } from '../../../core/events/event-type.enum';
 import { UpdateCustomerProfileDto, SubmitKycDocumentsDto } from '../dto/customer.dto';
 import { UpdateSasaPayCustomerDto } from '../dto/sasapay-customer.dto';
 import { SasaPayWaasService } from '../../onboarding/services/sasapay-waas.service';
@@ -223,7 +224,7 @@ export class CustomerService {
 
     // Dispatch outbox event
     await this.events.publish(
-      'customer.kyc_submitted',
+      EventType.CustomerKycSubmitted,
       'CustomerApplication',
       String(customerId),
       { customerId, astppId: customer.astpp_id, documentType: dto.documentType, documentNumber: dto.documentNumber }

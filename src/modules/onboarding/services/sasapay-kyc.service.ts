@@ -12,6 +12,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { DatabaseService } from '../../../core/database/database.service';
 import { SasaPayLogger } from '../../../core/logging/sasapay-logger.service';
+import { EventType } from '../../../core/events/event-type.enum';
 
 const DOCUMENT_TYPES = ['document_front', 'document_back', 'selfie'] as const;
 type KycDocumentType = typeof DOCUMENT_TYPES[number];
@@ -609,8 +610,8 @@ export class SasaPayKycService {
       
       await client.query(
         `INSERT INTO events (event_type, aggregate_type, aggregate_id, payload, created_at)
-         VALUES ('sasapay_kyc.psp_upload_failed', 'SasaPayKycSubmission', $1, $2::jsonb, NOW())`,
-        [submissionId, JSON.stringify({ submissionId })],
+         VALUES ($1, 'SasaPayKycSubmission', $2, $3::jsonb, NOW())`,
+        [EventType.SasaPayKycPspUploadFailed, submissionId, JSON.stringify({ submissionId })],
       );
     });
   }
@@ -809,8 +810,12 @@ export class SasaPayKycService {
       
       await client.query(
         `INSERT INTO events (event_type, aggregate_type, aggregate_id, payload, created_at)
-         VALUES ('sasapay_kyc.submitted_for_review', 'SasaPayKycSubmission', $1, $2::jsonb, NOW())`,
-        [submissionId, JSON.stringify({ submissionId, policyVersion: submission.policy_version })],
+         VALUES ($1, 'SasaPayKycSubmission', $2, $3::jsonb, NOW())`,
+        [
+          EventType.SasaPayKycSubmittedForReview,
+          submissionId,
+          JSON.stringify({ submissionId, policyVersion: submission.policy_version }),
+        ],
       );
     });
 

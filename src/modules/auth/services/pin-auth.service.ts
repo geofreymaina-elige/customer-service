@@ -12,6 +12,7 @@ import { DatabaseService } from '../../../core/database/database.service';
 import { SecureJwtService, TokenResponse } from '../../../core/auth/jwt.service';
 import { MessageService } from '../../../core/messages/message.service';
 import { EventService } from '../../../core/events/event.service';
+import { EventType } from '../../../core/events/event-type.enum';
 import { SetPinDto, VerifyPinDto, ChangePinDto } from '../dto/pin-auth.dto';
 import { AppException, PinLockedException } from '../../../core/errors/app.exception';
 import { KafkaNotificationService } from '../../../core/notifications/kafka-notification.service';
@@ -74,7 +75,7 @@ export class PinAuthService {
       [customer.id, String(customer.id)]
     );
 
-    await this.events.publish('customer.pin_set', 'CustomerPin', String(customer.id), { customerId: customer.id });
+    await this.events.publish(EventType.CustomerPinSet, 'CustomerPin', String(customer.id), { customerId: customer.id });
 
     return {
       success: true,
@@ -144,7 +145,7 @@ export class PinAuthService {
       [customerId, String(customerId)]
     );
 
-    await this.events.publish('customer.pin_changed', 'CustomerPin', String(customerId), { customerId });
+    await this.events.publish(EventType.CustomerPinChanged, 'CustomerPin', String(customerId), { customerId });
 
     return {
       success: true,

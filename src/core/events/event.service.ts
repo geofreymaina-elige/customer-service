@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { EventType } from './event-type.enum';
 import { DatabaseService } from '../database/database.service';
 
 export type EventHandler = (event: {
@@ -20,7 +21,7 @@ export class EventService {
   /**
    * Register an idempotent handler for an event type
    */
-  subscribe(eventType: string, handler: EventHandler) {
+  subscribe(eventType: EventType, handler: EventHandler) {
     const existing = this.handlers.get(eventType) || [];
     existing.push(handler);
     this.handlers.set(eventType, existing);
@@ -29,7 +30,12 @@ export class EventService {
   /**
    * Publish a durable event inside a database transaction or standalone
    */
-  async publish(eventType: string, aggregateType: string, aggregateId: string, payload: Record<string, any>): Promise<string> {
+  async publish(
+    eventType: EventType,
+    aggregateType: string,
+    aggregateId: string,
+    payload: Record<string, any>,
+  ): Promise<string> {
     const event = await this.db.queryOne(
       `INSERT INTO events (event_type, aggregate_type, aggregate_id, payload, created_at)
        VALUES ($1, $2, $3, $4, NOW())
@@ -39,6 +45,48 @@ export class EventService {
 
     this.logger.log(`Published event ${eventType} (${event.uuid}) on ${aggregateType}:${aggregateId}`);
     return event.uuid;
+  }
+
+  async publishStateChange(
+    eventType: EventType,
+    aggregateType: string,
+    aggregateId: string,
+    state: Record<string, unknown>,
+  ): Promise<string | null> {
+    const uuid = await this.db.transaction(async (client) => {
+      await client.query(
+        'SELECT pg_advisory_xact_lock(hashtext($1))',
+        [`${eventType}:${aggregateType}:${aggregateId}`],
+      );
+
+      const previous = await client.query<{ state_matches: boolean }>(
+        `SELECT payload->'state' = $4::jsonb AS state_matches
+         FROM events
+         WHERE event_type = $1 AND aggregate_type = $2 AND aggregate_id = $3
+         ORDER BY id DESC
+         LIMIT 1`,
+        [eventType, aggregateType, aggregateId, JSON.stringify(state)],
+      );
+
+      if (previous.rows[0]?.state_matches) {
+        return null;
+      }
+
+      const event = await client.query<{ uuid: string }>(
+        `INSERT INTO events (event_type, aggregate_type, aggregate_id, payload, created_at)
+         VALUES ($1, $2, $3, $4, NOW())
+         RETURNING uuid`,
+        [eventType, aggregateType, aggregateId, JSON.stringify({ state })],
+      );
+
+      return event.rows[0].uuid;
+    });
+
+    if (uuid) {
+      this.logger.log(`Published event ${eventType} (${uuid}) on ${aggregateType}:${aggregateId}`);
+    }
+
+    return uuid;
   }
 
   /**

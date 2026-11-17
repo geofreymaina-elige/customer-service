@@ -14,7 +14,10 @@ import { SecureJwtService } from '../../../core/auth/jwt.service';
 import { MessageService } from '../../../core/messages/message.service';
 import { JobService } from '../../../core/jobs/job.service';
 import { KafkaNotificationService } from '../../../core/notifications/kafka-notification.service';
+import { EventService } from '../../../core/events/event.service';
+import { EventType } from '../../../core/events/event-type.enum';
 import { OnboardUserDeviceDto } from '../dto/onboarding.dto';
+import { OnboardingStatusService } from './onboarding-status.service';
 
 @Injectable()
 export class OnboardingService {
@@ -27,6 +30,8 @@ export class OnboardingService {
     private readonly messages: MessageService,
     private readonly jobService: JobService,
     private readonly notifications: KafkaNotificationService,
+    private readonly events: EventService,
+    private readonly onboardingStatus: OnboardingStatusService,
   ) {}
 
   async recordWalletLimitReached(
@@ -207,6 +212,19 @@ export class OnboardingService {
         otpPending = true;
       }
     }
+
+    const onboardingStatus = await this.onboardingStatus.getStatus(customer.id);
+    await this.events.publishStateChange(
+      EventType.CustomerOnboardingStateChanged,
+      'Customer',
+      String(customer.id),
+      {
+        applicationStatus: onboardingStatus.applicationStatus,
+        walletStatus: onboardingStatus.wallet?.status ?? null,
+        nextAction: onboardingStatus.nextAction,
+        requiredDocuments: onboardingStatus.requiredDocuments,
+      },
+    );
 
     // 5. Generate long-lived general app token. Transaction tokens require PIN verification.
     const token = this.jwtService.generateAppAccessToken(customer, deviceResult.deviceHash);

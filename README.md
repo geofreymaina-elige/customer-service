@@ -37,7 +37,7 @@ It is exclusively focused on managing customer onboarding, identity verification
   - Administrative PIN lockout clearing.
   - Comprehensive customer activity logs and audit timeline.
 - **Durable Events & Workers**:
-  - PostgreSQL outbox pattern dispatching customer lifecycle events (`customer.created`, `customer.kyc_approved`, `customer.pin_changed`, `customer.wallet_locked`, `customer.device_registered`).
+  - PostgreSQL outbox pattern for customer lifecycle events; known event names are defined in the `EventType` enum.
   - Asynchronous background jobs worker for KYC verification and notification dispatch.
 - **Centralized Messages**:
   - All API response messages and error strings centralized in `src/config/messages.json`.
@@ -228,6 +228,27 @@ not `null`.
 9. **Admin rejects without requesting documents** — The application remains rejected
    and the app receives `wait_for_update`; the admin/customer-support process must
    determine any follow-up outside the upload flow.
+
+#### Lifecycle event logging
+
+The central event names are defined by the `EventType` enum in
+[`src/core/events/event-type.enum.ts`](src/core/events/event-type.enum.ts). The known
+events are:
+
+- `customer.device_registered`, `customer.device_revoked`
+- `customer.wallet_locked`, `customer.wallet_unlocked`
+- `customer.status_changed`
+- `customer.kyc_approved`, `customer.kyc_documents_required`,
+  `customer.kyc_rejected`, `customer.kyc_submitted`
+- `customer.pin_set`, `customer.pin_changed`, `customer.pin_unlocked_by_admin`
+- `sasapay_kyc.psp_upload_failed`, `sasapay_kyc.submitted_for_review`
+- `customer.onboarding_state_changed`
+
+After device-session onboarding, `customer.onboarding_state_changed` records the
+current application status, wallet status, `nextAction`, and required document types
+in the existing `events` outbox. Repeated onboarding calls with the same state do not
+create duplicate events; a changed state creates a new event. The event worker only
+logs these events for now; this event does not send SMS or push notifications.
 
 #### Where lifecycle state is stored
 

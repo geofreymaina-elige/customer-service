@@ -3,6 +3,7 @@ import { DatabaseService } from '../../../core/database/database.service';
 import { SecureJwtService } from '../../../core/auth/jwt.service';
 import { MessageService } from '../../../core/messages/message.service';
 import { EventService } from '../../../core/events/event.service';
+import { EventType } from '../../../core/events/event-type.enum';
 import { DeviceMetadataDto } from '../dto/device.dto';
 import { DeviceConflictException } from '../../../core/errors/app.exception';
 
@@ -122,7 +123,7 @@ export class DeviceGatekeeperService {
       ]
     );
 
-    await this.events.publish('customer.device_registered', 'CustomerDevice', String(customerId), {
+    await this.events.publish(EventType.CustomerDeviceRegistered, 'CustomerDevice', String(customerId), {
       customerId,
       sessionId: newDevice.uuid,
       deviceModel: deviceData.device_model,
@@ -160,7 +161,7 @@ export class DeviceGatekeeperService {
       [customerId, String(customerId), JSON.stringify({ sessionId })]
     );
 
-    await this.events.publish('customer.device_revoked', 'CustomerDevice', String(customerId), {
+    await this.events.publish(EventType.CustomerDeviceRevoked, 'CustomerDevice', String(customerId), {
       customerId,
       sessionId,
     });

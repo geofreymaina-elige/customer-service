@@ -7,6 +7,8 @@ const { WalletService } = require('../dist/src/modules/wallets/services/wallet.s
 const { WalletController } = require('../dist/src/modules/wallets/controllers/wallet.controller.js');
 const { MessageService } = require('../dist/src/core/messages/message.service.js');
 const { OnboardingService } = require('../dist/src/modules/onboarding/services/onboarding.service.js');
+const { OnboardingStatusService } = require('../dist/src/modules/onboarding/services/onboarding-status.service.js');
+const { EventType } = require('../dist/src/core/events/event-type.enum.js');
 
 function createWalletService({ applicationStatus, walletStatus, requiredDocuments = [] }) {
   const database = {
@@ -25,7 +27,8 @@ function createWalletService({ applicationStatus, walletStatus, requiredDocument
     getCurrentStatus: async () => ({ requiredDocuments }),
   };
 
-  return new WalletService(database, new MessageService(), {}, {}, kycService);
+  const statusService = new OnboardingStatusService(database, new MessageService(), kycService);
+  return new WalletService(database, new MessageService(), {}, {}, statusService);
 }
 
 function createNextActionWalletService({
@@ -53,7 +56,8 @@ function createNextActionWalletService({
     getCurrentStatus: async () => kycStatus ? { status: kycStatus, requiredDocuments } : null,
   };
 
-  return new WalletService(database, new MessageService(), {}, {}, kycService);
+  const statusService = new OnboardingStatusService(database, new MessageService(), kycService);
+  return new WalletService(database, new MessageService(), {}, {}, statusService);
 }
 
 for (const scenario of [
@@ -125,12 +129,14 @@ test('onboarding status endpoint returns the summary as a top-level message', as
 });
 
 test('missing local customer returns registration instructions instead of a not-found error', async () => {
+  const database = { queryOne: async () => null };
+  const statusService = new OnboardingStatusService(database, new MessageService(), {});
   const service = new WalletService(
-    { queryOne: async () => null },
+    database,
     new MessageService(),
     {},
     {},
-    {},
+    statusService,
   );
 
   const result = await service.getWalletOnboardingStatusByAstppId('31553');
@@ -323,6 +329,8 @@ test('onboarding next actions use the app workflow actions without returning nul
 
 function createOnboardingService({ astppCustomer, astppError } = {}) {
   const transactionQueries = [];
+  const publishedStates = [];
+  const notificationCalls = [];
   const database = {
     transaction: async (callback) => callback({
       query: async (sql, params = []) => {
@@ -368,10 +376,24 @@ function createOnboardingService({ astppCustomer, astppError } = {}) {
     { generateAppAccessToken: () => 'app-token' },
     new MessageService(),
     { enqueue: async () => 'job-uuid' },
-    {},
+    { sendNotification: async (...args) => notificationCalls.push(args) },
+    {
+      publishStateChange: async (...args) => {
+        publishedStates.push(args);
+        return 'event-uuid';
+      },
+    },
+    {
+      getStatus: async () => ({
+        applicationStatus: 'pending',
+        wallet: null,
+        requiredDocuments: ['document_front'],
+        nextAction: { type: 'upload_kyc_documents' },
+      }),
+    },
   );
 
-  return { service, transactionQueries };
+  return { service, transactionQueries, publishedStates, notificationCalls };
 }
 
 test('device onboarding rejects a missing ASTPP account without creating a placeholder', async () => {
@@ -412,7 +434,8 @@ test('device onboarding synchronizes the active ASTPP record and retires the old
       identityDocumentNumber: 'P1234',
     },
   };
-  const { service, transactionQueries } = createOnboardingService({ astppCustomer });
+  const { service, transactionQueries, publishedStates, notificationCalls } =
+    createOnboardingService({ astppCustomer });
 
   const result = await service.onboardUserDevice({ astpp_id: '31553' });
 
@@ -428,4 +451,16 @@ test('device onboarding synchronizes the active ASTPP record and retires the old
   const applicationSync = transactionQueries.find(({ sql }) => sql.includes('INSERT INTO customer_applications'));
   assert.equal(applicationSync.params[4], 'approved');
   assert.ok(transactionQueries.some(({ sql }) => sql.includes('INSERT INTO customer_applicant_details')));
+  assert.deepEqual(publishedStates, [[
+    EventType.CustomerOnboardingStateChanged,
+    'Customer',
+    '33',
+    {
+      applicationStatus: 'pending',
+      walletStatus: null,
+      nextAction: { type: 'upload_kyc_documents' },
+      requiredDocuments: ['document_front'],
+    },
+  ]]);
+  assert.equal(notificationCalls.length, 0);
 });
