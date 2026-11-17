@@ -3,9 +3,9 @@
 const { spawnSync } = require('node:child_process');
 const path = require('node:path');
 
-const astppId = process.argv[2] || process.env.ASTPP_IMAGE_TEST_ASTPP_ID || '557';
+const astppId = process.argv[2] || process.env.ASTPP_IMAGE_TEST_ASTPP_ID || '31553';
 if (!/^\d+$/.test(astppId) || Number(astppId) < 1) {
-  throw new Error('Provide a positive ASTPP ID, for example: npm run test:astpp-image-download -- 557');
+  throw new Error('Provide a positive ASTPP ID, for example: npm run test:astpp-image-download -- 31553');
 }
 
 const testFile = path.resolve(__dirname, '..', 'test', 'astpp-image-download.test.js');

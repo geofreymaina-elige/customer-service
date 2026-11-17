@@ -131,15 +131,15 @@ To run the real ASTPP image-download integration test independently, configure
 `DATABASE_*` and `ASTPP_IMAGES_BASE_URL` in `.env`, then pass the ASTPP customer ID:
 
 ```bash
-npm run test:astpp-image-download -- 557
+npm run test:astpp-image-download -- 31553
 ```
 
-The test defaults to customer `557` if no ID is provided. It queries the selected
+The test defaults to customer `31553` if no ID is provided. It queries the selected
 customer's KYC filenames from PostgreSQL, downloads the images
 using the onboarding service's actual HTTPS downloader, verifies that all three files
 are non-empty, and removes its isolated temporary files. It does not upload images to
 SasaPay or print image contents. The configured PostgreSQL database must contain
-customer `557` and its primary/wallet KYC records. The normal `npm test` run skips
+customer `31553` and its primary/wallet KYC records. The normal `npm test` run skips
 this external integration test.
 
 ### 📱 Device Management

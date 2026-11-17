@@ -14,7 +14,7 @@ test('real ASTPP KYC image download for the configured customer', {
   skip: process.env.ASTPP_IMAGE_INTEGRATION_TEST !== '1',
 }, async () => {
   const { Pool } = require('pg');
-  const astppId = Number(process.env.ASTPP_IMAGE_TEST_ASTPP_ID || 557);
+  const astppId = Number(process.env.ASTPP_IMAGE_TEST_ASTPP_ID || 31553);
   assert.ok(Number.isSafeInteger(astppId) && astppId > 0, 'ASTPP_IMAGE_TEST_ASTPP_ID must be a positive integer');
   const baseUrl = process.env.ASTPP_IMAGES_BASE_URL;
   assert.ok(baseUrl, 'ASTPP_IMAGES_BASE_URL must be set in the environment or .env file');
