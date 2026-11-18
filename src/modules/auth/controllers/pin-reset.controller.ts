@@ -47,42 +47,51 @@ export class PinResetController {
   })
   @ApiResponse({
     status: 200,
-    description: 'PIN reset initiated successfully, OTP sent',
+    description: 'Identity verified successfully and an OTP was sent to the registered phone number.',
     schema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean', example: true },
-        message: { type: 'string', example: 'PIN reset initiated. OTP sent to your registered phone number.' },
+      example: {
+        success: true,
+        message: 'Identity verified successfully. An OTP has been sent to your registered phone number.',
         data: {
-          type: 'object',
-          properties: {
-            reset_id: { type: 'string', example: 'rst_a1b2c3d4e5f6' },
-            expires_at: { type: 'string', example: '2026-10-05T12:15:00Z' }
-          }
-        }
-      }
+          resetId: '07f1c5cea5c942ebd2c7829ee62f6ccbdf6b2c9e174ca368b168cb9fe2459553',
+          maskedPhone: '****0771',
+          expiresInMinutes: 5,
+        },
+      },
     }
   })
   @ApiResponse({
     status: 400,
-    description: 'Validation failed - Invalid ID number or customer not found',
+    description: 'Validation failed for the request body.',
     schema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean', example: false },
-        message: { type: 'string', example: 'Invalid ID number or customer not found' }
-      }
+      example: {
+        success: false,
+        code: 'VALIDATION_ERROR',
+        message: 'Validation failed on the submitted data.',
+        errors: ['astpp_id should not be empty'],
+      },
     }
   })
   @ApiResponse({
     status: 401,
-    description: 'Unauthorized - Invalid or missing ASTPP token',
+    description: 'Unauthorized - Invalid ASTPP token or identity document number does not match the registered profile.',
     schema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean', example: false },
-        message: { type: 'string', example: 'Unauthorized' }
-      }
+      example: {
+        success: false,
+        code: 'HTTP_ERROR',
+        message: 'Identity document number does not match registered profile.',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'No customer was found for the supplied ASTPP ID.',
+    schema: {
+      example: {
+        success: false,
+        code: 'HTTP_ERROR',
+        message: 'Resource not found.',
+      },
     }
   })
   async initiateReset(@Body() dto: InitiatePinResetDto) {
@@ -130,18 +139,14 @@ export class PinResetController {
     status: 200,
     description: 'OTP verified successfully',
     schema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean', example: true },
-        message: { type: 'string', example: 'OTP verified successfully. You can now set a new PIN.' },
+      example: {
+        success: true,
+        message: 'OTP verified successfully. You can now set your new PIN.',
         data: {
-          type: 'object',
-          properties: {
-            verified: { type: 'boolean', example: true },
-            reset_id: { type: 'string', example: 'rst_a1b2c3d4e5f6' }
-          }
-        }
-      }
+          canResetPin: true,
+          resetId: '07f1c5cea5c942ebd2c7829ee62f6ccbdf6b2c9e174ca368b168cb9fe2459553',
+        },
+      },
     }
   })
   @ApiResponse({
@@ -217,11 +222,10 @@ export class PinResetController {
     status: 200,
     description: 'PIN reset completed successfully',
     schema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean', example: true },
-        message: { type: 'string', example: 'PIN reset successfully' }
-      }
+      example: {
+        success: true,
+        message: 'Security PIN reset successfully. Please sign in with your new PIN.',
+      },
     }
   })
   @ApiResponse({
