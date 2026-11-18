@@ -16,25 +16,62 @@ export class AppConfigController {
   @Get('app-config')
   @ApiOperation({
     summary: 'Get App Configuration',
-    description: 'Retrieve service availability and feature flags. Disabled feature flags include their configured error message.',
+    description: [
+      'Endpoint: `{{baseUrl}}/api/v1/app-config`',
+      '',
+      'Returns the mobile app services page configuration and Ambia Pay feature flags.',
+      '`services` controls which service cards are visible on the Services page.',
+      '`feature_flags` controls features displayed within those services.',
+      'Disabled feature flags include their configured `message`; enabled feature flags have `message: null`.',
+    ].join('\n'),
   })
   @ApiResponse({
     status: 200,
     description: 'App configuration retrieved successfully',
     schema: {
       type: 'object',
+      example: {
+        services: {
+          esim: true,
+          wallet: false,
+          voip: true,
+        },
+        status: 'success',
+        feature_flags: [
+          {
+            service: 'app',
+            feature_key: 'app.maintenance',
+            parent_key: null,
+            name: 'Application Maintenance',
+            description: 'Controls access to the entire application during scheduled maintenance or an application-wide outage.',
+            is_enabled: false,
+            message: 'The application is temporarily unavailable for maintenance. Please try again later.',
+          },
+          {
+            service: 'app',
+            feature_key: 'app.service',
+            parent_key: null,
+            name: 'Application Services',
+            description: 'Parent flag controlling the availability of all application services.',
+            is_enabled: true,
+            message: null,
+          },
+        ],
+      },
       properties: {
         services: {
           type: 'object',
+          description: 'Controls the service cards visible on the mobile app Services page. These flags do not represent feature availability inside a service.',
           properties: {
-            esim: { type: 'boolean', example: true },
-            wallet: { type: 'boolean', example: false },
-            voip: { type: 'boolean', example: true },
+            esim: { type: 'boolean', example: true, description: 'Whether the eSIM service card is visible.' },
+            wallet: { type: 'boolean', example: false, description: 'Whether the wallet service card is visible.' },
+            voip: { type: 'boolean', example: true, description: 'Whether the VoIP service card is visible.' },
           },
         },
         status: { type: 'string', example: 'success' },
         feature_flags: {
           type: 'array',
+          description: 'Ambia Pay feature flags used within application services. Parent and child flags can control maintenance, transaction, top-up, payment, and other service features.',
           items: {
             type: 'object',
             properties: {
