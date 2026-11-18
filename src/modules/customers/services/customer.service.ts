@@ -125,6 +125,40 @@ export class CustomerService {
     };
   }
 
+  async validateVoipAccount(customerId: number, voipNumber: string) {
+    if (!voipNumber?.trim()) {
+      throw new NotFoundException('A VoIP number is not registered for this customer.');
+    }
+
+    const customer = await this.db.queryOne<{
+      voip_number: string;
+      first_name: string;
+      last_name: string;
+    }>(
+      `SELECT voip_number, first_name, last_name
+       FROM customers
+       WHERE id = $1 AND voip_number = $2 AND deleted_at IS NULL`,
+      [customerId, voipNumber],
+    );
+
+    if (!customer) {
+      throw new NotFoundException('No customer is registered with this VoIP number.');
+    }
+
+    return {
+      status: true,
+      responseCode: '0',
+      message: 'Account Validation Results',
+      account_details: {
+        channel_code: 'LOCAL_VOIP',
+        channel_name: 'Ambia VoIP',
+        account_number: customer.voip_number,
+        account_name: `${customer.first_name} ${customer.last_name}`.trim(),
+        account_type: 1,
+      },
+    };
+  }
+
   /**
    * Update editable customer profile fields
    */

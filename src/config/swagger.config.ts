@@ -359,6 +359,7 @@ nextAction?
     .addTag('PIN Management', 'PIN management and verification')
     .addTag('Device and Logout Management', 'View device sessions, sign out, and recover access on a new device')
     .addTag('Wallet Balance', 'Wallet balance and information')
+    .addTag('SasaPay', 'SasaPay mobile money and bank account validation')
     .addTag('Configuration and Banners', 'App configuration and banner images')
     .build();
 }

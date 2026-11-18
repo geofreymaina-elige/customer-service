@@ -1009,6 +1009,120 @@
           ]
         },
         {
+          "name": "Validate mobile or bank account",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('response includes the SasaPay validation result', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.success).to.eql(true);",
+                  "  pm.expect(body.data).to.have.property('status');",
+                  "  pm.expect(body.data).to.have.property('responseCode');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}",
+                "type": "text",
+                "description": "Required service API key"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{appAccessToken}}",
+                "type": "text",
+                "description": "Valid customer JWT access token"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channelCode\": \"0\",\n  \"accountNumber\": \"254712345678\",\n  \"accountType\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/customers/account-validation",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v2",
+                "customers",
+                "account-validation"
+              ]
+            },
+            "description": "Checks an account against SasaPay. The service supplies its configured merchant code; send a provider channel code, account number and optional account type (0 SasaPay, 1 mobile, 3 M-PESA Paybill, 4 M-PESA Till, 5 bank). Obtain `appAccessToken` through the Authentication flow first."
+          }
+        },
+        {
+          "name": "Validate customer VoIP account",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('response includes the registered customer name', () => {",
+                  "  const details = pm.response.json().data.account_details;",
+                  "  pm.expect(details.channel_code).to.eql('LOCAL_VOIP');",
+                  "  pm.expect(details.account_number).to.be.a('string').and.not.empty;",
+                  "  pm.expect(details.account_name).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}",
+                "type": "text",
+                "description": "Required service API key"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{appAccessToken}}",
+                "type": "text",
+                "description": "Valid customer JWT access token"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/customers/voip-account-validation",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v2",
+                "customers",
+                "voip-account-validation"
+              ]
+            },
+            "description": "Uses the authenticated customer's JWT-bound VoIP number to find their first and last names in the local customers table. No request body is required."
+          }
+        },
+        {
           "name": "Authentication",
           "description": "Sessions and tokens. Registering a new device and creating its wallet happens here too (see \"Sign in: New device\"), since the mobile app only ever experiences it as signing in -- wallet creation is a backend detail.",
           "item": [

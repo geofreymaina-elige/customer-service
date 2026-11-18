@@ -1,4 +1,33 @@
-import { IsOptional, IsString, IsEmail, IsEnum, IsNotEmpty } from 'class-validator';
+import { IsOptional, IsString, IsEmail, IsEnum, IsNotEmpty, IsInt, IsIn } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
+export class AccountValidationDto {
+  @ApiProperty({
+    description: 'SasaPay channel or bank code.',
+    example: '0',
+  })
+  @IsNotEmpty()
+  @IsString()
+  channelCode: string;
+
+  @ApiProperty({
+    description: 'Mobile number, bank account number, or Paybill/Till account reference.',
+    example: '254712345678',
+  })
+  @IsNotEmpty()
+  @IsString()
+  accountNumber: string;
+
+  @ApiPropertyOptional({
+    description: 'Account type: 0 SasaPay, 1 mobile (default), 3 M-PESA Paybill, 4 M-PESA Till, 5 bank.',
+    enum: [0, 1, 3, 4, 5],
+    example: 1,
+  })
+  @IsOptional()
+  @IsInt()
+  @IsIn([0, 1, 3, 4, 5])
+  accountType?: number;
+}
 
 export class UpdateCustomerProfileDto {
   @IsOptional()

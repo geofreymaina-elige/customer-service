@@ -38,6 +38,19 @@ export interface SasaPayCustomerDetails {
   };
 }
 
+export interface SasaPayAccountValidationResponse {
+  status: boolean;
+  responseCode: string;
+  message: string;
+  account_details?: {
+    channel_code: string;
+    channel_name: string;
+    account_number: string;
+    account_name: string;
+    account_type: number;
+  };
+}
+
 @Injectable()
 export class SasaPayWaasService {
   private readonly logger = new Logger(SasaPayWaasService.name);
@@ -370,6 +383,41 @@ export class SasaPayWaasService {
     }));
   }
 
+  async validateAccount(data: {
+    channelCode: string;
+    accountNumber: string;
+    accountType?: number;
+  }): Promise<SasaPayAccountValidationResponse> {
+    return this.callSasaPayApi(async (token) => {
+      const payload = {
+        merchantCode: this.merchantCode,
+        channelCode: data.channelCode,
+        accountNumber: data.accountNumber,
+        ...(data.accountType === undefined ? {} : { accountType: data.accountType }),
+      };
+      const url = `${this.baseUrl}/api/v2/waas/account-validation/`;
+      this.logProviderRequest('POST', url, {
+        ...payload,
+        accountNumber: '[REDACTED]',
+      });
+
+      const response = await axios.post(url, payload, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 15000,
+      });
+      this.logProviderResponse(url, response.status, response.data);
+
+      return response.data;
+    }, () => ({
+      status: false,
+      responseCode: 'UNAVAILABLE',
+      message: 'SasaPay account validation is unavailable.',
+    }));
+  }
+
   async updateCustomerDetails(
     accountNumber: string,
     data: {
@@ -461,6 +509,7 @@ export class SasaPayWaasService {
    */
   private extractOperationFromUrl(url: string): string {
     if (url.includes('/auth/token')) return 'AUTH_TOKEN';
+    if (url.includes('/account-validation')) return 'ACCOUNT_VALIDATION';
     if (url.includes('/personal-onboarding/confirmation')) return 'ONBOARDING_CONFIRM';
     if (url.includes('/personal-onboarding/kyc')) return 'KYC_UPLOAD';
     if (url.includes('/personal-onboarding')) return 'ONBOARDING_INITIATE';
