@@ -247,7 +247,9 @@ export class OnboardingService {
     return this.db.transaction(async (client) => {
       const superseded = await client.query(
         `UPDATE customers
-         SET deleted_at = COALESCE(deleted_at, NOW()), updated_at = NOW()
+         SET deleted_at = COALESCE(deleted_at, NOW()),
+             status = 'suspended',
+             updated_at = NOW()
          WHERE phone_number = $1
            AND astpp_id <> $2
            AND deleted_at IS NULL
@@ -290,6 +292,10 @@ export class OnboardingService {
            account_type = EXCLUDED.account_type,
            timezone = EXCLUDED.timezone,
            astpp_created_at = EXCLUDED.astpp_created_at,
+           status = CASE
+             WHEN customers.deleted_at IS NOT NULL THEN 'active'
+             ELSE customers.status
+           END,
            deleted_at = NULL,
            synced_at = NOW(),
            updated_at = NOW()

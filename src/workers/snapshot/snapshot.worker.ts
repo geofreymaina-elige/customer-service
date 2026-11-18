@@ -82,7 +82,7 @@ export class SnapshotWorker {
       // Note: MySQL doesn't accept bound parameters for LIMIT/OFFSET, so we use string interpolation
       // Filter: Only accounts with type = 9 (customer accounts, not resellers/admins)
       const customerIds = await this.astppMysql.query<{ id: number }>(
-        `SELECT id FROM accounts WHERE deleted = 0 AND type = 9 ORDER BY id ASC LIMIT ${this.batchSize} OFFSET ${offset}`,
+        `SELECT id FROM accounts WHERE type = 9 ORDER BY id ASC LIMIT ${this.batchSize} OFFSET ${offset}`,
         [],
       );
 
@@ -166,7 +166,7 @@ export class SnapshotWorker {
         SELECT id, number, first_name, last_name, email,
                telephone_2, country_id, currency_id, type AS account_type,
                deleted, creation
-        FROM accounts WHERE id = ? AND deleted = 0 AND type = 9
+        FROM accounts WHERE id = ? AND type = 9
       `, [astpp_id]),
 
       // Primary KYC application
@@ -245,7 +245,9 @@ export class SnapshotWorker {
       if (Number(account.deleted) !== 1 && account.number) {
         const superseded = await client.query(
           `UPDATE customers
-           SET deleted_at = COALESCE(deleted_at, NOW()), updated_at = NOW()
+           SET deleted_at = COALESCE(deleted_at, NOW()),
+            status = 'suspended',
+            updated_at = NOW()
            WHERE phone_number = $1 AND astpp_id <> $2 AND deleted_at IS NULL
            RETURNING astpp_id`,
           [account.number, account.id],
@@ -272,9 +274,9 @@ export class SnapshotWorker {
         INSERT INTO customers (
           astpp_id, phone_number, voip_number, first_name, last_name, email,
           country_id, country_code, currency_id, account_type,
-          deleted_at, astpp_created_at, synced_at, created_at, updated_at
+          status, deleted_at, astpp_created_at, synced_at, created_at, updated_at
         ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW(), NOW()
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW(), NOW()
         )
         ON CONFLICT (astpp_id) DO UPDATE SET
           phone_number = EXCLUDED.phone_number,
@@ -284,6 +286,11 @@ export class SnapshotWorker {
           email = EXCLUDED.email,
           country_id = EXCLUDED.country_id,
           country_code = EXCLUDED.country_code,
+          status = CASE
+            WHEN EXCLUDED.deleted_at IS NOT NULL THEN 'suspended'
+            WHEN customers.deleted_at IS NOT NULL THEN 'active'
+            ELSE customers.status
+          END,
           deleted_at = EXCLUDED.deleted_at,
           synced_at = NOW(),
           updated_at = NOW()
@@ -299,9 +306,24 @@ export class SnapshotWorker {
         countryCode,
         account.currency_id || null,
         account.account_type || null,
+        deletedAt ? 'suspended' : 'active',
         deletedAt,
         parseTimestampOrNull(account.creation),
       ]);
+
+      if (Number(account.deleted) === 1) {
+        await client.query(`
+          UPDATE customer_wallets SET
+            status = 'inactive',
+            is_locked = false,
+            lock_reason = 'Customer deleted in ASTPP',
+            locked_by = 'SYSTEM_SNAPSHOT',
+            locked_at = NULL,
+            freeze_type = NULL,
+            updated_at = NOW()
+          WHERE astpp_id = $1 AND status != 'closed'
+        `, [account.id]);
+      }
 
       const customerResult = await client.query(
         'SELECT id FROM customers WHERE astpp_id = $1',

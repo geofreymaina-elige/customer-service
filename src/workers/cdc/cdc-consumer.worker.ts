@@ -237,9 +237,9 @@ export class CdcConsumerWorker implements OnModuleInit, OnModuleDestroy {
         INSERT INTO customers (
           astpp_id, phone_number, first_name, last_name, email,
           country_id, country_code, currency_id, account_type,
-          deleted_at, astpp_created_at, sync_version, synced_at, created_at, updated_at
+          status, deleted_at, astpp_created_at, sync_version, synced_at, created_at, updated_at
         ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW(), NOW()
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW(), NOW()
         )
         ON CONFLICT (astpp_id) DO UPDATE SET
           phone_number = EXCLUDED.phone_number,
@@ -250,6 +250,11 @@ export class CdcConsumerWorker implements OnModuleInit, OnModuleDestroy {
           country_code = EXCLUDED.country_code,
           currency_id = EXCLUDED.currency_id,
           account_type = EXCLUDED.account_type,
+          status = CASE
+            WHEN EXCLUDED.deleted_at IS NOT NULL THEN 'suspended'
+            WHEN customers.deleted_at IS NOT NULL THEN 'active'
+            ELSE customers.status
+          END,
           deleted_at = EXCLUDED.deleted_at,
           sync_version = EXCLUDED.sync_version,
           synced_at = NOW(),
@@ -264,6 +269,7 @@ export class CdcConsumerWorker implements OnModuleInit, OnModuleDestroy {
         countryCode,
         currency_id || null,
         account_type || null,
+        deletedAt ? 'suspended' : 'active',
         deletedAt,
         parseTimestampOrNull(creation),
         __source_ts_ms,
@@ -304,6 +310,7 @@ export class CdcConsumerWorker implements OnModuleInit, OnModuleDestroy {
       await client.query(`
         UPDATE customers SET
           deleted_at = NOW(),
+          status = 'suspended',
           sync_version = $2,
           updated_at = NOW()
         WHERE astpp_id = $1
@@ -389,7 +396,7 @@ export class CdcConsumerWorker implements OnModuleInit, OnModuleDestroy {
           UPDATE customers SET
             status = 'active',
             updated_at = NOW()
-          WHERE astpp_id = $1
+          WHERE astpp_id = $1 AND deleted_at IS NULL
         `, [astpp_id]);
       }
 
@@ -534,7 +541,9 @@ export class CdcConsumerWorker implements OnModuleInit, OnModuleDestroy {
   private async softDeletePhoneReplacements(phoneNumber: string, astpp_id: number, client: any) {
     const result = await client.query(
       `UPDATE customers
-       SET deleted_at = COALESCE(deleted_at, NOW()), updated_at = NOW()
+       SET deleted_at = COALESCE(deleted_at, NOW()),
+           status = 'suspended',
+           updated_at = NOW()
        WHERE phone_number = $1 AND astpp_id <> $2 AND deleted_at IS NULL
        RETURNING astpp_id`,
       [phoneNumber, astpp_id],

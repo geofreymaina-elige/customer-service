@@ -451,8 +451,8 @@ export class WaasOnboardingJobService {
         `INSERT INTO customers (
            astpp_id, phone_number, voip_number, first_name, last_name, email,
            country_id, country_code, currency_id, account_type,
-           deleted_at, astpp_created_at, synced_at, created_at, updated_at
-         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, NOW(), NOW(), NOW())
+           status, deleted_at, astpp_created_at, synced_at, created_at, updated_at
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, NOW(), NOW(), NOW())
          ON CONFLICT (astpp_id) DO UPDATE SET
            phone_number = EXCLUDED.phone_number,
            voip_number = EXCLUDED.voip_number,
@@ -461,6 +461,11 @@ export class WaasOnboardingJobService {
            email = EXCLUDED.email,
            country_id = EXCLUDED.country_id,
            country_code = EXCLUDED.country_code,
+           status = CASE
+             WHEN EXCLUDED.deleted_at IS NOT NULL THEN 'suspended'
+             WHEN customers.deleted_at IS NOT NULL THEN 'active'
+             ELSE customers.status
+           END,
            deleted_at = EXCLUDED.deleted_at,
            synced_at = NOW(),
            updated_at = NOW()`,
@@ -475,10 +480,25 @@ export class WaasOnboardingJobService {
           countryCode,
           account.currency_id || null,
           account.account_type || null,
+          deletedAt ? 'suspended' : 'active',
           deletedAt,
           parseTimestampOrNull(account.creation),
         ],
       );
+
+      if (Number(account.deleted) === 1) {
+        await client.query(`
+          UPDATE customer_wallets SET
+            status = 'inactive',
+            is_locked = false,
+            lock_reason = 'Customer deleted in ASTPP',
+            locked_by = 'SYSTEM_ASTPP_SYNC',
+            locked_at = NULL,
+            freeze_type = NULL,
+            updated_at = NOW()
+          WHERE astpp_id = $1 AND status != 'closed'
+        `, [account.id]);
+      }
 
       const customerRow = await client.query(
         'SELECT id FROM customers WHERE astpp_id = $1',
