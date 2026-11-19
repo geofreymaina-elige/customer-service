@@ -7,7 +7,6 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
-import { randomUUID } from 'crypto';
 import { DatabaseService } from '../../../core/database/database.service';
 import { SecureJwtService, TokenResponse } from '../../../core/auth/jwt.service';
 import { MessageService } from '../../../core/messages/message.service';
@@ -236,7 +235,10 @@ export class PinAuthService {
         [newAttempts, lockedUntil, isPermanent, customer.id]
       );
 
-      await this.recordAttempt(customer.id, false, 'INVALID_PIN', ip, userAgent);
+      const attempt = await this.recordAttempt(customer.id, false, 'INVALID_PIN', ip, userAgent);
+      if (!attempt) {
+        throw new Error('Failed to record invalid PIN attempt.');
+      }
 
       const attemptsRemaining = Math.max(0, 5 - newAttempts);
       const lockWarning = newAttempts >= 5
@@ -256,7 +258,7 @@ export class PinAuthService {
             lockWarning,
           }),
           priority: 'urgent',
-          correlationId: `pin_failure_${randomUUID()}`,
+          correlationId: `pin_failure_${attempt.id}`,
           sourceService: 'customer_service',
           type: 'pin_failure',
           notifyTopic: true,
@@ -320,9 +322,10 @@ export class PinAuthService {
   }
 
   private async recordAttempt(customerId: number, isSuccess: boolean, reason: string | null, ip: string, userAgent: string) {
-    await this.db.query(
+    return this.db.queryOne<{ id: number }>(
       `INSERT INTO customer_auth_attempts (customer_id, attempt_type, is_successful, failure_reason, ip_address, user_agent, created_at)
-       VALUES ($1, 'pin', $2, $3, $4, $5, NOW())`,
+       VALUES ($1, 'pin', $2, $3, $4, $5, NOW())
+       RETURNING id`,
       [customerId, isSuccess, reason, ip, userAgent]
     );
   }

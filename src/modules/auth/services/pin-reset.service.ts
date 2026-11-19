@@ -70,11 +70,16 @@ export class PinResetService {
     const resetIdHash = crypto.createHash('sha256').update(resetId).digest('hex');
 
     // Create session (state: id_verified, expires in 30 minutes)
-    await this.db.query(
+    const resetSession = await this.db.queryOne<{ uuid: string }>(
       `INSERT INTO customer_pin_reset_sessions (customer_id, session_token_hash, state, resend_count, expires_at, created_at, updated_at)
-       VALUES ($1, $2, 'id_verified', 0, NOW() + INTERVAL '30 minutes', NOW(), NOW())`,
+       VALUES ($1, $2, 'id_verified', 0, NOW() + INTERVAL '30 minutes', NOW(), NOW())
+       RETURNING uuid`,
       [customer.id, resetIdHash]
     );
+
+    if (!resetSession) {
+      throw new Error('Failed to create PIN reset session.');
+    }
 
     // Generate 6-digit OTP
     const otpCode = crypto.randomInt(100000, 999999).toString();
@@ -102,7 +107,7 @@ export class PinResetService {
       customer.phone_number,
       otpCode,
       'pin_reset',
-      `pin_reset_${customer.uuid}_${Date.now()}`,
+      resetSession.uuid,
       String(customer.astpp_id)
     );
 

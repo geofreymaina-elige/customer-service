@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Kafka, Producer } from 'kafkajs';
+import { DatabaseService } from '../database/database.service';
 
 export interface NotificationPayload {
   astppId?: string;
@@ -27,9 +28,23 @@ export class KafkaNotificationService {
   private readonly topic: string;
   private isConnected = false;
 
-  constructor(private readonly config: ConfigService) {
+  constructor(
+    private readonly config: ConfigService,
+    private readonly db: DatabaseService,
+  ) {
     this.topic = this.config.getOrThrow<string>('kafka.notificationTopic');
     this.initializeKafka();
+  }
+
+  async createCorrelationId(prefix: string): Promise<string> {
+    const result = await this.db.queryOne<{ uuid: string }>(
+      'SELECT uuid_generate_v4() AS uuid',
+    );
+    if (!result) {
+      throw new Error('Failed to generate notification correlation ID.');
+    }
+
+    return `${prefix}_${result.uuid}`;
   }
 
   private async initializeKafka() {
@@ -151,7 +166,7 @@ export class KafkaNotificationService {
       title: titles[status],
       body: messages[status],
       priority: 'high',
-      correlationId: `wallet_onboarding_${astppId}_${Date.now()}`,
+      correlationId: await this.createCorrelationId('wallet_onboarding'),
       sourceService: 'customer_service',
       type: 'wallet_onboarding',
       notifyTopic: true,
@@ -185,7 +200,7 @@ export class KafkaNotificationService {
       title: 'New Device Registered',
       body: `Your account has been accessed from a new device: ${deviceModel}`,
       priority: 'high',
-      correlationId: `device_registered_${astppId}_${Date.now()}`,
+      correlationId: await this.createCorrelationId('device_registered'),
       sourceService: 'customer_service',
       type: 'security',
       notifyTopic: true,
@@ -216,7 +231,7 @@ export class KafkaNotificationService {
       title: 'PIN Created',
       body: 'Your wallet PIN has been successfully set. You can now access all wallet features.',
       priority: 'high',
-      correlationId: `pin_set_${astppId}_${Date.now()}`,
+      correlationId: await this.createCorrelationId('pin_set'),
       sourceService: 'customer_service',
       type: 'security',
       notifyTopic: true,
@@ -245,7 +260,7 @@ export class KafkaNotificationService {
       title: 'PIN Changed',
       body: 'Your wallet PIN has been successfully changed.',
       priority: 'high',
-      correlationId: `pin_changed_${astppId}_${Date.now()}`,
+      correlationId: await this.createCorrelationId('pin_changed'),
       sourceService: 'customer_service',
       type: 'security',
       notifyTopic: true,
@@ -275,7 +290,7 @@ export class KafkaNotificationService {
       title: 'Device Session Ended',
       body: `Your device session has been ended. ${reason}`,
       priority: 'high',
-      correlationId: `device_revoked_${astppId}_${Date.now()}`,
+      correlationId: await this.createCorrelationId('device_revoked'),
       sourceService: 'customer_service',
       type: 'security',
       notifyTopic: true,

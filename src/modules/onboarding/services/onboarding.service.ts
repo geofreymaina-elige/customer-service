@@ -48,11 +48,15 @@ export class OnboardingService {
       throw new Error(`Cannot record SasaPay wallet limit for missing customer ${customerId}`);
     }
 
-    await this.db.query(
+    const activityLog = await this.db.queryOne<{ uuid: string }>(
       `INSERT INTO customer_activity_logs (customer_id, event_type, actor_type, actor_id, details)
-       VALUES ($1, 'SASAPAY_WALLET_LIMIT_REACHED', 'SYSTEM', 'SASAPAY_WAAS', $2::jsonb)`,
+       VALUES ($1, 'SASAPAY_WALLET_LIMIT_REACHED', 'SYSTEM', 'SASAPAY_WAAS', $2::jsonb)
+       RETURNING uuid`,
       [customerId, { stage, providerResponseCode, walletLimit: 2 }],
     );
+    if (!activityLog) {
+      throw new Error(`Failed to record SasaPay wallet limit for customer ${customerId}`);
+    }
 
     if (notifyCustomer) {
       await this.notifications.sendNotification({
@@ -61,7 +65,7 @@ export class OnboardingService {
         title: this.messages.get('wallets.onboarding.walletLimitReached.title'),
         body: this.messages.get('wallets.onboarding.walletLimitReached.body'),
         priority: 'urgent',
-        correlationId: `sasapay-wallet-limit-${customerId}-${Date.now()}`,
+        correlationId: activityLog.uuid,
         sourceService: 'customer-management-service',
         type: 'SASAPAY_WALLET_LIMIT_REACHED',
         notifyTopic: true,

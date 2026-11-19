@@ -90,11 +90,15 @@ export class DeviceLogoutService {
     const sessionToken = crypto.randomBytes(32).toString('hex');
     const sessionTokenHash = crypto.createHash('sha256').update(sessionToken).digest('hex');
 
-    await this.db.query(
+    const logoutSession = await this.db.queryOne<{ uuid: string }>(
       `INSERT INTO customer_device_logout_sessions (customer_id, session_token_hash, state, resend_count, expires_at, created_at, updated_at)
-       VALUES ($1, $2, 'id_verified', 0, NOW() + INTERVAL '30 minutes', NOW(), NOW())`,
+       VALUES ($1, $2, 'id_verified', 0, NOW() + INTERVAL '30 minutes', NOW(), NOW())
+       RETURNING uuid`,
       [customer.id, sessionTokenHash]
     );
+    if (!logoutSession) {
+      throw new Error('Failed to create device logout session.');
+    }
 
     // 6. Generate 6-digit OTP
     const otpCode = crypto.randomInt(100000, 999999).toString();
@@ -119,7 +123,7 @@ export class DeviceLogoutService {
       customer.phone_number,
       otpCode,
       'device_recovery',
-      `device_recovery_${customer.uuid}_${Date.now()}`,
+      logoutSession.uuid,
       String(customer.astpp_id)
     );
 
