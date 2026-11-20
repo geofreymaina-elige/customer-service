@@ -126,12 +126,10 @@ export class AppConfigController {
   })
   @ApiOperation({
     summary: 'Get App Banners',
-    deprecated: true,
     description: [
-      '> **ON HOLD - DO NOT CONSUME OR IMPLEMENT THIS API/FEATURE.**',
-      '> This App Banners API is currently on hold and must not be consumed or implemented by mobile or other clients.',
-      '',
-      'Retrieve banner carousel slots 1-5. Only X-API-Key is required. When X-Astpp-Id and X-Astpp-Token authenticate an existing customer, their identity (and optional X-Fcm-Token) is available for targeting. Missing/invalid authentication or an unknown customer falls back to general banners. Slot 1 is returned as the hero section; slots 2-5 are returned as feature cards.',
+      'Retrieve banner carousel slots 1-5. Only X-API-Key is required.',
+      'When X-Astpp-Id and X-Astpp-Token authenticate an existing customer, the primary segment from the Segments API can override matching slots. Slots without an active matching segment banner use the general banner. Missing/invalid authentication, no primary segment, or a segment lookup failure falls back to general banners.',
+      'Slot 1 is returned as the hero section; slots 2-5 are returned as feature cards.',
     ].join('\n'),
   })
   @ApiResponse({

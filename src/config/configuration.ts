@@ -42,6 +42,9 @@ export default () => ({
     mysqlWaitForConnections: process.env.ASTPP_MYSQL_WAIT_FOR_CONNECTIONS === 'true',
     imagesBaseUrl: process.env.ASTPP_IMAGES_BASE_URL,
   },
+  segments: {
+    apiKey: process.env.SEGMENTS_API_KEY,
+  },
   kafka: {
     brokers: process.env.KAFKA_BROKERS.split(',').map((broker) => broker.trim()),
     clientId: process.env.KAFKA_CLIENT_ID,

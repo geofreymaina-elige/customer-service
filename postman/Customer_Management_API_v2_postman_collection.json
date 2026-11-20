@@ -7986,7 +7986,7 @@
         },
         {
           "name": "App Config",
-          "description": "Mobile app service configuration, feature flags, and banner content. X-API-Key is required. Banner authentication is attempted when ASTPP ID/token are supplied; invalid or missing auth and unknown accounts fall back to general banners.",
+          "description": "Mobile app service configuration, feature flags, and banner content. X-API-Key is required. Authenticated customers receive active banners for their primary segment where configured; other slots use general banners.",
           "item": [
             {
               "name": "Get app config",
@@ -8115,7 +8115,7 @@
                     "key": "X-Astpp-Id",
                     "value": "{{astppId}}",
                     "type": "text",
-                    "description": "Optional ASTPP account ID for authentication and future banner targeting."
+                    "description": "Optional ASTPP account ID for authentication and primary-segment banner targeting."
                   },
                   {
                     "key": "X-Astpp-Token",
@@ -8127,7 +8127,7 @@
                     "key": "X-Fcm-Token",
                     "value": "{{fcmToken}}",
                     "type": "text",
-                    "description": "Optional Firebase registration token. Used only for future targeting after successful ASTPP authentication."
+                    "description": "Optional Firebase registration token for future device-level targeting."
                   }
                 ],
                 "auth": {
@@ -8144,7 +8144,7 @@
                     "banners"
                   ]
                 },
-                "description": "Returns banner carousel slots 1-5. Only X-API-Key is required. If X-Astpp-Id and X-Astpp-Token authenticate a customer in this service, that identity and optional X-Fcm-Token are available for future banner targeting. Missing/invalid credentials or an unknown account fall back to general banners."
+                "description": "Returns banner carousel slots 1-5. Authenticated customers receive active banners for their primary segment where configured; each unmatched slot uses its general banner. Missing/invalid credentials, no primary segment, or a segment lookup failure returns general banners."
               },
               "response": [
                 {
@@ -8162,7 +8162,7 @@
                         "key": "X-Astpp-Id",
                         "value": "{{astppId}}",
                         "type": "text",
-                        "description": "Optional ASTPP account ID for authentication and future banner targeting."
+                        "description": "Optional ASTPP account ID for authentication and primary-segment banner targeting."
                       },
                       {
                         "key": "X-Astpp-Token",
@@ -8174,7 +8174,7 @@
                         "key": "X-Fcm-Token",
                         "value": "{{fcmToken}}",
                         "type": "text",
-                        "description": "Optional Firebase registration token. Used only for future targeting after successful ASTPP authentication."
+                        "description": "Optional Firebase registration token for future device-level targeting."
                       }
                     ],
                     "auth": {
@@ -8191,7 +8191,7 @@
                         "banners"
                       ]
                     },
-                    "description": "Returns banner carousel slots 1-5. Only X-API-Key is required. If X-Astpp-Id and X-Astpp-Token authenticate a customer in this service, that identity and optional X-Fcm-Token are available for future banner targeting. Missing/invalid credentials or an unknown account fall back to general banners."
+                    "description": "Returns banner carousel slots 1-5. Authenticated customers receive active banners for their primary segment where configured; each unmatched slot uses its general banner. Missing/invalid credentials, no primary segment, or a segment lookup failure returns general banners."
                   },
                   "status": "OK",
                   "code": 200,

@@ -1,11 +1,18 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const axios = require('axios');
 const crypto = require('node:crypto');
 const { test } = require('node:test');
 const { AppConfigService } = require('../dist/src/modules/app-config/services/app-config.service.js');
 const { AppConfigController } = require('../dist/src/modules/app-config/controllers/app-config.controller.js');
 const { OptionalAstppBannerGuard } = require('../dist/src/core/auth/optional-astpp-banner.guard.js');
+
+function segmentConfig(apiKey) {
+  return {
+    get: (key) => key === 'segments.apiKey' ? apiKey : undefined,
+  };
+}
 
 test('app config has no ASTPP ID and banners pass only validated audience context to the service', async () => {
   const calls = [];
@@ -38,7 +45,7 @@ test('app config returns the shared config without checking an ASTPP customer', 
     query: async () => ({ rows: [] }),
   };
 
-  const response = await new AppConfigService(db).getAppConfig();
+  const response = await new AppConfigService(db, segmentConfig()).getAppConfig();
 
   assert.deepEqual(response, {
     services: {
@@ -256,7 +263,7 @@ test('app config returns feature flags with descriptions and disabled messages o
     },
   };
 
-  const response = await new AppConfigService(db).getAppConfig();
+  const response = await new AppConfigService(db, segmentConfig()).getAppConfig();
 
   assert.deepEqual(response, {
     services: {
@@ -304,17 +311,19 @@ test('banners promote slot 1 to hero and return slots 2-5 as feature cards', asy
     queryOne: async () => {
       assert.fail('banner lookup should not query customers');
     },
-    query: async (sql) => {
+    query: async (sql, params) => {
       assert.match(sql, /fc\.display_order AS slot/);
       assert.match(sql, /fc\.display_order BETWEEN 1 AND 5/);
       assert.match(sql, /fc\.card_slug LIKE 'banner_slot_%'/);
       assert.match(sql, /aa\.is_active = TRUE/);
+      assert.match(sql, /sb\.slot_number = fc\.display_order/);
       assert.match(sql, /ORDER BY fc\.display_order ASC/);
+      assert.deepEqual(params, [null]);
       return { rows: bannerRows };
     },
   };
 
-  const response = await new AppConfigService(db).getBanners();
+  const response = await new AppConfigService(db, segmentConfig()).getBanners();
 
   assert.deepEqual(response, {
     status: 'success',
@@ -346,13 +355,160 @@ test('banners promote slot 1 to hero and return slots 2-5 as feature cards', asy
   assert.equal(response.page_layout.feature_cards.some((banner) => banner.slot === 1), false);
 });
 
+test('banners use the primary segment ID to override only its configured slot', async () => {
+  const originalGet = axios.get;
+  let request;
+  axios.get = async (url, options) => {
+    request = { url, options };
+    return {
+      data: {
+        astppId: 31553,
+        primarySegment: { segmentId: 1147, priorityRank: 10 },
+      },
+    };
+  };
+
+  const bannerRows = [
+    {
+      card_uuid: 'slot-1-card-uuid',
+      card_slug: 'banner_slot_1',
+      slot: 1,
+      title: 'Banner Slot 1',
+      subtitle: '',
+      asset_uuid: 'slot-1-asset-uuid',
+      asset_key: 'slot-1-asset',
+      url: 'https://cdn.example.test/banner-1.jpg',
+      alt_text: '',
+      updated_at: new Date('2026-10-05T14:45:49.125Z'),
+    },
+    {
+      card_uuid: 'slot-2-card-uuid',
+      card_slug: 'banner_slot_2',
+      slot: 2,
+      title: 'We missed you!',
+      subtitle: 'Top up and get 30% airtime bonus, on us.',
+      asset_uuid: 'segment-asset-uuid',
+      asset_key: 'segment-asset',
+      url: 'https://cdn.example.test/segment-banner.jpg',
+      alt_text: '',
+      updated_at: new Date('2026-11-20T14:00:12.797Z'),
+    },
+  ];
+  const db = {
+    query: async (sql, params) => {
+      assert.match(sql, /FROM segment_banners sb/);
+      assert.match(sql, /sb\.external_segment_id = \$1/);
+      assert.match(sql, /sb\.slot_number = fc\.display_order/);
+      assert.deepEqual(params, [1147]);
+      return { rows: bannerRows };
+    },
+  };
+
+  try {
+    const response = await new AppConfigService(
+      db,
+      segmentConfig('segments-test-api-key')
+    ).getBanners({ astppId: '31553' });
+
+    assert.equal(
+      request.url,
+      'https://api.ambiapay.com/api/v1/segments/membership/31553?limit=1&offset=0'
+    );
+    assert.equal(request.options.headers['X-API-Key'], 'segments-test-api-key');
+    assert.equal(response.page_layout.feature_cards[0].card_uuid, 'slot-2-card-uuid');
+    assert.equal(response.page_layout.feature_cards[0].title, 'We missed you!');
+    assert.equal(response.page_layout.feature_cards[0].asset_uuid, 'segment-asset-uuid');
+    assert.deepEqual(Object.keys(response), ['status', 'layout_version', 'page_layout']);
+  } finally {
+    axios.get = originalGet;
+  }
+});
+
+test('banners fall back to general rows when the primary segment is null', async () => {
+  const originalGet = axios.get;
+  axios.get = async () => ({
+    data: {
+      astppId: '31553',
+      memberships: [],
+      primarySegment: null,
+    },
+  });
+
+  const generalHero = {
+    card_uuid: 'slot-1-card-uuid',
+    card_slug: 'banner_slot_1',
+    slot: 1,
+    title: 'General hero',
+    subtitle: '',
+    asset_uuid: 'general-asset-uuid',
+    asset_key: 'general-asset',
+    url: 'https://cdn.example.test/general.jpg',
+    alt_text: '',
+    updated_at: new Date('2026-10-05T14:45:49.125Z'),
+  };
+  const db = {
+    query: async (_sql, params) => {
+      assert.deepEqual(params, [null]);
+      return { rows: [generalHero] };
+    },
+  };
+
+  try {
+    const response = await new AppConfigService(
+      db,
+      segmentConfig('segments-test-api-key')
+    ).getBanners({ astppId: '31553' });
+
+    assert.equal(response.page_layout.hero_section.title, 'General hero');
+  } finally {
+    axios.get = originalGet;
+  }
+});
+
+test('banners fall back to general rows when the segments lookup fails', async () => {
+  const originalGet = axios.get;
+  axios.get = async () => {
+    throw new Error('segments service unavailable');
+  };
+
+  const generalHero = {
+    card_uuid: 'slot-1-card-uuid',
+    card_slug: 'banner_slot_1',
+    slot: 1,
+    title: 'General hero',
+    subtitle: '',
+    asset_uuid: 'general-asset-uuid',
+    asset_key: 'general-asset',
+    url: 'https://cdn.example.test/general.jpg',
+    alt_text: '',
+    updated_at: new Date('2026-10-05T14:45:49.125Z'),
+  };
+  const db = {
+    query: async (_sql, params) => {
+      assert.deepEqual(params, [null]);
+      return { rows: [generalHero] };
+    },
+  };
+
+  try {
+    const response = await new AppConfigService(
+      db,
+      segmentConfig('segments-test-api-key')
+    ).getBanners({ astppId: '31553' });
+
+    assert.equal(response.page_layout.hero_section.title, 'General hero');
+  } finally {
+    axios.get = originalGet;
+  }
+});
+
 test('banners fail when the active slot 1 hero banner is missing', async () => {
   const db = {
     query: async () => ({ rows: [] }),
   };
 
   await assert.rejects(
-    new AppConfigService(db).getBanners(),
+    new AppConfigService(db, segmentConfig()).getBanners(),
     { message: 'No active hero asset found' }
   );
 });

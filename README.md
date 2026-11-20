@@ -174,7 +174,9 @@ this external integration test.
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/api/v1/app-config` | Retrieve service availability and feature flags (X-API-Key) |
-| `GET` | `/api/v1/banners` | Retrieve banners (X-API-Key; optional ASTPP ID/token and FCM token) |
+| `GET` | `/api/v1/banners` | Retrieve banners; authenticated customers get primary-segment slot overrides where configured, otherwise general banners |
+
+Set `SEGMENTS_API_KEY` in the service environment to enable primary-segment banner overrides. It is optional; when it is missing or the segment lookup fails, the endpoint returns the general banners.
 
 ### Customer Lifecycle & Onboarding State
 
