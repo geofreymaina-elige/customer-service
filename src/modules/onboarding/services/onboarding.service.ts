@@ -8,6 +8,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { DatabaseService } from '../../../core/database/database.service';
+import { normalizePhoneNumber } from '../../../core/utils/phone-number.util';
 import { AstppAdapterService, AstppCustomerRecord } from '../../astpp/astpp-adapter.service';
 import { DeviceGatekeeperService } from '../../devices/services/device-gatekeeper.service';
 import { SecureJwtService } from '../../../core/auth/jwt.service';
@@ -104,11 +105,67 @@ export class OnboardingService {
     throw new ConflictException(this.messages.get('wallets.onboarding.walletLimitReached.body'));
   }
 
+  private async assertIdentityPhoneMatchesExistingWallet(customerId: number): Promise<void> {
+    const identity = await this.db.queryOne<{
+      identity_document_type: string;
+      identity_document_number: string;
+      phone_number: string;
+      country_code: string | null;
+    }>(
+      `SELECT cad.identity_document_type, cad.identity_document_number,
+              customer.phone_number, customer.country_code
+       FROM customer_applicant_details cad
+       JOIN customers customer ON customer.id = cad.customer_id
+       WHERE cad.customer_id = $1
+         AND cad.application_type IN ('primary_kyc', 'wallet_kyc')
+       ORDER BY CASE WHEN cad.application_type = 'primary_kyc' THEN 0 ELSE 1 END, cad.updated_at DESC
+       LIMIT 1`,
+      [customerId],
+    );
+
+    if (!identity?.identity_document_number?.trim()) return;
+
+    const existingWalletOwners = await this.db.query<{
+      customer_id: number;
+      phone_number: string;
+      country_code: string | null;
+    }>(
+      `SELECT DISTINCT wallet.customer_id, wallet_owner.phone_number, wallet_owner.country_code
+       FROM customer_applicant_details matching_identity
+       JOIN customer_wallets wallet ON wallet.customer_id = matching_identity.customer_id
+       JOIN customers wallet_owner ON wallet_owner.id = wallet.customer_id
+       WHERE matching_identity.customer_id <> $1
+         AND UPPER(TRIM(matching_identity.identity_document_type)) = UPPER(TRIM($2))
+         AND REGEXP_REPLACE(UPPER(TRIM(matching_identity.identity_document_number)), '[^A-Z0-9]', '', 'g')
+             = REGEXP_REPLACE(UPPER(TRIM($3)), '[^A-Z0-9]', '', 'g')`,
+      [customerId, identity.identity_document_type, identity.identity_document_number],
+    );
+
+    if (existingWalletOwners.rows.length === 0) return;
+
+    if (!identity.country_code) {
+      throw new BadRequestException(this.messages.get('common.invalidAstppCustomer'));
+    }
+
+    const customerPhone = normalizePhoneNumber(
+      identity.phone_number,
+      identity.country_code,
+    ).internationalDigits;
+    const hasDifferentPhoneWallet = existingWalletOwners.rows.some((owner) => {
+      if (!owner.country_code) return true;
+      return normalizePhoneNumber(owner.phone_number, owner.country_code).internationalDigits !== customerPhone;
+    });
+
+    if (hasDifferentPhoneWallet) {
+      throw new ConflictException(this.messages.get('wallets.onboarding.identityPhoneMismatch'));
+    }
+  }
+
   /**
    * Complete Onboard User Device Flow:
    * 1. Query ASTPP MySQL database for VoIP account & customer profile.
    * 2. Upsert customer & customer_applications in PostgreSQL.
-   * 3. Check the local wallet limit for the customer's identity before device registration.
+   * 3. Check the local wallet limit and identity-phone consistency before device registration.
    * 4. Register device using DeviceGatekeeperService (checks single-device rule).
    * 5. Enqueue background onboarding job for SasaPay WaaS and KYC image processing.
    * 6. Return simplified response with user details and token (if PIN set).
@@ -158,6 +215,7 @@ export class OnboardingService {
     );
     if (!existingWallet) {
       await this.assertWalletCapacityAvailable(customer.id);
+      await this.assertIdentityPhoneMatchesExistingWallet(customer.id);
     }
 
     // 2. Register / Verify Device with single-device constraint

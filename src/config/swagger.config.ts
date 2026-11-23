@@ -114,6 +114,15 @@ Complete API documentation for mobile app developers to integrate AmbiaPay walle
 
 ---
 
+## Important customer and onboarding notes
+
+- Each customer may have one active device. Switching devices requires the existing logout or recovery process; recovery verifies identity and uses a PIN and OTP, or can be assisted by support.
+- Calling the session/device endpoint may start onboarding and trigger a SasaPay OTP. SasaPay has no separate OTP-resend endpoint; once a wallet is created, onboarding does not request another OTP.
+- AmbiaPay allows one wallet per customer. If an identity document is already linked to a wallet under a different phone number, session/device onboarding returns **409 Conflict**; the customer should verify their details or contact support.
+- The onboarding-status response includes a top-level \`message\` (for example, \`Wallet active\`) that the app can display on its services/status screen.
+
+---
+
 ## Authentication
 
 All API requests require multiple authentication layers:

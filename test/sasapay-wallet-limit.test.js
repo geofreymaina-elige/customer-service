@@ -55,13 +55,67 @@ test('local wallet capacity check logs and rejects before onboarding proceeds', 
   assert.equal(limitRecorded, true);
 });
 
+test('identity document linked to a wallet on another phone returns a configured conflict', async () => {
+  const service = Object.create(OnboardingService.prototype);
+  service.db = {
+    queryOne: async () => ({
+      identity_document_type: 'NATIONAL_ID',
+      identity_document_number: '12345678',
+      phone_number: '+254 713 726 384',
+      country_code: '254',
+    }),
+    query: async () => ({
+      rows: [{
+        customer_id: 52,
+        phone_number: '0713 726 385',
+        country_code: '254',
+      }],
+    }),
+  };
+  service.messages = { get: () => 'Configured identity and phone conflict.' };
+
+  await assert.rejects(
+    service.assertIdentityPhoneMatchesExistingWallet(41),
+    (error) => error instanceof ConflictException
+      && error.getStatus() === 409
+      && error.message === 'Configured identity and phone conflict.',
+  );
+});
+
+test('identity document linked to a wallet on the same normalized phone is allowed', async () => {
+  const service = Object.create(OnboardingService.prototype);
+  service.db = {
+    queryOne: async () => ({
+      identity_document_type: 'NATIONAL_ID',
+      identity_document_number: '12345678',
+      phone_number: '+254 713 726 384',
+      country_code: '254',
+    }),
+    query: async () => ({
+      rows: [{
+        customer_id: 52,
+        phone_number: '0713 726 384',
+        country_code: '254',
+      }],
+    }),
+  };
+  service.messages = { get: () => 'Configured identity and phone conflict.' };
+
+  await service.assertIdentityPhoneMatchesExistingWallet(41);
+});
+
 test('wallet-limit activity event sends urgent SMS and push using configured copy', async () => {
   const service = Object.create(OnboardingService.prototype);
   const insertedLogs = [];
   const sentNotifications = [];
   service.db = {
-    queryOne: async () => ({ astpp_id: 89459, phone_number: '+254700000000' }),
-    query: async (...args) => insertedLogs.push(args),
+    queryOne: async (sql, args) => {
+      if (sql.includes('INSERT INTO customer_activity_logs')) {
+        insertedLogs.push([sql, args]);
+        return { uuid: 'activity-uuid' };
+      }
+      return { astpp_id: 89459, phone_number: '+254700000000' };
+    },
   };
   service.messages = { get: (key) => `configured:${key}` };
   service.notifications = {
