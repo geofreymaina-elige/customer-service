@@ -21,10 +21,10 @@ export class CustomerController {
     private readonly sasapayWaas: SasaPayWaasService,
   ) {}
 
+  @ApiExcludeEndpoint()
   @Post('account-validation')
   @HttpCode(HttpStatus.OK)
   @UseGuards(AuthGuard)
-  @ApiTags('SasaPay')
   @ApiOperation({
     summary: 'Validate a mobile money or bank account',
     description: `Validates the account with SasaPay using this service's configured merchant code.
@@ -65,10 +65,10 @@ Requires both the service API key and a valid customer JWT.`,
     };
   }
 
+  @ApiExcludeEndpoint()
   @Post('voip-account-validation')
   @HttpCode(HttpStatus.OK)
   @UseGuards(AuthGuard)
-  @ApiTags('SasaPay')
   @ApiOperation({
     summary: 'Validate the authenticated customer VoIP account',
     description: `Looks up the authenticated customer's JWT-bound VoIP number in the customers table and returns the registered first and last name.
