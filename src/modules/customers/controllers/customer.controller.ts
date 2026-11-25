@@ -65,47 +65,48 @@ Requires both the service API key and a valid customer JWT.`,
     };
   }
 
-  @ApiExcludeEndpoint()
-  @Post('voip-account-validation')
-  @HttpCode(HttpStatus.OK)
-  @UseGuards(AuthGuard)
-  @ApiOperation({
-    summary: 'Validate the authenticated customer VoIP account',
-    description: `Looks up the authenticated customer's JWT-bound VoIP number in the customers table and returns the registered first and last name.
-
-This is a local lookup; it does not call SasaPay. Requires both the service API key and a valid customer JWT. No request body is required.`,
-  })
-  @ApiSecurity('API-Key')
-  @ApiSecurity('AppAccessToken')
-  @ApiResponse({
-    status: 200,
-    description: 'Local VoIP account validation result.',
-    schema: {
-      example: {
-        success: true,
-        data: {
-          status: true,
-          responseCode: '0',
-          message: 'Account Validation Results',
-          account_details: {
-            channel_code: 'LOCAL_VOIP',
-            channel_name: 'Ambia VoIP',
-            account_number: '254700000001',
-            account_name: 'Alex Doe',
-            account_type: 1,
-          },
-        },
-      },
-    },
-  })
-  @ApiResponse({ status: 401, description: 'Unauthorized - Invalid or expired JWT token.' })
-  @ApiResponse({ status: 404, description: 'No customer is registered with this VoIP number.' })
-  async validateVoipAccount(@CurrentUser() user: AuthenticatedUser) {
-    return {
-      success: true,
-      data: await this.customerService.validateVoipAccount(user.id, user.voipNumber),
-    };
-  }
+  // DISABLED: voip-account-validation endpoint
+  // @ApiExcludeEndpoint()
+  // @Post('voip-account-validation')
+  // @HttpCode(HttpStatus.OK)
+  // @UseGuards(AuthGuard)
+  // @ApiOperation({
+  //   summary: 'Validate the authenticated customer VoIP account',
+  //   description: `Looks up the authenticated customer's JWT-bound VoIP number in the customers table and returns the registered first and last name.
+  //
+  // This is a local lookup; it does not call SasaPay. Requires both the service API key and a valid customer JWT. No request body is required.`,
+  // })
+  // @ApiSecurity('API-Key')
+  // @ApiSecurity('AppAccessToken')
+  // @ApiResponse({
+  //   status: 200,
+  //   description: 'Local VoIP account validation result.',
+  //   schema: {
+  //     example: {
+  //       success: true,
+  //       data: {
+  //         status: true,
+  //         responseCode: '0',
+  //         message: 'Account Validation Results',
+  //         account_details: {
+  //           channel_code: 'LOCAL_VOIP',
+  //           channel_name: 'Ambia VoIP',
+  //           account_number: '254700000001',
+  //           account_name: 'Alex Doe',
+  //           account_type: 1,
+  //         },
+  //       },
+  //     },
+  //   },
+  // })
+  // @ApiResponse({ status: 401, description: 'Unauthorized - Invalid or expired JWT token.' })
+  // @ApiResponse({ status: 404, description: 'No customer is registered with this VoIP number.' })
+  // async validateVoipAccount(@CurrentUser() user: AuthenticatedUser) {
+  //   return {
+  //     success: true,
+  //     data: await this.customerService.validateVoipAccount(user.id, user.voipNumber),
+  //   };
+  // }
 
   @ApiExcludeEndpoint()
   @Get('me')
