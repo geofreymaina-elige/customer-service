@@ -367,7 +367,7 @@ export class WaasOnboardingJobService {
         instruction: 'Customer must upload documents via GET /onboarding-status and POST /sessions/device',
       });
       
-      throw new Error(`Customer ${customer.id} has SERVICE_CARD document type which requires manual KYC upload. SasaPay API does not support Service/Military Cards.`);
+      throw new Error(`Customer ${customer.id} has SERVICE_CARD document type which requires secondary KYC upload. SasaPay API does not support Service/Military Cards.`);
     }
     
     const customerPhone = normalizePhoneNumber(customer.phone_number, customer.country_code);

@@ -36,7 +36,34 @@ export class OnboardingStatusService {
       [customerId]
     );
 
+    // Check if customer has SERVICE_CARD which requires manual KYC
+    const kycDetails = await this.db.queryOne<{
+      identity_document_type: string;
+      identity_document_number: string;
+      application_type: string;
+    }>(
+      `SELECT cad.identity_document_type, cad.identity_document_number, cad.application_type
+       FROM customer_applications ca
+       JOIN customer_applicant_details cad ON cad.customer_application_id = ca.id
+       WHERE ca.customer_id = $1
+         AND cad.application_type IN ('wallet_kyc', 'primary_kyc', 'sasapay_kyc')
+       ORDER BY 
+         CASE cad.application_type
+           WHEN 'sasapay_kyc' THEN 1
+           WHEN 'wallet_kyc' THEN 2
+           ELSE 3
+         END ASC
+       LIMIT 1`,
+      [customerId]
+    );
+
     let applicationStatus = application?.kyc_status || 'not_started';
+    
+    // If SERVICE_CARD detected and no wallet yet, requires KYC upload
+    if (kycDetails?.identity_document_type === 'SERVICE_CARD' && !wallet && applicationStatus === 'not_started') {
+      applicationStatus = 'requires_kyc_upload';
+    }
+    
     if (application?.sasapay_account_status === 'REJECTED' && applicationStatus === 'approved') {
       applicationStatus = 'pending';
     }
@@ -57,7 +84,15 @@ export class OnboardingStatusService {
     );
 
     let nextAction: OnboardingNextAction = { type: 'wait_for_update' };
-    if (
+    
+    // If KYC upload required (SERVICE_CARD or other reasons), direct to document upload
+    if (applicationStatus === 'requires_kyc_upload' || (kycDetails?.identity_document_type === 'SERVICE_CARD' && !wallet)) {
+      nextAction = {
+        type: 'upload_kyc_documents',
+        method: 'POST',
+        endpoint: '/api/v2/customers/kyc/submissions/images',
+      };
+    } else if (
       application?.sasapay_account_number
       && kycSubmission?.status === 'awaiting_documents'
       && requiredDocuments.length
