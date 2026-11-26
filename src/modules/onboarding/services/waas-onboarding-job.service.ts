@@ -321,6 +321,15 @@ export class WaasOnboardingJobService {
     if (!customer.country_code) {
       throw new Error(`Customer ${customer.id} has no country code for phone number validation.`);
     }
+    
+    if (!kycDetails?.identity_document_type) {
+      throw new Error(`Customer ${customer.id} has no identity_document_type in KYC details.`);
+    }
+    
+    if (!kycDetails?.identity_document_number) {
+      throw new Error(`Customer ${customer.id} has no identity_document_number in KYC details.`);
+    }
+    
     const customerPhone = normalizePhoneNumber(customer.phone_number, customer.country_code);
 
     const result = await this.sasapayWaas.initiatePersonalOnboardingAuto({
@@ -330,8 +339,8 @@ export class WaasOnboardingJobService {
       lastName: customer.last_name,
       countryCode: customerPhone.countryCallingCode,
       mobileNumber: customerPhone.nationalNumber,
-      documentType: this.mapDocTypeToSasaPay(kycDetails?.identity_document_type || 'NATIONAL_ID'),
-      documentNumber: kycDetails?.identity_document_number || `ID${customer.astpp_id}`,
+      documentType: mapPostgresToSasaPay(kycDetails.identity_document_type),
+      documentNumber: kycDetails.identity_document_number,
       email: customer.email,
     });
 
@@ -351,9 +360,9 @@ export class WaasOnboardingJobService {
       firstName: customer.first_name,
       lastName: customer.last_name,
       mobileNumber: customer.phone_number,
-      documentType: this.mapDocTypeToSasaPay(kycDetails?.identity_document_type || 'NATIONAL_ID'),
-      documentNumber: kycDetails?.identity_document_number || `ID${customer.astpp_id}`,
-      kycSource: kycDetails?.application_type || 'fallback',
+      documentType: mapPostgresToSasaPay(kycDetails.identity_document_type),
+      documentNumber: kycDetails.identity_document_number,
+      kycSource: kycDetails?.application_type || 'unknown',
       status: 'otp_sent',
     });
 

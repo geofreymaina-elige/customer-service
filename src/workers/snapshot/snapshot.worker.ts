@@ -454,6 +454,9 @@ export class SnapshotWorker {
       await client.query('COMMIT');
     } catch (error) {
       await client.query('ROLLBACK');
+      if (error.message?.includes('data integrity issue')) {
+        this.logger.error(`Data integrity issue for ASTPP customer ${snapshot.account.id}: ${error.message}`);
+      }
       throw error;
     } finally {
       client.release();

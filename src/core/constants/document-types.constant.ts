@@ -73,22 +73,36 @@ export const POSTGRES_TO_SASAPAY_DOC_TYPE: Record<DocumentType, SasaPayDocumentT
 
 /**
  * Helper: Map ASTPP type to PostgreSQL string
+ * @throws Error if astppType is null, undefined, or unmapped
  */
 export function mapAstppToPostgres(astppType: number | null | undefined): DocumentType {
   if (astppType === null || astppType === undefined) {
-    return DocumentType.NATIONAL_ID; // Default fallback
+    throw new Error('ASTPP document type is null or undefined - data integrity issue');
   }
-  return ASTPP_TO_POSTGRES_DOC_TYPE[astppType] ?? DocumentType.NATIONAL_ID;
+  
+  const mapped = ASTPP_TO_POSTGRES_DOC_TYPE[astppType];
+  if (!mapped) {
+    throw new Error(`Unknown ASTPP document type: ${astppType} - data integrity issue`);
+  }
+  
+  return mapped;
 }
 
 /**
  * Helper: Map PostgreSQL string to SasaPay API code
+ * @throws Error if postgresType is null, undefined, or unmapped
  */
 export function mapPostgresToSasaPay(postgresType: string | null | undefined): SasaPayDocumentType {
   if (!postgresType) {
-    return SasaPayDocumentType.ID_CARD; // Default fallback
+    throw new Error('PostgreSQL document type is null or undefined - data integrity issue');
   }
-  return POSTGRES_TO_SASAPAY_DOC_TYPE[postgresType as DocumentType] ?? SasaPayDocumentType.ID_CARD;
+  
+  const mapped = POSTGRES_TO_SASAPAY_DOC_TYPE[postgresType as DocumentType];
+  if (!mapped) {
+    throw new Error(`Unknown PostgreSQL document type: "${postgresType}" - data integrity issue`);
+  }
+  
+  return mapped;
 }
 
 /**
