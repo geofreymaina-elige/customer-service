@@ -581,9 +581,9 @@ export class CdcConsumerWorker implements OnModuleInit, OnModuleDestroy {
     
     switch (type) {
       case 0: return 'NATIONAL_ID';
-      case 1: return 'PASSPORT';
+      case 1: return 'SERVICE_CARD';
       case 2: return 'ALIEN_CARD';
-      case 3: return 'SERVICE_CARD';
+      case 3: return 'PASSPORT';
       default: return 'NATIONAL_ID';
     }
   }

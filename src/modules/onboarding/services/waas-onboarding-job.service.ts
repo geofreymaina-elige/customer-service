@@ -1113,10 +1113,13 @@ export class WaasOnboardingJobService {
   }
 
   private mapDocumentType(type: number | undefined): string {
+    if (type === undefined || type === null) return 'NATIONAL_ID';
+    
     switch (type) {
-      case 1: return 'PASSPORT';
+      case 0: return 'NATIONAL_ID';
+      case 1: return 'SERVICE_CARD';
       case 2: return 'ALIEN_CARD';
-      case 3: return 'SERVICE_CARD';
+      case 3: return 'PASSPORT';
       default: return 'NATIONAL_ID';
     }
   }
@@ -1134,8 +1137,8 @@ export class WaasOnboardingJobService {
     const mapping: Record<string, string> = {
       NATIONAL_ID: '1',
       SERVICE_CARD: '1',
-      ALIEN_CARD: '2',
-      PASSPORT: '3',
+      ALIEN_CARD: '3',
+      PASSPORT: '2',
     };
     return mapping[docType] ?? '1';
   }
