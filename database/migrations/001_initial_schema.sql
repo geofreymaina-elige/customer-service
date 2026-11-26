@@ -221,7 +221,7 @@ CREATE TABLE IF NOT EXISTS customer_applicant_details (
     sasapay_callback_payload JSONB,
     sasapay_psp_status VARCHAR(32),
     sasapay_psp_reason TEXT,
-    review_status VARCHAR(16),
+    review_status VARCHAR(32),
     review_decision VARCHAR(16),
     reviewed_by VARCHAR(128),
     reviewed_at TIMESTAMPTZ,
