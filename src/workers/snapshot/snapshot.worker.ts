@@ -384,6 +384,7 @@ export class SnapshotWorker {
             )
             ON CONFLICT (customer_application_id, application_type) DO UPDATE SET
               name = EXCLUDED.name,
+              identity_document_type = EXCLUDED.identity_document_type,
               identity_document_number = EXCLUDED.identity_document_number,
               date_of_birth = EXCLUDED.date_of_birth,
               synced_at = NOW(),
