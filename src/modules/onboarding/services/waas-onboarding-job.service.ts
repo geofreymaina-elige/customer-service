@@ -317,6 +317,23 @@ export class WaasOnboardingJobService {
       [payload.customerId, this.config.get<boolean>('sasapay.kycEnabled') === true],
     );
 
+    // --- Debug logging ---
+    this.logger.log(`[STEP 1] Customer details: ${JSON.stringify({
+      id: customer.id,
+      astpp_id: customer.astpp_id,
+      phone_number: customer.phone_number,
+      country_code: customer.country_code,
+      first_name: customer.first_name,
+      last_name: customer.last_name,
+      email: customer.email,
+    })}`);
+    
+    this.logger.log(`[STEP 1] KYC details: ${JSON.stringify({
+      identity_document_type: kycDetails?.identity_document_type,
+      identity_document_number: kycDetails?.identity_document_number,
+      application_type: kycDetails?.application_type,
+    })}`);
+
     // --- 1c. Call SasaPay WaaS /personal-onboarding/ ---
     if (!customer.country_code) {
       throw new Error(`Customer ${customer.id} has no country code for phone number validation.`);
@@ -328,6 +345,29 @@ export class WaasOnboardingJobService {
     
     if (!kycDetails?.identity_document_number) {
       throw new Error(`Customer ${customer.id} has no identity_document_number in KYC details.`);
+    }
+    
+    // Check if document type is supported by SasaPay automatic onboarding
+    if (kycDetails.identity_document_type === 'SERVICE_CARD') {
+      this.logger.warn(`[STEP 1] Customer ${customer.id} has SERVICE_CARD which is not supported by SasaPay API. Manual KYC required.`);
+      
+      // Mark as requiring manual KYC
+      await this.db.query(
+        `UPDATE customer_applications
+         SET kyc_status = 'manual_kyc_required',
+             updated_at = NOW()
+         WHERE customer_id = $1`,
+        [customer.id],
+      );
+      
+      await this.writeAuditLog(customer.id, 'SASAPAY_MANUAL_KYC_REQUIRED', {
+        reason: 'Service/Military Card not supported by SasaPay automatic onboarding',
+        documentType: kycDetails.identity_document_type,
+        documentNumber: kycDetails.identity_document_number,
+        instruction: 'Customer must upload documents via GET /onboarding-status and POST /sessions/device',
+      });
+      
+      throw new Error(`Customer ${customer.id} has SERVICE_CARD document type which requires manual KYC upload. SasaPay API does not support Service/Military Cards.`);
     }
     
     const customerPhone = normalizePhoneNumber(customer.phone_number, customer.country_code);
