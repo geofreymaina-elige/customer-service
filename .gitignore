@@ -24,3 +24,6 @@ snapshot_checkpoint.json
 
 # Secrets (SSH keys, tokens — never commit)
 /secrets/
+
+# Agent working directory (investigations, reports, temporary analysis)
+.agents/
