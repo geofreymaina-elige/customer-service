@@ -19,14 +19,14 @@ const DRY_RUN = process.argv.includes('--dry-run');
 
 // Validate required environment variables
 const requiredEnvVars = [
-  'ASTPP_MYSQL_HOST',
-  'ASTPP_MYSQL_USER',
-  'ASTPP_MYSQL_PASSWORD',
-  'ASTPP_MYSQL_DATABASE',
-  'POSTGRES_HOST',
-  'POSTGRES_USER',
-  'POSTGRES_PASSWORD',
-  'POSTGRES_DATABASE',
+  'ASTPP_HOST',
+  'ASTPP_USER',
+  'ASTPP_PASSWORD',
+  'ASTPP_DATABASE',
+  'DATABASE_HOST',
+  'DATABASE_USER',
+  'DATABASE_PASSWORD',
+  'DATABASE_NAME',
 ];
 
 const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
@@ -39,11 +39,11 @@ if (missingVars.length > 0) {
 
 // ASTPP MySQL connection (READ-ONLY)
 const astppConfig = {
-  host: process.env.ASTPP_MYSQL_HOST,
-  port: parseInt(process.env.ASTPP_MYSQL_PORT || '3306'),
-  user: process.env.ASTPP_MYSQL_USER,
-  password: process.env.ASTPP_MYSQL_PASSWORD,
-  database: process.env.ASTPP_MYSQL_DATABASE,
+  host: process.env.ASTPP_HOST,
+  port: parseInt(process.env.ASTPP_PORT || '3306'),
+  user: process.env.ASTPP_USER,
+  password: process.env.ASTPP_PASSWORD,
+  database: process.env.ASTPP_DATABASE,
   // READ-ONLY connection settings
   multipleStatements: false,
   enableKeepAlive: true,
@@ -52,11 +52,12 @@ const astppConfig = {
 
 // PostgreSQL connection (READ-WRITE for fixes)
 const pgConfig = {
-  host: process.env.POSTGRES_HOST,
-  port: parseInt(process.env.POSTGRES_PORT || '5432'),
-  user: process.env.POSTGRES_USER,
-  password: process.env.POSTGRES_PASSWORD,
-  database: process.env.POSTGRES_DATABASE,
+  host: process.env.DATABASE_HOST,
+  port: parseInt(process.env.DATABASE_PORT || '5432'),
+  user: process.env.DATABASE_USER,
+  password: process.env.DATABASE_PASSWORD,
+  database: process.env.DATABASE_NAME,
+  ssl: process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: false } : false,
   max: 10,
 };
 
