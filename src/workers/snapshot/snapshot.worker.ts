@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { AstppMysqlService } from '../../core/astpp-mysql/astpp-mysql.service';
 import { DatabaseService } from '../../core/database/database.service';
 import { parseDateOrNull, parseTimestampOrNull } from '../../core/utils/date.util';
+import { mapAstppToPostgres } from '../../core/constants';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
@@ -495,17 +496,10 @@ export class SnapshotWorker {
 
   /**
    * Map ASTPP document type (integer) to string
+   * @deprecated Use mapAstppToPostgres from core/constants instead
    */
   private mapDocumentType(type: number | undefined): string {
-    if (!type) return 'NATIONAL_ID';
-    
-    switch (type) {
-      case 0: return 'NATIONAL_ID';
-      case 1: return 'SERVICE_CARD';
-      case 2: return 'ALIEN_CARD';
-      case 3: return 'PASSPORT';
-      default: return 'NATIONAL_ID';
-    }
+    return mapAstppToPostgres(type);
   }
 
   /**

@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { DatabaseService } from '../../../core/database/database.service';
 import { normalizePhoneNumber } from '../../../core/utils/phone-number.util';
+import { mapAstppToPostgres } from '../../../core/constants';
 import { AstppAdapterService, AstppCustomerRecord } from '../../astpp/astpp-adapter.service';
 import { DeviceGatekeeperService } from '../../devices/services/device-gatekeeper.service';
 import { SecureJwtService } from '../../../core/auth/jwt.service';
@@ -461,14 +462,12 @@ export class OnboardingService {
     }
   }
 
+  /**
+   * Map ASTPP document type to PostgreSQL string
+   * @deprecated Use mapAstppToPostgres from core/constants instead
+   */
   private mapAstppDocumentType(type: number): string {
-    switch (Number(type)) {
-      case 0: return 'NATIONAL_ID';
-      case 1: return 'SERVICE_CARD';
-      case 2: return 'ALIEN_CARD';
-      case 3: return 'PASSPORT';
-      default: return 'NATIONAL_ID';
-    }
+    return mapAstppToPostgres(type);
   }
 
   private mapAstppGender(gender?: number): string | null {

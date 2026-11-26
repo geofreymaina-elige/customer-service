@@ -5,6 +5,7 @@ import { DatabaseService } from '../../../core/database/database.service';
 import { AstppMysqlService } from '../../../core/astpp-mysql/astpp-mysql.service';
 import { SasaPayWalletConfirmation, SasaPayWaasService } from './sasapay-waas.service';
 import { JobService } from '../../../core/jobs/job.service';
+import { mapAstppToPostgres, mapPostgresToSasaPay } from '../../../core/constants';
 import * as fsPromises from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
@@ -1112,16 +1113,12 @@ export class WaasOnboardingJobService {
     }
   }
 
+  /**
+   * Map ASTPP document type to PostgreSQL string
+   * @deprecated Use mapAstppToPostgres from core/constants instead
+   */
   private mapDocumentType(type: number | undefined): string {
-    if (type === undefined || type === null) return 'NATIONAL_ID';
-    
-    switch (type) {
-      case 0: return 'NATIONAL_ID';
-      case 1: return 'SERVICE_CARD';
-      case 2: return 'ALIEN_CARD';
-      case 3: return 'PASSPORT';
-      default: return 'NATIONAL_ID';
-    }
+    return mapAstppToPostgres(type);
   }
 
   private mapGender(gender: number | undefined): string | null {
@@ -1132,14 +1129,11 @@ export class WaasOnboardingJobService {
     }
   }
 
-  /** Map string doc-type enum to SasaPay document type code */
+  /**
+   * Map PostgreSQL doc-type string to SasaPay API code
+   * @deprecated Use mapPostgresToSasaPay from core/constants instead
+   */
   private mapDocTypeToSasaPay(docType: string): string {
-    const mapping: Record<string, string> = {
-      NATIONAL_ID: '1',
-      SERVICE_CARD: '1',
-      ALIEN_CARD: '3',
-      PASSPORT: '2',
-    };
-    return mapping[docType] ?? '1';
+    return mapPostgresToSasaPay(docType);
   }
 }

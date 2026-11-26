@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { DatabaseService } from '../../core/database/database.service';
 import { AstppMysqlService } from '../../core/astpp-mysql/astpp-mysql.service';
 import { parseDateOrNull, parseTimestampOrNull } from '../../core/utils/date.util';
+import { mapAstppToPostgres } from '../../core/constants';
 import { Kafka, Consumer, EachMessagePayload } from 'kafkajs';
 
 interface KafkaEvent {
@@ -575,17 +576,10 @@ export class CdcConsumerWorker implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Map ASTPP document type to string
+   * @deprecated Use mapAstppToPostgres from core/constants instead
    */
   private mapDocumentType(type: number | undefined): string {
-    if (!type) return 'NATIONAL_ID';
-    
-    switch (type) {
-      case 0: return 'NATIONAL_ID';
-      case 1: return 'SERVICE_CARD';
-      case 2: return 'ALIEN_CARD';
-      case 3: return 'PASSPORT';
-      default: return 'NATIONAL_ID';
-    }
+    return mapAstppToPostgres(type);
   }
 
   /**

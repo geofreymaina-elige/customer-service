@@ -84,9 +84,18 @@ All mappings verified correct:
 
 ### After (FIXED)
 - **ASTPP type 0 (National ID)** → stored as NATIONAL_ID → sent to SasaPay as "1" (ID card) ✓
-- **ASTPP type 1 (Service Card)** → stored as SERVICE_CARD → sent to SasaPay as "1" (ID card) ✓
+- **ASTPP type 1 (Service Card)** → stored as SERVICE_CARD → **REQUIRES MANUAL KYC** (SasaPay doesn't support this type) ⚠️
 - **ASTPP type 2 (Alien Card)** → stored as ALIEN_CARD → sent to SasaPay as "3" (Alien ID) ✓
 - **ASTPP type 3 (Passport)** → stored as PASSPORT → sent to SasaPay as "2" (Passport) ✓
+
+**Important Note:** SasaPay API only accepts 3 document types:
+- "1" = ID card (National ID)
+- "2" = Passport
+- "3" = Alien ID
+
+**Service/Military Cards are NOT supported** by SasaPay's automatic onboarding API. Customers with Service Cards must use the manual KYC upload flow via:
+- `GET /onboarding-status` - check if manual KYC is required
+- `POST /sessions/device` - upload additional KYC documents
 
 ---
 
